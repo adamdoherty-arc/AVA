@@ -631,9 +631,23 @@ interface IndividualThetaDecayProps {
 function IndividualThetaDecay({ option }: IndividualThetaDecayProps) {
     const theta = option.greeks?.theta || 0
     const dte = option.dte || 0
-    const quantity = option.quantity || 1
+    const quantity = Math.abs(option.quantity || 1)
 
-    // Calculate daily theta in dollars (theta * quantity * 100 shares per contract)
+    // Determine if this is a SHORT position (where theta benefits us) or LONG (where theta hurts us)
+    // SHORT positions: CSP, CC, Short Put, Short Call, or negative quantity
+    // LONG positions: Long Call, Long Put, or positive quantity with no "short" indicator
+    const strategy = option.strategy?.toLowerCase() || ''
+    const type = option.type?.toLowerCase() || ''
+
+    const isShortPosition =
+        strategy === 'csp' ||
+        strategy === 'cc' ||
+        strategy.includes('short') ||
+        type.includes('short') ||
+        option.quantity < 0
+
+    // For SHORT positions: theta is POSITIVE (we collect it as income)
+    // For LONG positions: theta is NEGATIVE (we lose value to time decay)
     const dailyThetaDollars = Math.abs(theta) * quantity * 100
 
     // Don't show if no theta or expired
@@ -671,28 +685,46 @@ function IndividualThetaDecay({ option }: IndividualThetaDecayProps) {
     const sevenDayTheta = decaySchedule.slice(0, 7).reduce((sum, d) => sum + d.theta, 0)
     const totalToExpiry = dailyThetaDollars * dte
 
+    // Colors and signs based on position type
+    const valueColor = isShortPosition ? 'text-emerald-400' : 'text-red-400'
+    const bgHighlight = isShortPosition ? 'bg-emerald-500/5' : 'bg-red-500/5'
+    const progressGradient = isShortPosition
+        ? 'bg-gradient-to-r from-emerald-500 to-emerald-400'
+        : 'bg-gradient-to-r from-red-500 to-red-400'
+    const borderColor = isShortPosition ? 'border-emerald-500/20' : 'border-red-500/20'
+    const headerBg = isShortPosition
+        ? 'from-emerald-500/5 to-green-500/5'
+        : 'from-red-500/5 to-orange-500/5'
+    const sign = isShortPosition ? '+' : '-'
+    const label = isShortPosition ? 'Premium Income' : 'Time Decay Cost'
+
     return (
-        <div className="mt-4 p-4 bg-gradient-to-br from-purple-500/5 to-indigo-500/5 rounded-xl border border-purple-500/20">
+        <div className={`mt-4 p-4 bg-gradient-to-br ${headerBg} rounded-xl border ${borderColor}`}>
             {/* Header */}
-            <div className="flex items-center gap-2 mb-3">
-                <Calendar className="w-4 h-4 text-purple-400" />
-                <span className="text-sm font-semibold text-white">Theta Decay Schedule</span>
-                <span className="text-xs text-purple-400 bg-purple-500/20 px-2 py-0.5 rounded-full">{dte} days to expiry</span>
+            <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                    <Calendar className={`w-4 h-4 ${isShortPosition ? 'text-emerald-400' : 'text-red-400'}`} />
+                    <span className="text-sm font-semibold text-white">Theta Decay</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${isShortPosition ? 'text-emerald-400 bg-emerald-500/20' : 'text-red-400 bg-red-500/20'}`}>
+                        {label}
+                    </span>
+                </div>
+                <span className="text-xs text-slate-400">{dte} DTE</span>
             </div>
 
             {/* Summary Stats */}
             <div className="grid grid-cols-3 gap-3 mb-4">
                 <div className="bg-slate-800/50 rounded-lg p-2.5 text-center">
                     <div className="text-[10px] text-slate-500 uppercase tracking-wide">Daily</div>
-                    <div className="text-sm font-bold text-emerald-400 font-mono">+{formatCurrency(dailyThetaDollars)}</div>
+                    <div className={`text-sm font-bold ${valueColor} font-mono`}>{sign}{formatCurrency(dailyThetaDollars)}</div>
                 </div>
                 <div className="bg-slate-800/50 rounded-lg p-2.5 text-center">
                     <div className="text-[10px] text-slate-500 uppercase tracking-wide">7-Day</div>
-                    <div className="text-sm font-bold text-emerald-400 font-mono">+{formatCurrency(sevenDayTheta)}</div>
+                    <div className={`text-sm font-bold ${valueColor} font-mono`}>{sign}{formatCurrency(sevenDayTheta)}</div>
                 </div>
                 <div className="bg-slate-800/50 rounded-lg p-2.5 text-center">
                     <div className="text-[10px] text-slate-500 uppercase tracking-wide">To Expiry</div>
-                    <div className="text-sm font-bold text-emerald-400 font-mono">+{formatCurrency(totalToExpiry)}</div>
+                    <div className={`text-sm font-bold ${valueColor} font-mono`}>{sign}{formatCurrency(totalToExpiry)}</div>
                 </div>
             </div>
 
@@ -710,16 +742,16 @@ function IndividualThetaDecay({ option }: IndividualThetaDecayProps) {
                     </thead>
                     <tbody className="divide-y divide-slate-700/30">
                         {decaySchedule.map((row) => (
-                            <tr key={row.day} className={row.day <= 7 ? 'bg-emerald-500/5' : ''}>
+                            <tr key={row.day} className={row.day <= 7 ? bgHighlight : ''}>
                                 <td className="py-1.5 px-2 text-slate-300">Day {row.day}</td>
                                 <td className="py-1.5 px-2 text-slate-400">{row.date}</td>
-                                <td className="py-1.5 px-2 text-right font-mono text-emerald-400">+{formatCurrency(row.theta)}</td>
-                                <td className="py-1.5 px-2 text-right font-mono text-white">{formatCurrency(row.cumulative)}</td>
+                                <td className={`py-1.5 px-2 text-right font-mono ${valueColor}`}>{sign}{formatCurrency(row.theta)}</td>
+                                <td className={`py-1.5 px-2 text-right font-mono ${valueColor}`}>{sign}{formatCurrency(row.cumulative)}</td>
                                 <td className="py-1.5 px-2 text-right">
                                     <div className="flex items-center justify-end gap-1.5">
                                         <div className="w-12 h-1.5 rounded-full bg-slate-700 overflow-hidden">
                                             <div
-                                                className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400"
+                                                className={`h-full rounded-full ${progressGradient}`}
                                                 style={{ width: `${row.percentDecayed}%` }}
                                             />
                                         </div>
