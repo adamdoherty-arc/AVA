@@ -648,7 +648,9 @@ function IndividualThetaDecay({ option }: IndividualThetaDecayProps) {
 
     // For SHORT positions: theta is POSITIVE (we collect it as income)
     // For LONG positions: theta is NEGATIVE (we lose value to time decay)
-    const dailyThetaDollars = Math.abs(theta) * quantity * 100
+    // Theta is already in dollars per contract (e.g., -$0.70 means $0.70/day per contract)
+    // DO NOT multiply by 100 - that's already factored into the theta value
+    const dailyThetaDollars = Math.abs(theta) * quantity
 
     // Don't show if no theta or expired
     if (dte <= 0 || dailyThetaDollars === 0) {
