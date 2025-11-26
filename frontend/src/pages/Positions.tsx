@@ -1,12 +1,11 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { usePositions, useSyncPortfolio, useResearch, useRefreshResearch } from '../hooks/useMagnusApi'
 import {
     AlertCircle, RefreshCw, TrendingUp, TrendingDown, DollarSign,
     Briefcase, Target, Clock, Activity, ExternalLink, ChevronDown, ChevronUp,
-    Zap, PieChart, ArrowUpRight, ArrowDownRight, Brain, Calendar, Sparkles, Table2
+    Zap, PieChart, ArrowUpRight, ArrowDownRight, Brain, Calendar
 } from 'lucide-react'
 import { PieChart as RechartsPie, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
-import { axiosInstance } from '../lib/axios'
 
 const COLORS = ['#10B981', '#3B82F6', '#8B5CF6']
 
@@ -19,9 +18,6 @@ export default function Positions() {
 
     const { data: researchData, isLoading: researchLoading } = useResearch(selectedSymbol)
     const refreshResearchMutation = useRefreshResearch()
-    const [showThetaDecay, setShowThetaDecay] = useState(true)
-    const [thetaAiAnalysis, setThetaAiAnalysis] = useState<string | null>(null)
-    const [loadingThetaAi, setLoadingThetaAi] = useState(false)
 
     // Derive data early so hooks can use them consistently
     const summary = positions?.summary || { total_equity: 0, buying_power: 0, total_positions: 0 }
@@ -31,86 +27,7 @@ export default function Positions() {
     const totalStockValue = stocks.reduce((sum: number, s: StockPosition) => sum + s.current_value, 0)
     const totalOptionValue = options.reduce((sum: number, o: OptionPosition) => sum + Math.abs(o.current_value), 0)
     const totalPL = [...stocks, ...options].reduce((sum: number, p: StockPosition | OptionPosition) => sum + p.pl, 0)
-    const totalTheta = options.reduce((sum: number, o: OptionPosition) => sum + (o.greeks?.theta || 0) * o.quantity, 0)
-
-    // Calculate theta decay by calendar days - MUST be before any early returns
-    const thetaDecayByDay = useMemo(() => {
-        if (options.length === 0) return []
-
-        // Find max DTE
-        const maxDTE = Math.max(...options.map((o: OptionPosition) => o.dte || 0))
-        const daysToShow = Math.min(maxDTE, 30) // Show up to 30 days
-
-        const dailyData: ThetaDay[] = []
-        let cumulativeTheta = 0
-
-        for (let day = 1; day <= daysToShow; day++) {
-            // Sum theta from all options that are still active on this day
-            const activeOptions = options.filter((o: OptionPosition) => (o.dte || 0) >= day)
-            const dailyTheta = activeOptions.reduce((sum: number, o: OptionPosition) => {
-                const theta = (o.greeks?.theta || 0) * (o.quantity || 1) * 100 // per contract
-                return sum + theta
-            }, 0)
-
-            cumulativeTheta += dailyTheta
-
-            // Calculate which options expire on this day
-            const expiringOptions = options.filter((o: OptionPosition) => o.dte === day)
-
-            dailyData.push({
-                day,
-                date: getDateFromDTE(day),
-                dailyTheta: dailyTheta,
-                cumulativeTheta,
-                activeContracts: activeOptions.length,
-                expiringContracts: expiringOptions.length,
-                expiringSymbols: expiringOptions.map((o: OptionPosition) => o.symbol)
-            })
-        }
-
-        return dailyData
-    }, [options])
-
-    // Get AI analysis for theta decay - using useCallback for stability
-    const fetchThetaAiAnalysis = async () => {
-        if (options.length === 0) return
-
-        setLoadingThetaAi(true)
-        try {
-            const optionsSummary = options.map((o: OptionPosition) => ({
-                symbol: o.symbol,
-                type: o.option_type,
-                strike: o.strike,
-                dte: o.dte,
-                theta: o.greeks?.theta || 0,
-                delta: o.greeks?.delta || 0,
-                quantity: o.quantity,
-                premium: o.total_premium
-            }))
-
-            const response = await axiosInstance.post('/api/chat/message', {
-                message: `Analyze my options theta decay strategy. Here are my current positions: ${JSON.stringify(optionsSummary)}.
-
-                Total daily theta: $${totalTheta.toFixed(2)}
-
-                Provide brief insights on:
-                1. My overall theta exposure and if it's optimal
-                2. Any positions that might need attention based on DTE
-                3. Expected premium capture over the next 7 days
-                4. Risk assessment for theta decay timing
-
-                Keep the response concise and actionable.`,
-                context: 'theta_analysis'
-            })
-
-            setThetaAiAnalysis(response.data.response || response.data.message || 'Analysis completed.')
-        } catch (error) {
-            console.error('Failed to get theta analysis:', error)
-            setThetaAiAnalysis('Unable to generate AI analysis. Please ensure the backend is running.')
-        } finally {
-            setLoadingThetaAi(false)
-        }
-    }
+    const totalTheta = options.reduce((sum: number, o: OptionPosition) => sum + (o.greeks?.theta || 0) * o.quantity * 100, 0)
 
     // Effect to select first stock
     useEffect(() => {
@@ -118,13 +35,6 @@ export default function Positions() {
             setSelectedSymbol(positions.stocks[0].symbol)
         }
     }, [positions, selectedSymbol])
-
-    // Auto-fetch AI analysis when switching to options tab - MUST be before early returns
-    useEffect(() => {
-        if (activeTab === 'options' && options.length > 0 && !thetaAiAnalysis && !isLoading) {
-            fetchThetaAiAnalysis()
-        }
-    }, [activeTab, options.length, thetaAiAnalysis, isLoading])
 
     // Early returns AFTER all hooks
     if (isLoading) {
@@ -281,28 +191,13 @@ export default function Positions() {
                                     selectedSymbol={selectedSymbol}
                                 />
                             ) : (
-                                <>
-                                    <OptionsTable
-                                        options={options}
-                                        expanded={expandedOptions}
-                                        onToggle={toggleOptionExpanded}
-                                        onSelect={(symbol) => setSelectedSymbol(symbol)}
-                                        selectedSymbol={selectedSymbol}
-                                    />
-
-                                    {/* Theta Decay Calendar Table */}
-                                    {options.length > 0 && (
-                                        <ThetaDecayTable
-                                            data={thetaDecayByDay}
-                                            totalDailyTheta={totalTheta}
-                                            aiAnalysis={thetaAiAnalysis}
-                                            loadingAi={loadingThetaAi}
-                                            onRefreshAi={fetchThetaAiAnalysis}
-                                            isVisible={showThetaDecay}
-                                            onToggle={() => setShowThetaDecay(!showThetaDecay)}
-                                        />
-                                    )}
-                                </>
+                                <OptionsTable
+                                    options={options}
+                                    expanded={expandedOptions}
+                                    onToggle={toggleOptionExpanded}
+                                    onSelect={(symbol) => setSelectedSymbol(symbol)}
+                                    selectedSymbol={selectedSymbol}
+                                />
                             )}
                         </div>
                     </div>
@@ -462,16 +357,6 @@ interface OptionPosition {
         vega: number
         iv: number
     }
-}
-
-interface ThetaDay {
-    day: number
-    date: string
-    dailyTheta: number
-    cumulativeTheta: number
-    activeContracts: number
-    expiringContracts: number
-    expiringSymbols: string[]
 }
 
 // Helper to get date from DTE
@@ -682,6 +567,7 @@ function OptionsTable({ options, expanded, onToggle, onSelect, selectedSymbol }:
 
                         {isExpanded && (
                             <div className="px-4 pb-4 border-t border-slate-700/50">
+                                {/* Greeks Row */}
                                 <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-4">
                                     <GreekBadge label="Delta" value={option.greeks.delta} suffix="%" />
                                     <GreekBadge label="Theta" value={option.greeks.theta} prefix="$" positive />
@@ -689,6 +575,8 @@ function OptionsTable({ options, expanded, onToggle, onSelect, selectedSymbol }:
                                     <GreekBadge label="IV" value={option.greeks.iv} suffix="%" />
                                     <GreekBadge label="Break-even" value={option.breakeven} prefix="$" />
                                 </div>
+
+                                {/* Entry/Current/Premium Info */}
                                 <div className="flex gap-6 mt-4 text-sm">
                                     <div>
                                         <span className="text-slate-500">Entry: </span>
@@ -703,6 +591,9 @@ function OptionsTable({ options, expanded, onToggle, onSelect, selectedSymbol }:
                                         <span className="font-medium text-emerald-400 font-mono">{formatCurrency(option.total_premium)}</span>
                                     </div>
                                 </div>
+
+                                {/* Individual Theta Decay Calendar */}
+                                <IndividualThetaDecay option={option} />
                             </div>
                         )}
                     </div>
@@ -732,170 +623,118 @@ function GreekBadge({ label, value, prefix = '', suffix = '', positive }: GreekB
     )
 }
 
-// Theta Decay Table Component
-interface ThetaDecayTableProps {
-    data: ThetaDay[]
-    totalDailyTheta: number
-    aiAnalysis: string | null
-    loadingAi: boolean
-    onRefreshAi: () => void
-    isVisible: boolean
-    onToggle: () => void
+// Individual Theta Decay Component - shows decay for a single option
+interface IndividualThetaDecayProps {
+    option: OptionPosition
 }
 
-function ThetaDecayTable({ data, totalDailyTheta, aiAnalysis, loadingAi, onRefreshAi, isVisible, onToggle }: ThetaDecayTableProps) {
-    if (data.length === 0) {
+function IndividualThetaDecay({ option }: IndividualThetaDecayProps) {
+    const theta = option.greeks?.theta || 0
+    const dte = option.dte || 0
+    const quantity = option.quantity || 1
+
+    // Calculate daily theta in dollars (theta * quantity * 100 shares per contract)
+    const dailyThetaDollars = Math.abs(theta) * quantity * 100
+
+    // Don't show if no theta or expired
+    if (dte <= 0 || dailyThetaDollars === 0) {
         return null
     }
 
-    // Calculate 7-day summary
-    const sevenDayTheta = data.slice(0, 7).reduce((sum, d) => sum + d.dailyTheta, 0)
-    const weeklyTheta = data.slice(0, 7)
+    // Generate decay schedule - show up to 14 days or until expiration
+    const daysToShow = Math.min(dte, 14)
+    const decaySchedule: { day: number; date: string; theta: number; cumulative: number; percentDecayed: number }[] = []
+
+    let cumulative = 0
+    const totalPotentialTheta = dailyThetaDollars * dte
+
+    for (let day = 1; day <= daysToShow; day++) {
+        // Theta accelerates as expiration approaches - use simplified acceleration model
+        // Theta roughly doubles in the last week
+        const dteAtDay = dte - day + 1
+        const accelerationFactor = dteAtDay <= 7 ? 1 + (7 - dteAtDay) * 0.15 : 1
+        const adjustedDailyTheta = dailyThetaDollars * accelerationFactor
+
+        cumulative += adjustedDailyTheta
+        const percentDecayed = totalPotentialTheta > 0 ? (cumulative / totalPotentialTheta) * 100 : 0
+
+        decaySchedule.push({
+            day,
+            date: getDateFromDTE(day),
+            theta: adjustedDailyTheta,
+            cumulative,
+            percentDecayed: Math.min(percentDecayed, 100)
+        })
+    }
+
+    // Summary calculations
+    const sevenDayTheta = decaySchedule.slice(0, 7).reduce((sum, d) => sum + d.theta, 0)
+    const totalToExpiry = dailyThetaDollars * dte
 
     return (
-        <div className="glass-card overflow-hidden mt-5">
+        <div className="mt-4 p-4 bg-gradient-to-br from-purple-500/5 to-indigo-500/5 rounded-xl border border-purple-500/20">
             {/* Header */}
-            <div
-                className="p-4 flex items-center justify-between cursor-pointer hover:bg-white/[0.02] transition-colors border-b border-slate-700/50"
-                onClick={onToggle}
-            >
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500/20 to-indigo-500/20 flex items-center justify-center">
-                        <Calendar className="w-5 h-5 text-purple-400" />
-                    </div>
-                    <div>
-                        <h3 className="font-semibold text-white flex items-center gap-2">
-                            Theta Decay Calendar
-                            <span className="badge-purple text-xs">AI Powered</span>
-                        </h3>
-                        <p className="text-sm text-slate-400">
-                            Daily premium capture: <span className="text-emerald-400 font-mono">{formatCurrency(Math.abs(totalDailyTheta))}</span>
-                            <span className="mx-2">|</span>
-                            7-day forecast: <span className="text-emerald-400 font-mono">{formatCurrency(Math.abs(sevenDayTheta))}</span>
-                        </p>
-                    </div>
+            <div className="flex items-center gap-2 mb-3">
+                <Calendar className="w-4 h-4 text-purple-400" />
+                <span className="text-sm font-semibold text-white">Theta Decay Schedule</span>
+                <span className="text-xs text-purple-400 bg-purple-500/20 px-2 py-0.5 rounded-full">{dte} days to expiry</span>
+            </div>
+
+            {/* Summary Stats */}
+            <div className="grid grid-cols-3 gap-3 mb-4">
+                <div className="bg-slate-800/50 rounded-lg p-2.5 text-center">
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wide">Daily</div>
+                    <div className="text-sm font-bold text-emerald-400 font-mono">+{formatCurrency(dailyThetaDollars)}</div>
                 </div>
-                <div className={`p-2 rounded-lg transition-colors ${isVisible ? 'bg-primary/20 text-primary' : 'text-slate-400'}`}>
-                    {isVisible ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                <div className="bg-slate-800/50 rounded-lg p-2.5 text-center">
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wide">7-Day</div>
+                    <div className="text-sm font-bold text-emerald-400 font-mono">+{formatCurrency(sevenDayTheta)}</div>
+                </div>
+                <div className="bg-slate-800/50 rounded-lg p-2.5 text-center">
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wide">To Expiry</div>
+                    <div className="text-sm font-bold text-emerald-400 font-mono">+{formatCurrency(totalToExpiry)}</div>
                 </div>
             </div>
 
-            {isVisible && (
-                <div className="p-4">
-                    {/* Summary Stats */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-                        <div className="bg-slate-800/50 rounded-xl p-3 text-center border border-slate-700/30">
-                            <div className="text-xs text-slate-500 uppercase tracking-wide mb-1">Daily Theta</div>
-                            <div className="text-lg font-bold text-emerald-400 font-mono">{formatCurrency(Math.abs(totalDailyTheta))}</div>
-                        </div>
-                        <div className="bg-slate-800/50 rounded-xl p-3 text-center border border-slate-700/30">
-                            <div className="text-xs text-slate-500 uppercase tracking-wide mb-1">7-Day Total</div>
-                            <div className="text-lg font-bold text-emerald-400 font-mono">{formatCurrency(Math.abs(sevenDayTheta))}</div>
-                        </div>
-                        <div className="bg-slate-800/50 rounded-xl p-3 text-center border border-slate-700/30">
-                            <div className="text-xs text-slate-500 uppercase tracking-wide mb-1">30-Day Total</div>
-                            <div className="text-lg font-bold text-emerald-400 font-mono">{formatCurrency(Math.abs(data[data.length - 1]?.cumulativeTheta || 0))}</div>
-                        </div>
-                        <div className="bg-slate-800/50 rounded-xl p-3 text-center border border-slate-700/30">
-                            <div className="text-xs text-slate-500 uppercase tracking-wide mb-1">Active Options</div>
-                            <div className="text-lg font-bold text-white">{data[0]?.activeContracts || 0}</div>
-                        </div>
-                    </div>
+            {/* Decay Table */}
+            <div className="overflow-x-auto max-h-[200px] overflow-y-auto">
+                <table className="w-full text-xs">
+                    <thead className="sticky top-0 bg-slate-900/95">
+                        <tr className="text-slate-500 uppercase tracking-wide">
+                            <th className="text-left py-1.5 px-2">Day</th>
+                            <th className="text-left py-1.5 px-2">Date</th>
+                            <th className="text-right py-1.5 px-2">Daily</th>
+                            <th className="text-right py-1.5 px-2">Cumulative</th>
+                            <th className="text-right py-1.5 px-2">Progress</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-700/30">
+                        {decaySchedule.map((row) => (
+                            <tr key={row.day} className={row.day <= 7 ? 'bg-emerald-500/5' : ''}>
+                                <td className="py-1.5 px-2 text-slate-300">Day {row.day}</td>
+                                <td className="py-1.5 px-2 text-slate-400">{row.date}</td>
+                                <td className="py-1.5 px-2 text-right font-mono text-emerald-400">+{formatCurrency(row.theta)}</td>
+                                <td className="py-1.5 px-2 text-right font-mono text-white">{formatCurrency(row.cumulative)}</td>
+                                <td className="py-1.5 px-2 text-right">
+                                    <div className="flex items-center justify-end gap-1.5">
+                                        <div className="w-12 h-1.5 rounded-full bg-slate-700 overflow-hidden">
+                                            <div
+                                                className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400"
+                                                style={{ width: `${row.percentDecayed}%` }}
+                                            />
+                                        </div>
+                                        <span className="text-slate-400 w-8 text-right">{row.percentDecayed.toFixed(0)}%</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
 
-                    {/* AI Analysis Section */}
-                    <div className="mb-5 p-4 bg-gradient-to-br from-purple-500/10 to-indigo-500/10 rounded-xl border border-purple-500/20">
-                        <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-2">
-                                <Sparkles className="w-4 h-4 text-purple-400" />
-                                <span className="font-medium text-white">AI Theta Analysis</span>
-                            </div>
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation()
-                                    onRefreshAi()
-                                }}
-                                disabled={loadingAi}
-                                className="btn-icon p-1.5"
-                            >
-                                <RefreshCw className={`w-4 h-4 ${loadingAi ? 'animate-spin' : ''}`} />
-                            </button>
-                        </div>
-                        {loadingAi ? (
-                            <div className="flex items-center gap-3 py-4">
-                                <div className="w-5 h-5 relative">
-                                    <div className="absolute inset-0 rounded-full border-2 border-slate-700"></div>
-                                    <div className="absolute inset-0 rounded-full border-2 border-purple-400 border-t-transparent animate-spin"></div>
-                                </div>
-                                <span className="text-slate-400 text-sm">Analyzing theta decay patterns...</span>
-                            </div>
-                        ) : aiAnalysis ? (
-                            <div className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
-                                {aiAnalysis}
-                            </div>
-                        ) : (
-                            <div className="text-sm text-slate-400">
-                                Click refresh to generate AI analysis of your theta decay positions.
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Calendar Table */}
-                    <div className="flex items-center gap-2 mb-3">
-                        <Table2 className="w-4 h-4 text-slate-400" />
-                        <span className="text-sm font-medium text-slate-300">Daily Breakdown</span>
-                    </div>
-                    <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
-                        <table className="data-table text-sm">
-                            <thead className="sticky top-0 bg-slate-900/95 backdrop-blur">
-                                <tr>
-                                    <th className="text-left">Day</th>
-                                    <th className="text-left">Date</th>
-                                    <th className="text-right">Daily Theta</th>
-                                    <th className="text-right">Cumulative</th>
-                                    <th className="text-center">Contracts</th>
-                                    <th className="text-left">Expiring</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {data.map((day) => (
-                                    <tr
-                                        key={day.day}
-                                        className={`${
-                                            day.expiringContracts > 0
-                                                ? 'bg-amber-500/10 border-l-2 border-amber-400'
-                                                : day.day <= 7
-                                                ? 'bg-emerald-500/5'
-                                                : ''
-                                        }`}
-                                    >
-                                        <td className="font-medium text-white">
-                                            <span className={`${day.day <= 7 ? 'text-emerald-400' : 'text-slate-300'}`}>
-                                                Day {day.day}
-                                            </span>
-                                        </td>
-                                        <td className="text-slate-400">{day.date}</td>
-                                        <td className="text-right font-mono text-emerald-400">
-                                            +{formatCurrency(Math.abs(day.dailyTheta))}
-                                        </td>
-                                        <td className="text-right font-mono text-slate-300">
-                                            {formatCurrency(Math.abs(day.cumulativeTheta))}
-                                        </td>
-                                        <td className="text-center">
-                                            <span className="badge-neutral">{day.activeContracts}</span>
-                                        </td>
-                                        <td>
-                                            {day.expiringContracts > 0 && (
-                                                <div className="flex items-center gap-2">
-                                                    <span className="badge-warning">{day.expiringContracts} expiring</span>
-                                                    <span className="text-xs text-amber-400">{day.expiringSymbols.join(', ')}</span>
-                                                </div>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+            {dte > daysToShow && (
+                <div className="mt-2 text-center text-xs text-slate-500">
+                    Showing first {daysToShow} of {dte} days
                 </div>
             )}
         </div>
