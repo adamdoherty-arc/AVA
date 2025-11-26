@@ -174,6 +174,14 @@ export default function PremiumScanner() {
         }
     }, [])
 
+    // Auto-load most recent scan on mount
+    useEffect(() => {
+        if (historyData?.history?.length && scanResults.length === 0 && !isScanning) {
+            const mostRecent = historyData.history[0]
+            loadPreviousScan(mostRecent.scan_id)
+        }
+    }, [historyData, scanResults.length, isScanning, loadPreviousScan])
+
     // Group watchlists by source
     const watchlistsBySource = useMemo(() => {
         if (!watchlistsData?.watchlists) return {}
