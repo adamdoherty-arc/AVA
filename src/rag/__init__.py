@@ -3,12 +3,11 @@ Magnus RAG System
 Retrieval Augmented Generation for financial knowledge base
 
 Components:
-- SimpleRAG: Basic RAG query interface
+- RAGService: Production-ready RAG with Cross-Encoder & LLM
 - DocumentIngestionPipeline: Document ingestion and embedding
-- Daily XTrades sync (automated via Celery)
 """
 
-from src.rag.simple_rag import SimpleRAG
+from src.rag.rag_service import RAGService
 from src.rag.document_ingestion_pipeline import (
     DocumentIngestionPipeline,
     DocumentCategory,
@@ -17,10 +16,20 @@ from src.rag.document_ingestion_pipeline import (
     ingest_all_xtrades_history
 )
 
-__version__ = "1.0.0"
+__version__ = "2.0.0"
+
+_rag_instance = None
+
+def get_rag() -> RAGService:
+    """Get singleton instance of RAG Service"""
+    global _rag_instance
+    if _rag_instance is None:
+        _rag_instance = RAGService()
+    return _rag_instance
 
 __all__ = [
-    "SimpleRAG",
+    "RAGService",
+    "get_rag",
     "DocumentIngestionPipeline",
     "DocumentCategory",
     "DocumentSource",

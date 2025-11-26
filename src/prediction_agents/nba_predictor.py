@@ -8,7 +8,9 @@ import logging
 import math
 from typing import Dict, Optional, Tuple, Any
 from datetime import datetime, timedelta
+from datetime import datetime, timedelta
 import os
+from .llm_explanation_enhancer import get_llm_enhancer
 
 logger = logging.getLogger(__name__)
 
@@ -211,7 +213,41 @@ class NBAPredictor:
         if elo_diff > 100:
             explanation_parts.append(f"\n**Key Factor:** Significant Elo rating gap ({elo_diff:.0f} points)")
         
-        return "\n".join(explanation_parts)
+        # Generate base template explanation
+        template_explanation = "\n".join(explanation_parts)
+        
+        # Enhance with LLM if available
+        try:
+            enhancer = get_llm_enhancer()
+            loser = away_team if winner == home_team else home_team
+            
+            # Prepare context for LLM
+            context = {
+                'home_team': home_team,
+                'away_team': away_team,
+                'home_elo': home_elo,
+                'away_elo': away_elo,
+                'rest_days_home': rest_days_home,
+                'rest_days_away': rest_days_away,
+                'home_court_advantage': self.HOME_COURT_ADVANTAGE
+            }
+            
+            return enhancer.enhance_explanation(
+                sport="NBA",
+                winner=winner,
+                loser=loser,
+                probability=probability,
+                features={
+                    'home_elo': home_elo,
+                    'away_elo': away_elo,
+                    'elo_diff': abs(home_elo - away_elo)
+                },
+                context=context,
+                template_explanation=template_explanation
+            )
+        except Exception as e:
+            self.logger.warning(f"Failed to enhance explanation with LLM: {e}")
+            return template_explanation
     
     def update_elo_ratings(
         self,

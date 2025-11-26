@@ -5,6 +5,7 @@ Filter for sport/league selection
 
 import streamlit as st
 import pandas as pd
+from typing import Any
 from src.betting.filters.base_filter import BaseBettingFilter
 
 
@@ -19,6 +20,7 @@ class SportFilter(BaseBettingFilter):
     def __init__(self,
                  label: str = "Sport",
                  options: list = None,
+                 multi_select: bool = False,
                  help_text: str = None):
         """
         Initialize sport filter.
@@ -26,13 +28,15 @@ class SportFilter(BaseBettingFilter):
         Args:
             label: Display label
             options: List of sport options (default: ["All", "NFL", "NCAA Football", "NBA", "NCAA Basketball"])
+            multi_select: Whether to allow multiple selections
             help_text: Optional help text
         """
         super().__init__(label)
         self.options = options or ["All", "NFL", "NCAA Football", "NBA", "NCAA Basketball"]
+        self.multi_select = multi_select
         self.help_text = help_text or "Filter by sport or league"
 
-    def render(self, key_prefix: str) -> str:
+    def render(self, key_prefix: str) -> Any:
         """
         Render sport filter.
 
@@ -40,27 +44,45 @@ class SportFilter(BaseBettingFilter):
             key_prefix: Unique key prefix
 
         Returns:
-            Selected sport option
+            Selected sport option(s)
         """
-        return st.selectbox(
-            self.label,
-            options=self.options,
-            key=f"{key_prefix}_sport",
-            help=self.help_text
-        )
+        if self.multi_select:
+            return st.multiselect(
+                self.label,
+                options=self.options,
+                default=self.options if "All" not in self.options else ["All"],
+                key=f"{key_prefix}_sport",
+                help=self.help_text
+            )
+        else:
+            return st.selectbox(
+                self.label,
+                options=self.options,
+                key=f"{key_prefix}_sport",
+                help=self.help_text
+            )
 
-    def apply(self, df: pd.DataFrame, value: str) -> pd.DataFrame:
+    def apply(self, df: pd.DataFrame, value: Any) -> pd.DataFrame:
         """
         Apply sport filter.
 
         Args:
             df: Input DataFrame
-            value: Selected sport option
+            value: Selected sport option(s)
 
         Returns:
             Filtered DataFrame
         """
-        if value == "All":
+        # Handle "All" case
+        if isinstance(value, str):
+            if value == "All":
+                return df
+            selected_sports = [value]
+        elif isinstance(value, list):
+            if not value or "All" in value:
+                return df
+            selected_sports = value
+        else:
             return df
 
         # Try multiple common column names for sport/league
@@ -93,11 +115,14 @@ class SportFilter(BaseBettingFilter):
             "MMA": ["mma", "ufc", "mixed martial arts"],
         }
 
-        # Get possible values for the selected sport
-        possible_values = sport_mappings.get(value, [value.lower()])
+        # Build list of all possible values for selected sports
+        all_possible_values = []
+        for sport in selected_sports:
+            possible = sport_mappings.get(sport, [sport.lower()])
+            all_possible_values.extend(possible)
 
         # Filter by sport
-        mask = df_copy['_normalized_sport'].isin(possible_values)
+        mask = df_copy['_normalized_sport'].isin(all_possible_values)
         result = df_copy[mask].drop('_normalized_sport', axis=1)
 
         return result

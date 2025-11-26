@@ -11,6 +11,12 @@ import streamlit as st
 import os
 from datetime import datetime
 from src.betting.best_bets_ranker import BestBetsRanker
+from src.betting.filters import (
+    BettingFilterPanel, 
+    ConfidenceFilter, 
+    ExpectedValueFilter, 
+    SportFilter
+)
 
 # Page config
 st.set_page_config(page_title="Best Bets Across All Sports", page_icon="🏆", layout="wide")
@@ -56,32 +62,37 @@ try:
         help="Show top N ranked opportunities"
     )
 
-    min_ev_pct = st.sidebar.slider(
-        "Minimum EV %",
-        min_value=0,
-        max_value=30,
-        value=5,
-        step=1,
-        help="Only show bets with at least this much expected value"
-    )
-
-    min_confidence = st.sidebar.slider(
-        "Minimum Confidence",
-        min_value=0,
-        max_value=100,
-        value=60,
-        step=5,
-        help="Only show bets with at least this confidence score"
-    )
-
-    # Sport filter
+    # Create and render betting filter panel
+    # Replaces manual EV, Confidence, and Sport widgets
+    panel = BettingFilterPanel()
+    
+    # Add filters with custom settings to match original page
+    panel.add_filter(ExpectedValueFilter(
+        label="Minimum EV %", 
+        min_val=0.0, 
+        max_val=30.0, 
+        default=5.0,
+        step=1.0
+    ))
+    
+    panel.add_filter(ConfidenceFilter(
+        label="Minimum Confidence",
+        min_val=0,
+        max_val=100,
+        default=60,
+        step=5
+    ))
+    
+    # Sport filter needs dynamic options from summary
     all_sports = list(sport_summary.keys()) if sport_summary else ['NFL', 'NCAA', 'NBA']
-    sport_filter = st.sidebar.multiselect(
-        "Sports to include",
+    panel.add_filter(SportFilter(
+        label="Sports to include",
         options=all_sports,
-        default=all_sports,
-        help="Select which sports to show"
-    )
+        multi_select=True
+    ))
+    
+    # Render panel in sidebar
+    panel_values = panel.render(key_prefix="best_bets", layout="sidebar")
 
     max_age_hours = st.sidebar.slider(
         "Max odds age (hours)",
@@ -99,11 +110,20 @@ try:
 
     # Fetch best bets
     with st.spinner("🔍 Analyzing opportunities across all sports..."):
+        # Extract values from panel (using filter names as keys)
+        # ExpectedValueFilter -> 'expectedvalue'
+        # ConfidenceFilter -> 'confidence'
+        # SportFilter -> 'sport'
+        
+        min_ev_pct = panel_values.get('expectedvalue', 5.0)
+        min_confidence = panel_values.get('confidence', 60)
+        sport_selection = panel_values.get('sport', all_sports)
+        
         best_bets = ranker.get_best_bets(
             top_n=top_n,
             min_ev=min_ev_pct / 100.0,
             min_confidence=min_confidence,
-            sports_filter=sport_filter if sport_filter else None,
+            sports_filter=sport_selection if sport_selection else None,
             max_age_hours=max_age_hours
         )
 

@@ -1,4 +1,4 @@
-# Wheel Strategy Premium Hunter - Current Status
+# Ava Trading Platform - Current Status
 
 **Last Updated**: 2025-10-27
 **Status**: ✅ WORKING & TESTED

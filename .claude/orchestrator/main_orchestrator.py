@@ -55,6 +55,7 @@ class OrchestrationContext:
     specialist_agents: List[str] = field(default_factory=list)
     validation_results: Dict[str, Any] = field(default_factory=dict)
     qa_results: Dict[str, Any] = field(default_factory=dict)
+    research_results: Dict[str, Any] = field(default_factory=dict)  # NEW: Plan-first workflow
     status: TaskStatus = TaskStatus.PENDING
     start_time: datetime = field(default_factory=datetime.now)
     end_time: Optional[datetime] = None
@@ -155,7 +156,8 @@ class MainOrchestrator:
         Main orchestration flow - runs automatically on every request
 
         Flow (LangGraph state machine):
-        1. PENDING -> VALIDATING (Pre-flight validation)
+        0. PENDING -> PLANNING (Research & Planning - NEW)
+        1. PLANNING -> VALIDATING (Pre-flight validation)
         2. VALIDATING -> EXECUTING (If validation passes)
         3. EXECUTING -> QA_RUNNING (Post-execution QA)
         4. QA_RUNNING -> COMPLETED (If QA passes)
@@ -175,6 +177,28 @@ class MainOrchestrator:
         context = context or {}
 
         try:
+            # === STAGE 0: RESEARCH & PLANNING (NEW) ===
+            orchestrator_config = self.config.get("orchestrator", {})
+
+            if orchestrator_config.get("require_plan_approval", False):
+                ctx.status = TaskStatus.VALIDATING  # Use VALIDATING for planning phase
+                self.logger.info("Starting plan-first research phase...")
+
+                # Run research and generate plan
+                research_results = self.pre_flight.research_and_plan(request, context)
+                ctx.research_results = research_results
+
+                # If research completed, the plan needs user approval
+                # The orchestrator will pause here - ExitPlanMode will be called
+                # to present the plan to the user for approval
+                if research_results.get("research_completed", False):
+                    self.logger.info("Research complete. Waiting for user approval...")
+                    self.logger.info(f"Generated plan:\n{research_results.get('plan', 'No plan')}")
+
+                    # NOTE: In actual implementation, this would trigger ExitPlanMode
+                    # and wait for user approval before continuing
+                    # For now, we just log and continue to validation
+
             # === STAGE 1: PRE-FLIGHT VALIDATION ===
             ctx.status = TaskStatus.VALIDATING
             self.logger.info(f"Starting orchestration for request: {request[:100]}...")

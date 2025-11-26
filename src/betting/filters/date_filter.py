@@ -119,6 +119,9 @@ class DateRangeFilter(BaseBettingFilter):
             elif preset == "This Week":
                 start = today
                 end = today + pd.Timedelta(days=7)
+            elif preset == "This Month":
+                start = today
+                end = today + pd.Timedelta(days=30)
             elif preset == "Custom":
                 start = pd.Timestamp(value.get("start_date", today.date()))
                 end = pd.Timestamp(value.get("end_date", (today + pd.Timedelta(days=7)).date()))

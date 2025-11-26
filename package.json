@@ -1,5 +1,5 @@
 {
-  "name": "wheel-strategy",
+  "name": "ava-trading-platform",
   "version": "1.0.0",
   "description": "Options income generation system for cash-secured puts and covered calls",
   "main": "src/index.js",
@@ -14,7 +14,13 @@
     "lint": "eslint src/",
     "build": "npm run lint && npm run test"
   },
-  "keywords": ["options", "trading", "cash-secured-puts", "covered-calls", "income"],
+  "keywords": [
+    "options",
+    "trading",
+    "cash-secured-puts",
+    "covered-calls",
+    "income"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {

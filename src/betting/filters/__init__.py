@@ -13,7 +13,11 @@ from src.betting.filters.date_filter import DateRangeFilter
 from src.betting.filters.status_filter import GameStatusFilter
 from src.betting.filters.sport_filter import SportFilter
 from src.betting.filters.sort_filter import SortFilter
-from src.betting.filters.filter_panel import BettingFilterPanel
+from src.betting.filters.filter_panel import (
+    BettingFilterPanel,
+    create_standard_betting_panel,
+    create_minimal_betting_panel
+)
 
 __all__ = [
     'BaseBettingFilter',
@@ -24,4 +28,6 @@ __all__ = [
     'SportFilter',
     'SortFilter',
     'BettingFilterPanel',
+    'create_standard_betting_panel',
+    'create_minimal_betting_panel',
 ]

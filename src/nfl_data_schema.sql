@@ -77,7 +77,7 @@ CREATE INDEX IF NOT EXISTS idx_nfl_games_live ON nfl_games(is_live) WHERE is_liv
 CREATE INDEX IF NOT EXISTS idx_nfl_games_time ON nfl_games(game_time);
 CREATE INDEX IF NOT EXISTS idx_nfl_games_season_week ON nfl_games(season, week);
 CREATE INDEX IF NOT EXISTS idx_nfl_games_teams ON nfl_games(home_team, away_team);
-CREATE INDEX IF NOT EXISTS idx_nfl_games_upcoming ON nfl_games(game_time) WHERE game_status IN ('scheduled', 'live') AND game_time > NOW();
+CREATE INDEX IF NOT EXISTS idx_nfl_games_upcoming ON nfl_games(game_time) WHERE game_status IN ('scheduled', 'live');
 
 COMMENT ON TABLE nfl_games IS 'NFL game schedules and live scores';
 COMMENT ON COLUMN nfl_games.game_id IS 'Unique identifier from external API';

@@ -1,4 +1,4 @@
-# Magnus Trading Platform
+# Ava Trading Platform
 
 **Advanced Options Trading Platform with AI-Powered Analysis**
 

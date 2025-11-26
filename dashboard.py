@@ -626,6 +626,10 @@ if page == "Dashboard":
 
 # Opportunities feature removed - premium analysis integrated into TradingView Watchlists and Premium Scanner
 
+elif page == "Sports Game Hub":
+    from sports_betting_hub_page import show_sports_betting_hub
+    show_sports_betting_hub()
+
 elif page == "Positions":
     # Use improved Positions page with all enhancements
     from positions_page_improved import show_positions_page

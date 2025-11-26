@@ -78,6 +78,7 @@ class RAGService:
         self,
         collection_name: str = "magnus_knowledge",
         embedding_model: str = "all-mpnet-base-v2",
+        rerank_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2",
         cache_ttl_seconds: int = 3600,
         min_confidence_threshold: float = 0.6
     ):
@@ -87,6 +88,7 @@ class RAGService:
         Args:
             collection_name: ChromaDB collection name
             embedding_model: Sentence transformer model
+            rerank_model: Cross-encoder model for reranking
             cache_ttl_seconds: Cache time-to-live (default 1 hour)
             min_confidence_threshold: Minimum confidence for retrieval
         """
@@ -112,6 +114,25 @@ class RAGService:
         # Embedding model
         self.embedding_model = SentenceTransformer(embedding_model)
         logger.info(f"Loaded embedding model: {embedding_model}")
+
+        # Cross-Encoder for Reranking
+        try:
+            from sentence_transformers import CrossEncoder
+            self.cross_encoder = CrossEncoder(rerank_model)
+            logger.info(f"Loaded reranker: {rerank_model}")
+        except Exception as e:
+            logger.warning(f"Failed to load CrossEncoder: {e}. Reranking will be limited.")
+            self.cross_encoder = None
+
+        # Magnus Local LLM
+        try:
+            from src.magnus_local_llm import get_magnus_llm, TaskComplexity
+            self.llm = get_magnus_llm()
+            self.TaskComplexity = TaskComplexity
+            logger.info("Connected to Magnus Local LLM")
+        except Exception as e:
+            logger.error(f"Failed to connect to Magnus Local LLM: {e}")
+            self.llm = None
 
         # Cache configuration
         self.cache = {}
@@ -285,9 +306,7 @@ class RAGService:
 
     def _rerank_results(self, documents: List[RetrievedDocument], query: str) -> List[RetrievedDocument]:
         """
-        Rerank results using cross-encoder (simplified version)
-
-        In production, would use cross-encoder model. Here using enhanced scoring.
+        Rerank results using Cross-Encoder for high precision
 
         Args:
             documents: Retrieved documents
@@ -296,25 +315,23 @@ class RAGService:
         Returns:
             Reranked documents
         """
-        # Simple reranking: boost documents with exact phrase matches
-        query_lower = query.lower()
+        if not self.cross_encoder or not documents:
+            return documents
 
-        for doc in documents:
-            doc_lower = doc.content.lower()
+        # Prepare pairs for Cross-Encoder
+        pairs = [[query, doc.content] for doc in documents]
+        
+        # Predict scores
+        scores = self.cross_encoder.predict(pairs)
 
-            # Boost for exact phrase match
-            if query_lower in doc_lower:
-                doc.combined_score *= 1.3
+        # Update scores and sort
+        for i, doc in enumerate(documents):
+            doc.combined_score = float(scores[i])
+            doc.source = 'reranked'
 
-            # Boost for title/header matches (if in metadata)
-            if 'title' in doc.metadata and query_lower in doc.metadata['title'].lower():
-                doc.combined_score *= 1.2
-
-            # Penalize very long documents (might be less focused)
-            if len(doc.content) > 5000:
-                doc.combined_score *= 0.9
-
+        # Sort by new score
         documents.sort(key=lambda x: x.combined_score, reverse=True)
+        
         return documents
 
     def _adaptive_retrieval(self, query: str, complexity: str) -> List[RetrievedDocument]:
@@ -365,6 +382,9 @@ class RAGService:
 
         top_score = documents[0].combined_score
 
+        # Normalize Cross-Encoder scores (usually logits) to 0-1 if needed
+        # For now assuming scores are roughly correlated with confidence
+        
         # Check score distribution
         if len(documents) > 1:
             second_score = documents[1].combined_score
@@ -372,43 +392,39 @@ class RAGService:
         else:
             score_gap = 0.0
 
-        # Base confidence on top score
-        confidence = top_score
+        # Base confidence on top score (clamped)
+        confidence = min(max(top_score, 0.0), 1.0)
 
         # Boost if clear winner (large gap)
         if score_gap > 0.2:
             confidence *= 1.1
 
         # Boost if multiple relevant docs
-        relevant_count = sum(1 for doc in documents if doc.combined_score > 0.6)
+        relevant_count = sum(1 for doc in documents if doc.combined_score > 0.5)
         if relevant_count >= 3:
             confidence *= 1.05
 
-        # Adjust for query complexity
-        if complexity == 'simple' and top_score > 0.8:
-            confidence *= 1.1
-        elif complexity == 'complex' and relevant_count < 5:
-            confidence *= 0.9
-
         return min(confidence, 1.0)
 
-    def _generate_answer(self, query: str, documents: List[RetrievedDocument]) -> str:
+    def _generate_answer(self, query: str, documents: List[RetrievedDocument], complexity: str = 'medium') -> str:
         """
-        Generate answer from retrieved documents
-
-        In production, this would call an LLM. For now, returns formatted context.
-
-        Args:
-            query: User query
-            documents: Retrieved documents
-
-        Returns:
-            Generated answer
+        Generate answer using Magnus Local LLM
         """
         if not documents:
             return "I don't have enough information to answer that question."
 
-        # Build context from top documents
+        if not self.llm:
+            return "Magnus Local LLM is not connected. I found relevant documents but cannot generate an answer."
+
+        # Map complexity to TaskComplexity
+        complexity_map = {
+            'simple': self.TaskComplexity.FAST,
+            'medium': self.TaskComplexity.BALANCED,
+            'complex': self.TaskComplexity.COMPLEX
+        }
+        task_complexity = complexity_map.get(complexity, self.TaskComplexity.BALANCED)
+
+        # Build context
         context_parts = []
         for i, doc in enumerate(documents[:3], 1):
             source_info = doc.metadata.get('source', 'Unknown')
@@ -416,15 +432,27 @@ class RAGService:
 
         context = "\n".join(context_parts)
 
-        # TODO: Replace with actual LLM call
-        # For now, return structured context
-        answer = f"""Based on the available information:
+        # Construct system prompt
+        system_prompt = """You are Magnus, an expert financial advisor and trading assistant. 
+Use the provided context to answer the user's question. 
+If the answer is not in the context, say so politely.
+Keep answers concise, professional, and actionable."""
 
-{context}
-
-(Note: Full LLM integration pending. This is the relevant context retrieved.)"""
-
-        return answer
+        # Generate response
+        try:
+            # Add context to query for the LLM
+            full_query = f"Context:\n{context}\n\nUser Question: {query}"
+            
+            response = self.llm.query(
+                prompt=full_query,
+                complexity=task_complexity,
+                system_prompt=system_prompt,
+                use_trading_context=False  # We provide our own context
+            )
+            return response
+        except Exception as e:
+            logger.error(f"LLM generation failed: {e}")
+            return "I encountered an error while generating the answer. Please try again."
 
     def query(
         self,
@@ -479,7 +507,7 @@ class RAGService:
             self.metrics['retrieval_failures'] += 1
 
         # Generate answer
-        answer = self._generate_answer(question, documents)
+        answer = self._generate_answer(question, documents, complexity)
 
         # Build result
         processing_time = (datetime.now() - start_time).total_seconds() * 1000
@@ -612,6 +640,7 @@ if __name__ == "__main__":
     for question in test_questions:
         print(f"\nQuestion: {question}")
         result = rag.query(question)
+        print(f"Answer: {result.answer}")
         print(f"Complexity: {result.query_complexity}")
         print(f"Confidence: {result.confidence:.2f}")
         print(f"Method: {result.retrieval_method}")

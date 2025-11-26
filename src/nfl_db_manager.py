@@ -11,6 +11,7 @@ from typing import List, Dict, Optional, Any, Tuple
 from datetime import datetime, timedelta
 from decimal import Decimal
 import json
+from src.database.connection_pool import DatabaseConnectionPool
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -30,8 +31,32 @@ class NFLDBManager:
         self.initialize_database()
 
     def get_connection(self):
-        """Get database connection with connection pooling"""
-        return psycopg2.connect(**self.db_config)
+        """Get database connection from shared pool"""
+        try:
+            pool = DatabaseConnectionPool()
+            return pool._pool.getconn()
+        except Exception as e:
+            logger.error(f"Error getting connection from pool: {e}")
+            return psycopg2.connect(**self.db_config)
+
+    def release_connection(self, conn):
+        """Release connection back to shared pool"""
+        if not conn:
+            return
+
+        try:
+            pool = DatabaseConnectionPool()
+            if pool._pool and not conn.closed:
+                pool._pool.putconn(conn)
+            elif not conn.closed:
+                conn.close()
+        except Exception as e:
+            logger.error(f"Error releasing connection: {e}")
+            try:
+                if conn and not conn.closed:
+                    conn.close()
+            except:
+                pass
 
     def initialize_database(self):
         """Initialize database tables from schema file"""
@@ -50,7 +75,7 @@ class NFLDBManager:
             cur.execute(schema_sql)
             conn.commit()
             cur.close()
-            conn.close()
+            self.release_connection(conn)
 
             logger.info("NFL database tables initialized successfully")
 
@@ -139,7 +164,7 @@ class NFLDBManager:
             raise
         finally:
             cur.close()
-            conn.close()
+            self.release_connection(conn)
 
     def get_live_games(self) -> List[Dict]:
         """Get all currently live games"""
@@ -152,7 +177,7 @@ class NFLDBManager:
             return [dict(g) for g in games]
         finally:
             cur.close()
-            conn.close()
+            self.release_connection(conn)
 
     def get_upcoming_games(self, hours_ahead: int = 24) -> List[Dict]:
         """Get games starting in the next N hours"""
@@ -172,7 +197,7 @@ class NFLDBManager:
             return [dict(g) for g in games]
         finally:
             cur.close()
-            conn.close()
+            self.release_connection(conn)
 
     def get_game_by_external_id(self, external_game_id: str) -> Optional[Dict]:
         """Get game by external API game_id"""
@@ -188,7 +213,7 @@ class NFLDBManager:
             return dict(game) if game else None
         finally:
             cur.close()
-            conn.close()
+            self.release_connection(conn)
 
     # ========================================================================
     # PLAY OPERATIONS
@@ -246,7 +271,7 @@ class NFLDBManager:
             raise
         finally:
             cur.close()
-            conn.close()
+            self.release_connection(conn)
 
     def get_recent_significant_plays(self, limit: int = 50) -> List[Dict]:
         """Get recent high-impact plays"""
@@ -262,7 +287,7 @@ class NFLDBManager:
             return [dict(p) for p in plays]
         finally:
             cur.close()
-            conn.close()
+            self.release_connection(conn)
 
     # ========================================================================
     # PLAYER STATS OPERATIONS
@@ -335,7 +360,7 @@ class NFLDBManager:
             raise
         finally:
             cur.close()
-            conn.close()
+            self.release_connection(conn)
 
     # ========================================================================
     # INJURY OPERATIONS
@@ -376,7 +401,7 @@ class NFLDBManager:
             raise
         finally:
             cur.close()
-            conn.close()
+            self.release_connection(conn)
 
     def get_active_injuries(self, team: Optional[str] = None) -> List[Dict]:
         """Get active injury reports, optionally filtered by team"""
@@ -398,7 +423,7 @@ class NFLDBManager:
             return [dict(i) for i in injuries]
         finally:
             cur.close()
-            conn.close()
+            self.release_connection(conn)
 
     # ========================================================================
     # KALSHI CORRELATION OPERATIONS
@@ -438,7 +463,7 @@ class NFLDBManager:
             raise
         finally:
             cur.close()
-            conn.close()
+            self.release_connection(conn)
 
     # ========================================================================
     # ALERT OPERATIONS
@@ -478,7 +503,7 @@ class NFLDBManager:
             raise
         finally:
             cur.close()
-            conn.close()
+            self.release_connection(conn)
 
     def get_active_alert_triggers(self) -> List[Dict]:
         """Get all active alert configurations"""
@@ -496,7 +521,7 @@ class NFLDBManager:
             return [dict(t) for t in triggers]
         finally:
             cur.close()
-            conn.close()
+            self.release_connection(conn)
 
     # ========================================================================
     # SYNC LOGGING
@@ -519,7 +544,7 @@ class NFLDBManager:
             return sync_id
         finally:
             cur.close()
-            conn.close()
+            self.release_connection(conn)
 
     def complete_sync_log(
         self,
@@ -570,7 +595,7 @@ class NFLDBManager:
             conn.commit()
         finally:
             cur.close()
-            conn.close()
+            self.release_connection(conn)
 
     # ========================================================================
     # ANALYTICS & REPORTING
@@ -625,7 +650,7 @@ class NFLDBManager:
 
         finally:
             cur.close()
-            conn.close()
+            self.release_connection(conn)
 
 
 if __name__ == "__main__":

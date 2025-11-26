@@ -1,10 +1,6 @@
 """
 Kalshi NFL Prediction Markets - Modern Dashboard with Enhanced Game Cards
 Feature-rich interface for NFL prediction market analysis and tracking
-
-Author: AI Frontend Developer
-Created: 2025-11-09
-Updated: 2025-11-15 - Enhanced UI with clickable team logos, Telegram integration, and live indicators
 """
 
 import streamlit as st
@@ -14,6 +10,18 @@ import plotly.express as px
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 import json
+import sys
+from pathlib import Path
+
+# Add src to path for imports
+sys.path.append(str(Path(__file__).parent))
+
+from src.betting.filters import (
+    BettingFilterPanel, 
+    ConfidenceFilter, 
+    ExpectedValueFilter, 
+    DateRangeFilter
+)
 
 from src.services import get_kalshi_manager  # Use centralized service registry
 from src.kalshi_ai_evaluator import KalshiAIEvaluator
@@ -742,38 +750,19 @@ def render_filter_sidebar(df: pd.DataFrame, data_manager: MarketDataManager) -> 
     )
     filters['bet_types'] = selected_bet_types
 
-    # ========== Confidence Range ==========
-    st.sidebar.subheader("💯 Confidence Score")
-    confidence_range = st.sidebar.slider(
-        "Minimum confidence",
-        min_value=0,
-        max_value=100,
-        value=60,
-        step=5,
-        help="Filter by AI confidence score"
-    )
-    filters['confidence_min'] = confidence_range
-
-    # ========== Edge Filter ==========
-    st.sidebar.subheader("📈 Edge Percentage")
-    edge_range = st.sidebar.slider(
-        "Minimum edge",
-        min_value=-10.0,
-        max_value=20.0,
-        value=0.0,
-        step=0.5,
-        help="Filter by expected value edge"
-    )
-    filters['edge_min'] = edge_range
-
-    # ========== Time Filter ==========
-    st.sidebar.subheader("⏰ Timing")
-    time_filter = st.sidebar.selectbox(
-        "Games closing",
-        options=['All', 'Today', 'Tomorrow', 'This Week', 'This Month'],
-        index=0
-    )
-    filters['time_filter'] = time_filter
+    # ========== Standard Filters (Confidence, Edge, Time) ==========
+    # Use shared filter library for these standard filters
+    panel = BettingFilterPanel()
+    panel.add_filter(ConfidenceFilter(default=60))
+    panel.add_filter(ExpectedValueFilter(default=0.0, min_value=-10.0, max_value=20.0))
+    panel.add_filter(DateRangeFilter(presets=['All', 'Today', 'Tomorrow', 'This Week', 'This Month']))
+    
+    # Render panel in sidebar
+    panel_values = panel.render(key_prefix="kalshi_sidebar", layout="sidebar")
+    filters.update(panel_values)
+    
+    # Store panel in filters for use in apply_filters
+    filters['_panel'] = panel
 
     # ========== Risk Level ==========
     st.sidebar.subheader("⚠️ Risk Level")
@@ -827,24 +816,13 @@ def apply_filters(df: pd.DataFrame, filters: Dict) -> pd.DataFrame:
     if filters.get('bet_types'):
         filtered_df = filtered_df[filtered_df['bet_type'].isin(filters['bet_types'])]
 
-    # Confidence filter
-    if filters.get('confidence_min') is not None:
-        filtered_df = filtered_df[filtered_df['confidence'] >= filters['confidence_min']]
-
-    # Edge filter
-    if filters.get('edge_min') is not None:
-        filtered_df = filtered_df[filtered_df['edge_pct'] >= filters['edge_min']]
-
-    # Time filter
-    time_filter = filters.get('time_filter', 'All')
-    if time_filter == 'Today':
-        filtered_df = filtered_df[filtered_df['days_to_close'] == 0]
-    elif time_filter == 'Tomorrow':
-        filtered_df = filtered_df[filtered_df['days_to_close'] == 1]
-    elif time_filter == 'This Week':
-        filtered_df = filtered_df[filtered_df['days_to_close'] <= 7]
-    elif time_filter == 'This Month':
-        filtered_df = filtered_df[filtered_df['days_to_close'] <= 30]
+    # Apply standard filters using the panel
+    if '_panel' in filters:
+        panel = filters['_panel']
+        filtered_df = panel.apply(filtered_df, filters)
+    else:
+        # Fallback if panel not present (shouldn't happen)
+        pass
 
     # Risk level filter
     if filters.get('risk_levels'):

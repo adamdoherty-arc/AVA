@@ -27,6 +27,7 @@ from src.ncaa_team_database import NCAA_LOGOS, get_team_logo_url, find_team_by_n
 from src.game_watchlist_manager import GameWatchlistManager
 from src.watchlist_monitor_service import get_monitor_service
 from src.prediction_agents import NFLPredictor, NCAAPredictor
+from src.betting.filters import create_standard_betting_panel, BettingFilterPanel
 
 # Initialize logger first
 logger = logging.getLogger(__name__)
@@ -696,111 +697,18 @@ def show_sport_games(db, watchlist_manager, sport_filter, sport_name, llm_servic
     # ==================== ALWAYS VISIBLE FILTERS ====================
     st.markdown("### 🎛️ Filters & Sorting")
 
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
+    # Create and render standard betting panel
+    # This replaces the manual filter widgets with the shared library
+    panel = create_standard_betting_panel()
+    
+    # Render filters in columns layout
+    filter_values = panel.render(key_prefix=f"gc_{sport_filter}", layout="columns")
+    
+    # Extract specific values needed for other parts of the UI
 
-    with col1:
-        sort_by = st.selectbox(
-            "Sort By",
-            ["🔴 Live First", "⏰ Game Time", "🎯 Best Odds", "🏆 Biggest Favorite", "🤖 AI Confidence"],
-            key=f"sort_{sport_filter}",
-            help="Sort games by different criteria"
-        )
-
-    with col2:
-        # Combined Status & Date Filter
-        unified_filter = st.selectbox(
-            "🔍 Filter Games",
-            ["All Games", "🔴 Live Only", "⏰ Upcoming", "✅ Final", "📅 Today Only", "📅 Next 7 Days", "📅 Custom Range"],
-            key=f"unified_filter_{sport_filter}",
-            help="Filter by game status or date"
-        )
-
-        # Parse the unified filter into status and date components
-        if unified_filter == "🔴 Live Only":
-            filter_status = "Live Only"
-            date_filter_mode = "All Games"
-        elif unified_filter == "⏰ Upcoming":
-            filter_status = "Upcoming"
-            date_filter_mode = "All Games"
-        elif unified_filter == "✅ Final":
-            filter_status = "Final"
-            date_filter_mode = "All Games"
-        elif unified_filter == "📅 Today Only":
-            filter_status = "All Games"
-            date_filter_mode = "Today Only"
-        elif unified_filter == "📅 Next 7 Days":
-            filter_status = "All Games"
-            date_filter_mode = "Next 7 Days"
-        elif unified_filter == "📅 Custom Range":
-            filter_status = "All Games"
-            date_filter_mode = "Custom Range"
-        else:  # "All Games"
-            filter_status = "All Games"
-            date_filter_mode = "All Games"
-
-    with col3:
-        odds_filter = st.selectbox(
-            "Money Filter",
-            ["All Games", "💰 EV > 5%", "💰 EV > 10%", "🎯 High Confidence"],
-            key=f"odds_filter_{sport_filter}"
-        )
-
-    with col4:
-        min_opportunity = st.slider(
-            "Min EV %",
-            0, 50, 0,
-            key=f"min_opp_{sport_filter}"
-        )
-
-    with col5:
-        cards_per_row = st.selectbox(
-            "Cards/Row",
-            [2, 3, 4],
-            index=1,  # Default to 3
-            key=f"cards_per_row_{sport_filter}"
-        )
-
-    with col6:
-        hide_final = st.checkbox(
-            "Hide Final",
-            value=False,
-            key=f"hide_final_{sport_filter}",
-            help="Filter out completed games"
-        )
-
-    # Second filter row - Custom Range, Lopsided Odds, and Auto-Refresh
-    col7, col8, col9, col10 = st.columns([2, 2, 1.5, 1.5])
-
-    with col7:
-        # Show custom date range selector when Custom Range is selected
-        if unified_filter == "📅 Custom Range":
-            date_range = st.date_input(
-                "📅 Select Date Range",
-                value=(datetime.now().date(), datetime.now().date() + timedelta(days=6)),
-                key=f"date_range_{sport_filter}",
-                help="Select start and end dates"
-            )
-        else:
-            date_range = None
-
-    with col8:
-        hide_lopsided = st.checkbox(
-            "🎯 Hide Lopsided Odds",
-            value=False,
-            key=f"hide_lopsided_{sport_filter}",
-            help="Filter out games with heavily favored teams (96%+ odds = low payout potential)"
-        )
-
-        if hide_lopsided:
-            lopsided_threshold = st.slider(
-                "Max Odds %",
-                70, 99, 90,
-                key=f"lopsided_threshold_{sport_filter}",
-                help="Hide games where one team's odds exceed this percentage"
-            )
-        else:
-            lopsided_threshold = 90
-
+    # Layout for auto-refresh and sync buttons
+    col9, col10 = st.columns([1.5, 1.5])
+    
     with col9:
         auto_refresh_enabled = st.checkbox(
             "⚡ Auto-Refresh",
@@ -1095,33 +1003,35 @@ def show_sport_games(db, watchlist_manager, sport_filter, sport_name, llm_servic
                     st.rerun()
 
 
+    # ==================== APPLY FILTERS ====================
+    # Convert to DataFrame for filtering
+    if espn_games:
+        df = pd.DataFrame(espn_games)
+        
+        # Apply filters using the panel
+        filtered_df = panel.apply(df, filter_values)
+        
+        # Convert back to list of dicts
+        filtered_games = filtered_df.to_dict('records')
+    else:
+        filtered_games = []
+
     # Calculate live count for display in pagination
-    live_count = sum(1 for g in espn_games if g.get('is_live', False))
+    live_count = sum(1 for g in filtered_games if g.get('is_live', False))
 
     # NOTE: Watchlist sidebar moved to show_game_cards() to avoid duplication across tabs
 
     # ==================== DISPLAY ESPN LIVE GAMES ====================
+    # Pass filtered games directly, no need for filter_settings anymore
     display_espn_live_games(
-        espn_games,
+        filtered_games,
         sport_name,
         sport_filter,
         watchlist_manager,
-        cards_per_row,
-        llm_service,
-        live_count,
-        filter_settings={
-            'sort_by': sort_by,
-            'filter_status': filter_status,
-            'odds_filter': odds_filter,
-            'min_opportunity': min_opportunity,
-            'hide_final': hide_final,
-            'date_filter_mode': date_filter_mode,
-            'date_range': date_range,
-            'selected_team_name': selected_team_name,
-            'team_filter': st.session_state.get(f'{sport_filter.lower()}_team_filter', 'All Teams'),
-            'hide_lopsided': hide_lopsided,
-            'lopsided_threshold': lopsided_threshold
-        }
+        cards_per_row=3, # Default to 3
+        llm_service=llm_service,
+        live_count=live_count,
+        filter_settings=None # Filters already applied
     )
 
 
@@ -1270,8 +1180,13 @@ def display_espn_live_games(espn_games, sport_name, sport_filter, watchlist_mana
         games_with_ev.append(game)
 
     # Filter games by status
+    # NOTE: Filtering is now done via BettingFilterPanel before calling this function
+    # We keep this variable name for compatibility with existing code
     filtered_games = games_with_ev
+    
+    # Legacy filter support (optional, if filter_settings passed)
     if filter_settings:
+        # Only apply if explicitly passed (backward compatibility)
         filter_status = filter_settings.get('filter_status', 'All Games')
         hide_final = filter_settings.get('hide_final', False)
 

@@ -28,7 +28,7 @@ from .core.agent_initializer import ensure_agents_initialized, get_registry
 from src.services.llm_sports_analyzer import LLMSportsAnalyzer
 from src.services.llm_options_strategist import LLMOptionsStrategist, MarketOutlook, RiskTolerance
 from src.database import get_db_connection
-from src.magnus_local_llm import get_local_llm
+from src.magnus_local_llm import get_magnus_llm
 from src.rag import get_rag
 
 logger = logging.getLogger(__name__)
@@ -51,16 +51,16 @@ class AgentAwareNLPHandler:
         try:
             ensure_agents_initialized()
             self.registry = get_registry()
-            agent_count = len(self.registry.list_all_agents())
+            agent_count = len(self.registry.list_agent_names())
             logger.info(f"✅ Agent-Aware NLP Handler initialized with {agent_count} agents")
         except Exception as e:
             logger.error(f"Failed to initialize agent registry: {e}")
             self.registry = None
 
         # Initialize specialized LLM services
-        self.sports_analyzer = LLMSportsAnalyzer(sport="NFL")
+        self.sports_analyzer = LLMSportsAnalyzer()
         self.options_strategist = LLMOptionsStrategist()
-        self.local_llm = get_local_llm()
+        self.local_llm = get_magnus_llm()
 
         # Initialize RAG system (optional - gracefully handle if not available)
         try:
@@ -347,7 +347,7 @@ Try: "Generate strategies for AAPL, bullish outlook, moderate risk" """
         if not self.registry:
             return {}
 
-        agents = self.registry.list_all_agents()
+        agents = self.registry.list_agent_names()
         capabilities_map = {}
 
         for agent_name in agents:
@@ -393,7 +393,7 @@ Try: "Generate strategies for AAPL, bullish outlook, moderate risk" """
         if not self.registry:
             return {'error': 'Agent registry not available'}
 
-        agents = self.registry.list_all_agents()
+        agents = self.registry.list_agent_names()
 
         stats = {
             'total_agents': len(agents),

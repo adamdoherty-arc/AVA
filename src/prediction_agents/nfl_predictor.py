@@ -18,8 +18,12 @@ from datetime import datetime, timedelta
 import math
 import json
 import os
+import logging
 
 from .base_predictor import BaseSportsPredictor
+from .llm_explanation_enhancer import get_llm_enhancer
+
+logger = logging.getLogger(__name__)
 
 
 class NFLPredictor(BaseSportsPredictor):
@@ -668,11 +672,39 @@ class NFLPredictor(BaseSportsPredictor):
             affected_team = away_team if injury_adj > 0 else home_team
             parts.append(f"Key injuries to {affected_team} significantly impact their chances in this matchup.")
 
-        return " ".join(parts)
+        # Generate base template explanation
+        template_explanation = " ".join(parts)
+        
+        # Enhance with LLM if available
+        try:
+            enhancer = get_llm_enhancer()
+            loser = away_team if winner == home_team else home_team
+            
+            # Prepare context for LLM
+            context = {
+                'home_team': home_team,
+                'away_team': away_team,
+                'adjustments': adjustments,
+                'elo_diff': features.get('elo_diff', 0),
+                'home_field_advantage': self.HOME_FIELD_ADVANTAGE
+            }
+            
+            return enhancer.enhance_explanation(
+                sport="NFL",
+                winner=winner,
+                loser=loser,
+                probability=probability,
+                features=features,
+                context=context,
+                template_explanation=template_explanation
+            )
+        except Exception as e:
+            self.logger.warning(f"Failed to enhance explanation with LLM: {e}")
+            return template_explanation
 
     def get_team_stats(self, team_name: str) -> Dict[str, Any]:
         """
-        Get current season statistics for a team.
+        Get current season statistics for a team from the database.
 
         Args:
             team_name: Name of the team
@@ -684,8 +716,60 @@ class NFLPredictor(BaseSportsPredictor):
         if team_name in self.team_stats:
             return self.team_stats[team_name]
 
-        # TODO: Load from database
-        # For now, return empty dict
+        # Load from database
+        try:
+            from src.database.connection_pool import get_db_connection
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+
+                # Calculate team stats from completed games this season
+                cursor.execute("""
+                    SELECT
+                        COUNT(*) as games_played,
+                        SUM(CASE WHEN home_team = %s THEN home_score ELSE away_score END) as points_for,
+                        SUM(CASE WHEN home_team = %s THEN away_score ELSE home_score END) as points_against,
+                        SUM(CASE
+                            WHEN (home_team = %s AND home_score > away_score) OR
+                                 (away_team = %s AND away_score > home_score)
+                            THEN 1 ELSE 0
+                        END) as wins,
+                        SUM(CASE
+                            WHEN (home_team = %s AND home_score < away_score) OR
+                                 (away_team = %s AND away_score < home_score)
+                            THEN 1 ELSE 0
+                        END) as losses
+                    FROM nfl_games
+                    WHERE (home_team = %s OR away_team = %s)
+                      AND game_status = 'final'
+                      AND season = EXTRACT(YEAR FROM CURRENT_DATE)
+                """, (team_name, team_name, team_name, team_name, team_name, team_name, team_name, team_name))
+
+                row = cursor.fetchone()
+                if row and row[0] and row[0] > 0:
+                    games_played = row[0]
+                    points_for = row[1] or 0
+                    points_against = row[2] or 0
+                    wins = row[3] or 0
+                    losses = row[4] or 0
+
+                    stats = {
+                        'games_played': games_played,
+                        'wins': wins,
+                        'losses': losses,
+                        'win_pct': wins / games_played if games_played > 0 else 0.5,
+                        'points_per_game': points_for / games_played,
+                        'points_allowed': points_against / games_played,
+                        'point_diff': (points_for - points_against) / games_played,
+                        'turnover_diff': 0  # Would need play-by-play data
+                    }
+
+                    # Cache the stats
+                    self.team_stats[team_name] = stats
+                    return stats
+
+        except Exception as e:
+            logger.warning(f"Could not load team stats for {team_name}: {e}")
+
         return {}
 
     def get_historical_matchups(
@@ -695,7 +779,7 @@ class NFLPredictor(BaseSportsPredictor):
         limit: int = 10
     ) -> List[Dict[str, Any]]:
         """
-        Get historical head-to-head matchups.
+        Get historical head-to-head matchups from the database.
 
         Args:
             team1: First team name
@@ -705,9 +789,104 @@ class NFLPredictor(BaseSportsPredictor):
         Returns:
             List of historical game dictionaries
         """
-        # TODO: Load from database
-        # For now, return empty list
+        try:
+            from src.database.connection_pool import get_db_connection
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+
+                cursor.execute("""
+                    SELECT
+                        game_id,
+                        season,
+                        week,
+                        home_team,
+                        away_team,
+                        home_score,
+                        away_score,
+                        game_time,
+                        venue
+                    FROM nfl_games
+                    WHERE game_status = 'final'
+                      AND ((home_team = %s AND away_team = %s) OR
+                           (home_team = %s AND away_team = %s))
+                    ORDER BY game_time DESC
+                    LIMIT %s
+                """, (team1, team2, team2, team1, limit))
+
+                rows = cursor.fetchall()
+                matchups = []
+
+                for row in rows:
+                    home_team = row[3]
+                    away_team = row[4]
+                    home_score = row[5]
+                    away_score = row[6]
+
+                    # Determine winner
+                    if home_score > away_score:
+                        winner = home_team
+                    elif away_score > home_score:
+                        winner = away_team
+                    else:
+                        winner = "Tie"
+
+                    matchups.append({
+                        'game_id': row[0],
+                        'season': row[1],
+                        'week': row[2],
+                        'home_team': home_team,
+                        'away_team': away_team,
+                        'home_score': home_score,
+                        'away_score': away_score,
+                        'winner': winner,
+                        'margin': abs(home_score - away_score),
+                        'game_time': row[7].isoformat() if row[7] else None,
+                        'venue': row[8]
+                    })
+
+                return matchups
+
+        except Exception as e:
+            logger.warning(f"Could not load historical matchups for {team1} vs {team2}: {e}")
+
         return []
+
+    def _load_injuries_from_db(self, team: str) -> List[Dict[str, Any]]:
+        """
+        Load active injuries for a team from database.
+
+        Args:
+            team: Team name
+
+        Returns:
+            List of injury dictionaries
+        """
+        try:
+            from src.database.connection_pool import get_db_connection
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+
+                cursor.execute("""
+                    SELECT player_name, position, injury_type, injury_status
+                    FROM nfl_injuries
+                    WHERE team = %s AND is_active = true
+                      AND injury_status IN ('Out', 'Questionable', 'Doubtful')
+                """, (team,))
+
+                injuries = []
+                for row in cursor.fetchall():
+                    injuries.append({
+                        'player_name': row[0],
+                        'position': row[1],
+                        'injury_type': row[2],
+                        'status': row[3]
+                    })
+
+                return injuries
+
+        except Exception as e:
+            logger.warning(f"Could not load injuries for {team}: {e}")
+            return []
 
     def set_injury_data(self, team: str, injuries: List[Dict[str, Any]]):
         """
@@ -719,6 +898,47 @@ class NFLPredictor(BaseSportsPredictor):
         """
         self.injury_data[team] = injuries
         self.logger.info(f"Updated injury data for {team}: {len(injuries)} injuries")
+
+    def predict_game(self, game_info: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Predict game outcome - wrapper for predict_winner used by predictions API.
+
+        Args:
+            game_info: Dictionary with 'home_team' and 'away_team'
+
+        Returns:
+            Prediction dictionary with win_probability, confidence, etc.
+        """
+        home_team = game_info.get('home_team', '')
+        away_team = game_info.get('away_team', '')
+
+        if not home_team or not away_team:
+            return None
+
+        # Load injuries from database if not already loaded
+        if home_team not in self.injury_data:
+            self.injury_data[home_team] = self._load_injuries_from_db(home_team)
+        if away_team not in self.injury_data:
+            self.injury_data[away_team] = self._load_injuries_from_db(away_team)
+
+        # Get full prediction
+        prediction = self.predict_winner(
+            home_team=home_team,
+            away_team=away_team,
+            game_date=game_info.get('game_time'),
+            weather=game_info.get('weather')
+        )
+
+        # Return in format expected by predictions router
+        return {
+            'winner': prediction.get('winner'),
+            'win_probability': prediction.get('probability', 0.5),
+            'confidence': prediction.get('confidence', 0.6),
+            'spread': prediction.get('spread'),
+            'explanation': prediction.get('explanation'),
+            'home_prob': prediction.get('home_prob', 0.5),
+            'away_prob': prediction.get('away_prob', 0.5)
+        }
 
     def get_all_team_predictions(self, week: int, season: int = 2025) -> List[Dict[str, Any]]:
         """

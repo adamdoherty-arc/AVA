@@ -6,11 +6,11 @@ Handles all database operations for Kalshi football markets
 import os
 import psycopg2
 import psycopg2.extras
-import psycopg2.pool
 import logging
 from typing import List, Dict, Optional
 from datetime import datetime
 import json
+from src.database.connection_pool import DatabaseConnectionPool
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -18,9 +18,6 @@ logger = logging.getLogger(__name__)
 
 class KalshiDBManager:
     """Manages database operations for Kalshi markets"""
-
-    # Class-level connection pool (shared across all instances)
-    _connection_pool = None
 
     def __init__(self):
         self.db_config = {
@@ -30,43 +27,29 @@ class KalshiDBManager:
             'user': 'postgres',
             'password': os.getenv('DB_PASSWORD')
         }
-        self._initialize_pool()
+        # Initialize shared pool
+        DatabaseConnectionPool()
         self.initialize_database()
 
-    def _initialize_pool(self):
-        """Initialize connection pool (only once)"""
-        if KalshiDBManager._connection_pool is None:
-            try:
-                KalshiDBManager._connection_pool = psycopg2.pool.ThreadedConnectionPool(
-                    minconn=2,
-                    maxconn=50,  # Increased from 10 to 50 for concurrent game enrichment
-                    **self.db_config
-                )
-                logger.info("Database connection pool initialized (2-50 connections)")
-            except Exception as e:
-                logger.error(f"Error initializing connection pool: {e}")
-                # Fall back to no pooling
-                KalshiDBManager._connection_pool = None
-
     def get_connection(self):
-        """Get database connection from pool"""
-        if KalshiDBManager._connection_pool:
-            try:
-                return KalshiDBManager._connection_pool.getconn()
-            except Exception as e:
-                logger.error(f"Error getting connection from pool: {e}")
-                raise
-        else:
+        """Get database connection from shared pool"""
+        try:
+            pool = DatabaseConnectionPool()
+            return pool._pool.getconn()
+        except Exception as e:
+            logger.error(f"Error getting connection from pool: {e}")
+            # Fallback to direct connection if pool fails
             return psycopg2.connect(**self.db_config)
 
     def release_connection(self, conn):
-        """Release connection back to pool"""
+        """Release connection back to shared pool"""
         if not conn:
             return
 
         try:
-            if KalshiDBManager._connection_pool and not conn.closed:
-                KalshiDBManager._connection_pool.putconn(conn)
+            pool = DatabaseConnectionPool()
+            if pool._pool and not conn.closed:
+                pool._pool.putconn(conn)
             elif not conn.closed:
                 conn.close()
         except Exception as e:

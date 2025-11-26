@@ -78,6 +78,8 @@ features:
     critical_rules:
       - no_horizontal_lines
       - real_time_updates
+      - no_data_export
+      - main_page_filters
     primary_agent: data-scientist
     supporting_agents:
       - spec-requirements-validator

@@ -21,6 +21,7 @@ import os
 from thefuzz import fuzz, process
 
 from .base_predictor import BaseSportsPredictor
+from .llm_explanation_enhancer import get_llm_enhancer
 
 
 class NCAAPredictor(BaseSportsPredictor):
@@ -656,7 +657,37 @@ class NCAAPredictor(BaseSportsPredictor):
         else:
             explanation += f"{away_team} expected to overcome home crowd advantage."
 
-        return explanation
+        # Generate base template explanation
+        template_explanation = explanation
+        
+        # Enhance with LLM if available
+        try:
+            enhancer = get_llm_enhancer()
+            loser = away_team if winner == home_team else home_team
+            
+            # Prepare context for LLM
+            context = {
+                'home_team': home_team,
+                'away_team': away_team,
+                'is_rivalry': is_rivalry,
+                'home_conf_power': features.get('home_conf_power'),
+                'away_conf_power': features.get('away_conf_power'),
+                'recruiting_diff': features.get('recruiting_diff'),
+                'home_field_advantage': self.HOME_FIELD_ADVANTAGE
+            }
+            
+            return enhancer.enhance_explanation(
+                sport="NCAA Football",
+                winner=winner,
+                loser=loser,
+                probability=probability,
+                features=features,
+                context=context,
+                template_explanation=template_explanation
+            )
+        except Exception as e:
+            self.logger.warning(f"Failed to enhance explanation with LLM: {e}")
+            return template_explanation
 
     def update_elo_ratings(
         self,

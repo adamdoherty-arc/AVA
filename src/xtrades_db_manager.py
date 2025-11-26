@@ -22,15 +22,8 @@ from dotenv import load_dotenv
 import logging
 
 # Import connection pool
-import sys
-from pathlib import Path
-# Add xtrades_monitor directory to path for db_connection_pool import
-xtrades_monitor_dir = Path(__file__).parent / 'xtrades_monitor'
-if str(xtrades_monitor_dir) not in sys.path:
-    sys.path.insert(0, str(xtrades_monitor_dir))
-
 try:
-    from db_connection_pool import get_db_pool
+    from src.database.connection_pool import DatabaseConnectionPool
     USE_CONNECTION_POOL = True
 except ImportError:
     logger.warning("Connection pool not available, using direct connections")
@@ -57,7 +50,9 @@ class XtradesDBManager:
         # Initialize connection pool if available
         if USE_CONNECTION_POOL:
             try:
-                self.pool = get_db_pool()
+                # Initialize the singleton pool
+                DatabaseConnectionPool()
+                self.pool = DatabaseConnectionPool()._pool
                 logger.info("XtradesDBManager initialized with connection pooling")
             except Exception as e:
                 logger.warning(f"Failed to initialize connection pool: {e}, falling back to direct connections")
