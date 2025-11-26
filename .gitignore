@@ -39,8 +39,9 @@ ENV/
 .DS_Store
 Thumbs.db
 
-# Streamlit
-.streamlit/secrets.toml
+# Streamlit (archived - now using React)
+.streamlit/
+.archived_streamlit/
 
 # Logs and temp
 logs/
