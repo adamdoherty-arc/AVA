@@ -227,6 +227,143 @@ CREATE INDEX IF NOT EXISTS idx_analytics_user
 ON user_activity(user_id, activity_date DESC);
 
 -- ============================================================================
+-- SPORTS GAMES INDEXES (Added 2025-11-29)
+-- ============================================================================
+-- Critical for optimized UNION queries and batch odds sync
+
+-- NFL Games
+CREATE INDEX IF NOT EXISTS idx_nfl_games_status_time
+ON nfl_games(game_status, game_time)
+WHERE game_status IN ('scheduled', 'live');
+
+CREATE INDEX IF NOT EXISTS idx_nfl_games_live
+ON nfl_games(is_live)
+WHERE is_live = true;
+
+CREATE INDEX IF NOT EXISTS idx_nfl_games_teams
+ON nfl_games(LOWER(home_team), LOWER(away_team));
+
+-- NBA Games
+CREATE INDEX IF NOT EXISTS idx_nba_games_status_time
+ON nba_games(game_status, game_time)
+WHERE game_status IN ('scheduled', 'live');
+
+CREATE INDEX IF NOT EXISTS idx_nba_games_live
+ON nba_games(is_live)
+WHERE is_live = true;
+
+CREATE INDEX IF NOT EXISTS idx_nba_games_teams
+ON nba_games(LOWER(home_team), LOWER(away_team));
+
+-- NCAA Football Games
+CREATE INDEX IF NOT EXISTS idx_ncaaf_games_status_time
+ON ncaa_football_games(game_status, game_time)
+WHERE game_status IN ('scheduled', 'live');
+
+CREATE INDEX IF NOT EXISTS idx_ncaaf_games_live
+ON ncaa_football_games(is_live)
+WHERE is_live = true;
+
+CREATE INDEX IF NOT EXISTS idx_ncaaf_games_teams
+ON ncaa_football_games(LOWER(home_team), LOWER(away_team));
+
+-- NCAA Basketball Games
+CREATE INDEX IF NOT EXISTS idx_ncaab_games_status_time
+ON ncaa_basketball_games(game_status, game_time)
+WHERE game_status IN ('scheduled', 'live');
+
+CREATE INDEX IF NOT EXISTS idx_ncaab_games_live
+ON ncaa_basketball_games(is_live)
+WHERE is_live = true;
+
+CREATE INDEX IF NOT EXISTS idx_ncaab_games_teams
+ON ncaa_basketball_games(LOWER(home_team), LOWER(away_team));
+
+-- ============================================================================
+-- LIVE ODDS & AI RECOMMENDATIONS INDEXES (Added 2025-11-29)
+-- ============================================================================
+-- Critical for sports betting AI and odds analysis
+
+-- Live Odds Snapshots (time-series data)
+CREATE INDEX IF NOT EXISTS idx_odds_snapshots_sport_game
+ON live_odds_snapshots(sport, game_id);
+
+CREATE INDEX IF NOT EXISTS idx_odds_snapshots_time
+ON live_odds_snapshots(snapshot_time DESC);
+
+CREATE INDEX IF NOT EXISTS idx_odds_snapshots_game_time
+ON live_odds_snapshots(game_id, snapshot_time DESC);
+
+-- AI Betting Recommendations
+CREATE INDEX IF NOT EXISTS idx_ai_recs_sport_game
+ON ai_betting_recommendations(sport, game_id);
+
+CREATE INDEX IF NOT EXISTS idx_ai_recs_unsettled
+ON ai_betting_recommendations(is_settled)
+WHERE is_settled = false;
+
+CREATE INDEX IF NOT EXISTS idx_ai_recs_confidence
+ON ai_betting_recommendations(confidence DESC)
+WHERE confidence >= 70;
+
+CREATE INDEX IF NOT EXISTS idx_ai_recs_created
+ON ai_betting_recommendations(created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_ai_recs_result
+ON ai_betting_recommendations(result)
+WHERE is_settled = true;
+
+-- ============================================================================
+-- PREDICTION TRACKING INDEXES (Added 2025-11-29)
+-- ============================================================================
+-- For model performance analysis and outcome tracking
+
+CREATE INDEX IF NOT EXISTS idx_prediction_results_game
+ON prediction_results(sport, game_id)
+WHERE sport IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_prediction_results_date
+ON prediction_results(prediction_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_prediction_results_outcome
+ON prediction_results(was_correct, prediction_date DESC)
+WHERE was_correct IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_model_performance_model
+ON model_performance(model_name, evaluation_date DESC);
+
+-- ============================================================================
+-- DASHBOARD & PORTFOLIO INDEXES (Added 2025-11-29)
+-- ============================================================================
+-- Critical for high-traffic dashboard queries
+
+-- Trade History (Dashboard loads this frequently)
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_trade_history_executed_at_desc
+ON trade_history (executed_at DESC);
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_trade_history_symbol_date
+ON trade_history (symbol, executed_at DESC)
+WHERE symbol IS NOT NULL;
+
+-- Alerts (Dashboard refreshes frequently)
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_alerts_active_recent
+ON alerts (is_dismissed, created_at DESC, priority DESC)
+WHERE is_dismissed = FALSE;
+
+-- Portfolio History (Chart data)
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_portfolio_history_date_range
+ON portfolio_history (date DESC, portfolio_value)
+WHERE date >= CURRENT_DATE - INTERVAL '365 days';
+
+-- Trade Journal (Frequently accessed)
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_trade_journal_entry_date
+ON trade_journal (entry_date DESC);
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_trade_journal_symbol
+ON trade_journal (symbol, entry_date DESC)
+WHERE symbol IS NOT NULL;
+
+-- ============================================================================
 -- VERIFICATION
 -- ============================================================================
 
@@ -384,6 +521,36 @@ DROP INDEX IF EXISTS idx_qa_reviews_date;
 -- Analytics
 DROP INDEX IF EXISTS idx_analytics_date;
 DROP INDEX IF EXISTS idx_analytics_user;
+
+-- Sports Games
+DROP INDEX IF EXISTS idx_nfl_games_status_time;
+DROP INDEX IF EXISTS idx_nfl_games_live;
+DROP INDEX IF EXISTS idx_nfl_games_teams;
+DROP INDEX IF EXISTS idx_nba_games_status_time;
+DROP INDEX IF EXISTS idx_nba_games_live;
+DROP INDEX IF EXISTS idx_nba_games_teams;
+DROP INDEX IF EXISTS idx_ncaaf_games_status_time;
+DROP INDEX IF EXISTS idx_ncaaf_games_live;
+DROP INDEX IF EXISTS idx_ncaaf_games_teams;
+DROP INDEX IF EXISTS idx_ncaab_games_status_time;
+DROP INDEX IF EXISTS idx_ncaab_games_live;
+DROP INDEX IF EXISTS idx_ncaab_games_teams;
+
+-- Live Odds & AI Recommendations
+DROP INDEX IF EXISTS idx_odds_snapshots_sport_game;
+DROP INDEX IF EXISTS idx_odds_snapshots_time;
+DROP INDEX IF EXISTS idx_odds_snapshots_game_time;
+DROP INDEX IF EXISTS idx_ai_recs_sport_game;
+DROP INDEX IF EXISTS idx_ai_recs_unsettled;
+DROP INDEX IF EXISTS idx_ai_recs_confidence;
+DROP INDEX IF EXISTS idx_ai_recs_created;
+DROP INDEX IF EXISTS idx_ai_recs_result;
+
+-- Prediction Tracking
+DROP INDEX IF EXISTS idx_prediction_results_game;
+DROP INDEX IF EXISTS idx_prediction_results_date;
+DROP INDEX IF EXISTS idx_prediction_results_outcome;
+DROP INDEX IF EXISTS idx_model_performance_model;
 
 COMMIT;
 */

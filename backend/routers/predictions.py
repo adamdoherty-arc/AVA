@@ -1,11 +1,14 @@
 """
 Predictions Router - API endpoints for prediction markets
 NO MOCK DATA - All endpoints use real Kalshi API and database
+
+Performance: Uses asyncio.to_thread() for non-blocking DB calls
 """
 from fastapi import APIRouter, Query, HTTPException
-from typing import Optional
+from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 import logging
+import asyncio
 from backend.services.prediction_service import prediction_service
 from backend.models.market import MarketResponse
 from src.kalshi_db_manager import KalshiDBManager
@@ -36,6 +39,92 @@ def get_predictor():
     return _nfl_predictor
 
 
+# ============ Sync Helper Functions (run via asyncio.to_thread) ============
+
+def _fetch_kalshi_nfl_markets_sync(min_edge: float, min_volume: int, sort_by: str) -> Dict[str, Any]:
+    """Sync function to fetch Kalshi NFL markets - called via asyncio.to_thread()"""
+    predictor = get_predictor()
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, ticker, title, home_team, away_team, market_type,
+                   yes_price, no_price, volume, open_interest, close_time, game_time
+            FROM kalshi_markets
+            WHERE market_type = 'nfl' AND status IN ('open', 'active')
+            ORDER BY game_time ASC
+        """)
+        rows = cursor.fetchall()
+
+    markets = []
+    for row in rows:
+        market_id, home_team, away_team = row[0], row[3], row[4]
+        market_type = row[5]
+        yes_price = float(row[6]) if row[6] else 50
+        no_price = float(row[7]) if row[7] else 50
+        volume = int(row[8]) if row[8] else 0
+
+        if volume < min_volume:
+            continue
+
+        # Get AI prediction
+        try:
+            prediction = predictor.predict_game({'home_team': home_team, 'away_team': away_team})
+            ai_prob = prediction.get('win_probability', 0.5) * 100 if prediction else 50
+            confidence = prediction.get('confidence', 0.7) * 100 if prediction else 60
+        except Exception as e:
+            logger.error(f"Prediction error: {e}")
+            ai_prob, confidence = 50, 60
+
+        # Calculate edge
+        if ai_prob > yes_price:
+            edge, recommendation = round(ai_prob - yes_price, 1), "YES"
+        else:
+            edge, recommendation = round(no_price - (100 - ai_prob), 1), "NO"
+
+        if edge < min_edge:
+            continue
+
+        markets.append({
+            "id": row[1] or f"kalshi_{market_id}",
+            "title": row[2],
+            "home_team": home_team,
+            "away_team": away_team,
+            "market_type": market_type,
+            "category": market_type.upper() if market_type else "NFL",
+            "yes_price": yes_price,
+            "no_price": no_price,
+            "ai_prediction": round(ai_prob, 0),
+            "ai_probability": round(ai_prob, 0),
+            "edge": edge,
+            "recommendation": recommendation,
+            "confidence": round(confidence, 0),
+            "volume": volume,
+            "open_interest": int(row[9]) if row[9] else 0,
+            "close_time": row[10].strftime("%Y-%m-%d %H:%M") if row[10] else "",
+            "expiry": row[10].strftime("%Y-%m-%d %H:%M") if row[10] else "",
+            "game_time": row[11].strftime("%Y-%m-%d %H:%M") if row[11] else "",
+            "reasoning": f"AI model predicts {recommendation} with {edge}% edge"
+        })
+
+    # Sort
+    sort_key = {"edge": "edge", "volume": "volume"}.get(sort_by, "confidence")
+    markets.sort(key=lambda x: x[sort_key], reverse=True)
+
+    total_volume = sum(m["volume"] for m in markets)
+    avg_edge = sum(m["edge"] for m in markets) / len(markets) if markets else 0
+
+    return {
+        "markets": markets,
+        "summary": {
+            "total_markets": len(markets),
+            "total_volume": total_volume,
+            "avg_edge": round(avg_edge, 1),
+            "high_confidence": len([m for m in markets if m["confidence"] >= 75]),
+            "yes_recommendations": len([m for m in markets if m["recommendation"] == "YES"]),
+            "no_recommendations": len([m for m in markets if m["recommendation"] == "NO"])
+        }
+    }
 
 
 @router.get("/nfl")
@@ -45,7 +134,8 @@ async def get_nfl_predictions(
     sort_by: str = Query("edge", description="Sort by: edge, volume, confidence")
 ):
     """Alias route for NFL predictions - used by frontend."""
-    return await get_kalshi_nfl_markets(min_edge, min_volume, sort_by)
+    return await asyncio.to_thread(_fetch_kalshi_nfl_markets_sync, min_edge, min_volume, sort_by)
+
 
 @router.get("/markets", response_model=MarketResponse)
 async def get_markets(
@@ -79,129 +169,19 @@ async def get_kalshi_nfl_markets(
 ):
     """
     Get Kalshi NFL prediction markets with AI edge detection from database.
+    Uses asyncio.to_thread() for non-blocking database access.
     """
     try:
-        kalshi_db = get_kalshi_db()
-        predictor = get_predictor()
-
-        # Get NFL markets from database
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-
-            cursor.execute("""
-                SELECT id, ticker, title, home_team, away_team, market_type,
-                       yes_price, no_price, volume, open_interest, close_time, game_time
-                FROM kalshi_markets
-                WHERE market_type = 'nfl' AND status IN ('open', 'active')
-                ORDER BY game_time ASC
-            """)
-
-            rows = cursor.fetchall()
-
-            markets = []
-            for row in rows:
-                market_id = row[0]
-                home_team = row[3]
-                away_team = row[4]
-                market_type = row[5]
-                yes_price = float(row[6]) if row[6] else 50
-                no_price = float(row[7]) if row[7] else 50
-                volume = int(row[8]) if row[8] else 0
-                open_interest = int(row[9]) if row[9] else 0
-
-                if volume < min_volume:
-                    continue
-
-                # Get AI prediction
-                try:
-                    prediction = predictor.predict_game({
-                        'home_team': home_team,
-                        'away_team': away_team
-                    })
-
-                    if prediction:
-                        ai_prob = prediction.get('win_probability', 0.5) * 100
-                        confidence = prediction.get('confidence', 0.7) * 100
-                    else:
-                        ai_prob = 50
-                        confidence = 60
-                except Exception as e:
-                    logger.error(f"Prediction error: {e}")
-                    ai_prob = 50
-                    confidence = 60
-
-                # Calculate edge
-                if ai_prob > yes_price:
-                    edge = round(ai_prob - yes_price, 1)
-                    recommendation = "YES"
-                else:
-                    edge = round(no_price - (100 - ai_prob), 1)
-                    recommendation = "NO"
-
-                if edge < min_edge:
-                    continue
-
-                close_time = row[10].strftime("%Y-%m-%d %H:%M") if row[10] else ""
-                game_time = row[11].strftime("%Y-%m-%d %H:%M") if row[11] else ""
-
-                markets.append({
-                    "id": row[1] or f"kalshi_{market_id}",
-                    "title": row[2],
-                    "home_team": home_team,
-                    "away_team": away_team,
-                    "market_type": market_type,
-                    "category": market_type.upper() if market_type else "NFL",  # Frontend expects category
-                    "yes_price": yes_price,
-                    "no_price": no_price,
-                    "ai_prediction": round(ai_prob, 0),  # Renamed from ai_probability
-                    "ai_probability": round(ai_prob, 0),  # Keep for backwards compatibility
-                    "edge": edge,
-                    "recommendation": recommendation,
-                    "confidence": round(confidence, 0),
-                    "volume": volume,
-                    "open_interest": open_interest,
-                    "close_time": close_time,  # Frontend expects close_time
-                    "expiry": close_time,
-                    "game_time": game_time,
-                    "reasoning": f"AI model predicts {recommendation} with {edge}% edge"
-                })
-
-        # Sort
-        if sort_by == "edge":
-            markets.sort(key=lambda x: x["edge"], reverse=True)
-        elif sort_by == "volume":
-            markets.sort(key=lambda x: x["volume"], reverse=True)
-        else:
-            markets.sort(key=lambda x: x["confidence"], reverse=True)
-
-        # Calculate summary
-        total_volume = sum(m["volume"] for m in markets)
-        avg_edge = sum(m["edge"] for m in markets) / len(markets) if markets else 0
-
-        return {
-            "markets": markets,
-            "summary": {
-                "total_markets": len(markets),
-                "total_volume": total_volume,
-                "avg_edge": round(avg_edge, 1),
-                "high_confidence": len([m for m in markets if m["confidence"] >= 75]),
-                "yes_recommendations": len([m for m in markets if m["recommendation"] == "YES"]),
-                "no_recommendations": len([m for m in markets if m["recommendation"] == "NO"])
-            },
-            "generated_at": datetime.now().isoformat()
-        }
-
+        result = await asyncio.to_thread(_fetch_kalshi_nfl_markets_sync, min_edge, min_volume, sort_by)
+        result["generated_at"] = datetime.now().isoformat()
+        return result
     except Exception as e:
         logger.error(f"Error getting Kalshi NFL markets: {e}")
         return {
             "markets": [],
             "summary": {
-                "total_markets": 0,
-                "total_volume": 0,
-                "avg_edge": 0,
-                "high_confidence": 0,
-                "yes_recommendations": 0,
-                "no_recommendations": 0
+                "total_markets": 0, "total_volume": 0, "avg_edge": 0,
+                "high_confidence": 0, "yes_recommendations": 0, "no_recommendations": 0
             },
             "message": f"Error fetching markets: {str(e)}. Ensure Kalshi data is synced.",
             "generated_at": datetime.now().isoformat()

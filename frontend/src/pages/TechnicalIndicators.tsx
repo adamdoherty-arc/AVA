@@ -1,34 +1,17 @@
-import { useState, useMemo } from 'react'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { axiosInstance } from '../lib/axios'
 import {
     LineChart, RefreshCw, Search, TrendingUp, TrendingDown,
-    Activity, BarChart3, Target, Zap, ArrowUpRight, ArrowDownRight,
-    AlertCircle, Loader2, ChevronDown, Filter, List, Database, Briefcase
+    Activity, BarChart3, Zap, ArrowUpRight, ArrowDownRight,
+    Loader2
 } from 'lucide-react'
 import {
     ResponsiveContainer, ComposedChart, Line, Bar, XAxis, YAxis,
     CartesianGrid, Tooltip, Legend, ReferenceLine
 } from 'recharts'
 
-const INDICATOR_CATEGORIES = [
-    { id: 'momentum', name: 'Momentum', indicators: ['RSI', 'MACD', 'Stochastic'] },
-    { id: 'volatility', name: 'Volatility', indicators: ['Bollinger Bands', 'ATR', 'IV Rank'] },
-    { id: 'volume', name: 'Volume', indicators: ['OBV', 'VWAP', 'Volume Profile'] },
-    { id: 'trend', name: 'Trend', indicators: ['EMA', 'SMA', 'ADX', 'Ichimoku'] },
-    { id: 'options', name: 'Options', indicators: ['IVR', 'Expected Move', 'Put/Call Ratio'] }
-]
-
 const TIMEFRAMES = ['1D', '1W', '1M', '3M', '6M', '1Y']
-
-const SYMBOL_SOURCES = [
-    { id: 'manual', name: 'Manual Input', icon: Search },
-    { id: 'tradingview', name: 'TradingView Watchlists', icon: List },
-    { id: 'positions', name: 'Current Positions', icon: Briefcase },
-    { id: 'database', name: 'Database Stocks', icon: Database }
-] as const
-
-type SymbolSource = typeof SYMBOL_SOURCES[number]['id']
 
 interface TechnicalData {
     symbol: string
@@ -58,73 +41,6 @@ export default function TechnicalIndicators() {
     const [symbol, setSymbol] = useState('AAPL')
     const [searchInput, setSearchInput] = useState('AAPL')
     const [timeframe, setTimeframe] = useState('1M')
-    const [selectedCategory, setSelectedCategory] = useState('all')
-    const [symbolSource, setSymbolSource] = useState<SymbolSource>('manual')
-    const [selectedWatchlist, setSelectedWatchlist] = useState<string>('')
-
-    // Fetch TradingView watchlists
-    const { data: watchlistsData } = useQuery({
-        queryKey: ['watchlists-all'],
-        queryFn: async () => {
-            const { data } = await axiosInstance.get('/watchlist/all')
-            // Map the response to expected format
-            const allWatchlists: { name: string; source: string; symbols: string[] }[] = []
-
-            // Add database watchlists
-            if (data.sources?.database) {
-                data.sources.database.forEach((wl: { name: string; id: string }) => {
-                    allWatchlists.push({
-                        name: wl.name,
-                        source: 'Database',
-                        symbols: [] // Symbols loaded on demand
-                    })
-                })
-            }
-
-            // Add TradingView watchlists
-            if (data.sources?.tradingview) {
-                data.sources.tradingview.forEach((wl: { name: string; id: number }) => {
-                    allWatchlists.push({
-                        name: wl.name,
-                        source: 'TradingView',
-                        symbols: [] // Symbols loaded on demand
-                    })
-                })
-            }
-
-            return { watchlists: allWatchlists }
-        },
-        staleTime: 300000
-    })
-
-    // Fetch Robinhood positions
-    const { data: positionsData } = useQuery({
-        queryKey: ['robinhood-positions'],
-        queryFn: async () => {
-            const { data } = await axiosInstance.get('/positions')
-            // Map stocks to positions format
-            const positions = (data.stocks || []).map((s: { symbol: string }) => ({
-                symbol: s.symbol
-            }))
-            return { positions }
-        },
-        staleTime: 60000
-    })
-
-    // Fetch database stocks from watchlist endpoint
-    const { data: databaseStocks } = useQuery({
-        queryKey: ['database-stocks'],
-        queryFn: async () => {
-            const { data } = await axiosInstance.get('/watchlist/database')
-            // Extract unique symbols from all watchlists
-            const symbols: string[] = []
-            if (data.watchlists) {
-                // Just return watchlist names for now - symbols loaded on demand
-            }
-            return { stocks: symbols }
-        },
-        staleTime: 300000
-    })
 
     const { data: technicals, isLoading, refetch } = useQuery<TechnicalData>({
         queryKey: ['technicals', symbol, timeframe],
@@ -135,44 +51,10 @@ export default function TechnicalIndicators() {
         staleTime: 60000
     })
 
-    // Get available symbols based on source
-    const availableSymbols = useMemo(() => {
-        switch (symbolSource) {
-            case 'tradingview':
-                if (selectedWatchlist && watchlistsData?.watchlists) {
-                    const wl = watchlistsData.watchlists.find(w => w.name === selectedWatchlist)
-                    return wl?.symbols || []
-                }
-                return []
-            case 'positions':
-                return positionsData?.positions?.map(p => p.symbol) || []
-            case 'database':
-                return databaseStocks?.stocks || []
-            default:
-                return []
-        }
-    }, [symbolSource, selectedWatchlist, watchlistsData, positionsData, databaseStocks])
-
-    // Group watchlists by source
-    const watchlistsBySource = useMemo(() => {
-        if (!watchlistsData?.watchlists) return {}
-        return watchlistsData.watchlists.reduce((acc, wl) => {
-            const source = wl.source
-            if (!acc[source]) acc[source] = []
-            acc[source].push(wl)
-            return acc
-        }, {} as Record<string, typeof watchlistsData.watchlists>)
-    }, [watchlistsData])
-
     const handleSearch = () => {
         if (searchInput.trim()) {
             setSymbol(searchInput.trim().toUpperCase())
         }
-    }
-
-    const handleSymbolSelect = (sym: string) => {
-        setSymbol(sym)
-        setSearchInput(sym)
     }
 
     const getSignalColor = (signal: string) => {
@@ -217,156 +99,41 @@ export default function TechnicalIndicators() {
 
             {/* Search and Controls */}
             <div className="glass-card p-5">
-                <div className="space-y-4">
-                    {/* Source Selection */}
-                    <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm text-slate-400 mr-2">Symbol Source:</span>
-                        {SYMBOL_SOURCES.map(source => {
-                            const Icon = source.icon
-                            return (
-                                <button
-                                    key={source.id}
-                                    onClick={() => {
-                                        setSymbolSource(source.id)
-                                        setSelectedWatchlist('')
-                                    }}
-                                    className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg font-medium transition-all ${
-                                        symbolSource === source.id
-                                            ? 'bg-primary text-white'
-                                            : 'bg-slate-800/60 text-slate-400 hover:text-white hover:bg-slate-700/60'
-                                    }`}
-                                >
-                                    <Icon className="w-4 h-4" />
-                                    {source.name}
-                                </button>
-                            )
-                        })}
+                <div className="flex flex-wrap items-center gap-4">
+                    {/* Symbol Search */}
+                    <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+                        <div className="relative flex-1">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                            <input
+                                type="text"
+                                value={searchInput}
+                                onChange={(e) => setSearchInput(e.target.value.toUpperCase())}
+                                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                                placeholder="Enter symbol..."
+                                className="input-field pl-10"
+                            />
+                        </div>
+                        <button onClick={handleSearch} className="btn-primary px-4">
+                            Analyze
+                        </button>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-4">
-                        {/* Manual Search */}
-                        {symbolSource === 'manual' && (
-                            <div className="flex items-center gap-2 flex-1 min-w-[200px]">
-                                <div className="relative flex-1">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                                    <input
-                                        type="text"
-                                        value={searchInput}
-                                        onChange={(e) => setSearchInput(e.target.value.toUpperCase())}
-                                        onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                                        placeholder="Enter symbol..."
-                                        className="input-field pl-10"
-                                    />
-                                </div>
-                                <button onClick={handleSearch} className="btn-primary px-4">
-                                    Analyze
-                                </button>
-                            </div>
-                        )}
-
-                        {/* TradingView Watchlist Selection */}
-                        {symbolSource === 'tradingview' && (
-                            <div className="flex items-center gap-3 flex-1">
-                                <div className="min-w-[200px]">
-                                    <select
-                                        value={selectedWatchlist}
-                                        onChange={(e) => setSelectedWatchlist(e.target.value)}
-                                        className="input-field w-full"
-                                    >
-                                        <option value="">Select Watchlist...</option>
-                                        {Object.entries(watchlistsBySource).map(([source, lists]) => (
-                                            <optgroup key={source} label={source}>
-                                                {lists.map(wl => (
-                                                    <option key={wl.name} value={wl.name}>
-                                                        {wl.name} ({wl.symbols.length} symbols)
-                                                    </option>
-                                                ))}
-                                            </optgroup>
-                                        ))}
-                                    </select>
-                                </div>
-                                {selectedWatchlist && availableSymbols.length > 0 && (
-                                    <div className="min-w-[150px]">
-                                        <select
-                                            value={symbol}
-                                            onChange={(e) => handleSymbolSelect(e.target.value)}
-                                            className="input-field w-full"
-                                        >
-                                            {availableSymbols.map(sym => (
-                                                <option key={sym} value={sym}>{sym}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Positions Selection */}
-                        {symbolSource === 'positions' && (
-                            <div className="flex items-center gap-3 flex-1">
-                                <div className="min-w-[200px]">
-                                    <select
-                                        value={symbol}
-                                        onChange={(e) => handleSymbolSelect(e.target.value)}
-                                        className="input-field w-full"
-                                    >
-                                        <option value="">Select from Positions...</option>
-                                        {availableSymbols.map(sym => (
-                                            <option key={sym} value={sym}>{sym}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                {availableSymbols.length === 0 && (
-                                    <span className="text-sm text-slate-400">No positions found</span>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Database Stocks Selection */}
-                        {symbolSource === 'database' && (
-                            <div className="flex items-center gap-3 flex-1">
-                                <div className="min-w-[200px]">
-                                    <select
-                                        value={symbol}
-                                        onChange={(e) => handleSymbolSelect(e.target.value)}
-                                        className="input-field w-full"
-                                    >
-                                        <option value="">Select from Database...</option>
-                                        {availableSymbols.map(sym => (
-                                            <option key={sym} value={sym}>{sym}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                {availableSymbols.length === 0 && (
-                                    <span className="text-sm text-slate-400">No stocks in database</span>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Timeframe */}
-                        <div className="flex items-center gap-2">
-                            {TIMEFRAMES.map(tf => (
-                                <button
-                                    key={tf}
-                                    onClick={() => setTimeframe(tf)}
-                                    className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-all ${
-                                        timeframe === tf
-                                            ? 'bg-primary text-white'
-                                            : 'bg-slate-800/60 text-slate-400 hover:text-white'
-                                    }`}
-                                >
-                                    {tf}
-                                </button>
-                            ))}
-                        </div>
+                    {/* Timeframe */}
+                    <div className="flex items-center gap-2">
+                        {TIMEFRAMES.map(tf => (
+                            <button
+                                key={tf}
+                                onClick={() => setTimeframe(tf)}
+                                className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-all ${
+                                    timeframe === tf
+                                        ? 'bg-primary text-white'
+                                        : 'bg-slate-800/60 text-slate-400 hover:text-white'
+                                }`}
+                            >
+                                {tf}
+                            </button>
+                        ))}
                     </div>
-
-                    {/* Symbol count indicator */}
-                    {symbolSource !== 'manual' && availableSymbols.length > 0 && (
-                        <div className="text-xs text-slate-500">
-                            {availableSymbols.length} symbols available • Currently analyzing: <span className="text-primary font-medium">{symbol}</span>
-                        </div>
-                    )}
                 </div>
             </div>
 
@@ -381,16 +148,16 @@ export default function TechnicalIndicators() {
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-4">
                                 <div className="text-3xl font-bold text-white">{technicals.symbol}</div>
-                                <div className="text-2xl font-mono text-white">${(technicals.price ?? 0).toFixed(2)}</div>
+                                <div className="text-2xl font-mono text-white">${technicals.price.toFixed(2)}</div>
                                 <div className={`flex items-center gap-1 ${
-                                    (technicals.change_pct ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
+                                    technicals.change_pct >= 0 ? 'text-emerald-400' : 'text-red-400'
                                 }`}>
-                                    {(technicals.change_pct ?? 0) >= 0 ? (
+                                    {technicals.change_pct >= 0 ? (
                                         <ArrowUpRight className="w-5 h-5" />
                                     ) : (
                                         <ArrowDownRight className="w-5 h-5" />
                                     )}
-                                    <span className="font-semibold">{Math.abs(technicals.change_pct ?? 0).toFixed(2)}%</span>
+                                    <span className="font-semibold">{Math.abs(technicals.change_pct).toFixed(2)}%</span>
                                 </div>
                             </div>
                             <div className="flex items-center gap-3">
@@ -410,12 +177,12 @@ export default function TechnicalIndicators() {
                         {/* RSI */}
                         <div className="glass-card p-4">
                             <div className="text-sm text-slate-400 mb-1">RSI (14)</div>
-                            <div className={`text-2xl font-bold ${getRSIColor(technicals.indicators?.rsi ?? 50)}`}>
-                                {(technicals.indicators?.rsi ?? 0).toFixed(1)}
+                            <div className={`text-2xl font-bold ${getRSIColor(technicals.indicators.rsi)}`}>
+                                {technicals.indicators.rsi.toFixed(1)}
                             </div>
                             <div className="text-xs text-slate-500 mt-1">
-                                {(technicals.indicators?.rsi ?? 50) >= 70 ? 'Overbought' :
-                                 (technicals.indicators?.rsi ?? 50) <= 30 ? 'Oversold' : 'Neutral'}
+                                {technicals.indicators.rsi >= 70 ? 'Overbought' :
+                                 technicals.indicators.rsi <= 30 ? 'Oversold' : 'Neutral'}
                             </div>
                         </div>
 
@@ -423,12 +190,12 @@ export default function TechnicalIndicators() {
                         <div className="glass-card p-4">
                             <div className="text-sm text-slate-400 mb-1">MACD</div>
                             <div className={`text-2xl font-bold ${
-                                (technicals.indicators?.macd?.histogram ?? 0) > 0 ? 'text-emerald-400' : 'text-red-400'
+                                technicals.indicators.macd.histogram > 0 ? 'text-emerald-400' : 'text-red-400'
                             }`}>
-                                {(technicals.indicators?.macd?.value ?? 0).toFixed(2)}
+                                {technicals.indicators.macd.value.toFixed(2)}
                             </div>
                             <div className="text-xs text-slate-500 mt-1">
-                                Signal: {(technicals.indicators?.macd?.signal ?? 0).toFixed(2)}
+                                Signal: {technicals.indicators.macd.signal.toFixed(2)}
                             </div>
                         </div>
 
@@ -436,10 +203,10 @@ export default function TechnicalIndicators() {
                         <div className="glass-card p-4">
                             <div className="text-sm text-slate-400 mb-1">Stochastic</div>
                             <div className="text-2xl font-bold text-white">
-                                {(technicals.indicators?.stochastic?.k ?? 0).toFixed(0)}
+                                {technicals.indicators.stochastic.k.toFixed(0)}
                             </div>
                             <div className="text-xs text-slate-500 mt-1">
-                                %K: {(technicals.indicators?.stochastic?.k ?? 0).toFixed(0)} / %D: {(technicals.indicators?.stochastic?.d ?? 0).toFixed(0)}
+                                %K: {technicals.indicators.stochastic.k.toFixed(0)} / %D: {technicals.indicators.stochastic.d.toFixed(0)}
                             </div>
                         </div>
 
@@ -447,7 +214,7 @@ export default function TechnicalIndicators() {
                         <div className="glass-card p-4">
                             <div className="text-sm text-slate-400 mb-1">ATR (14)</div>
                             <div className="text-2xl font-bold text-white">
-                                ${(technicals.indicators?.atr ?? 0).toFixed(2)}
+                                ${technicals.indicators.atr.toFixed(2)}
                             </div>
                             <div className="text-xs text-slate-500 mt-1">
                                 Avg True Range
@@ -458,12 +225,12 @@ export default function TechnicalIndicators() {
                         <div className="glass-card p-4">
                             <div className="text-sm text-slate-400 mb-1">IV Rank</div>
                             <div className={`text-2xl font-bold ${
-                                (technicals.indicators?.iv_rank ?? 0) >= 50 ? 'text-amber-400' : 'text-slate-300'
+                                technicals.indicators.iv_rank >= 50 ? 'text-amber-400' : 'text-slate-300'
                             }`}>
-                                {(technicals.indicators?.iv_rank ?? 0).toFixed(0)}%
+                                {technicals.indicators.iv_rank.toFixed(0)}%
                             </div>
                             <div className="text-xs text-slate-500 mt-1">
-                                {(technicals.indicators?.iv_rank ?? 0) >= 50 ? 'High IV' : 'Low IV'}
+                                {technicals.indicators.iv_rank >= 50 ? 'High IV' : 'Low IV'}
                             </div>
                         </div>
 
@@ -471,12 +238,12 @@ export default function TechnicalIndicators() {
                         <div className="glass-card p-4">
                             <div className="text-sm text-slate-400 mb-1">ADX</div>
                             <div className={`text-2xl font-bold ${
-                                (technicals.indicators?.adx ?? 0) >= 25 ? 'text-purple-400' : 'text-slate-300'
+                                technicals.indicators.adx >= 25 ? 'text-purple-400' : 'text-slate-300'
                             }`}>
-                                {(technicals.indicators?.adx ?? 0).toFixed(1)}
+                                {technicals.indicators.adx.toFixed(1)}
                             </div>
                             <div className="text-xs text-slate-500 mt-1">
-                                {(technicals.indicators?.adx ?? 0) >= 25 ? 'Strong Trend' : 'Weak Trend'}
+                                {technicals.indicators.adx >= 25 ? 'Strong Trend' : 'Weak Trend'}
                             </div>
                         </div>
                     </div>
@@ -553,19 +320,19 @@ export default function TechnicalIndicators() {
                             <div className="bg-slate-800/40 rounded-xl p-4 text-center">
                                 <div className="text-slate-400 text-sm mb-1">Upper Band</div>
                                 <div className="text-xl font-bold text-red-400">
-                                    ${(technicals.indicators?.bollinger?.upper ?? 0).toFixed(2)}
+                                    ${technicals.indicators.bollinger.upper.toFixed(2)}
                                 </div>
                             </div>
                             <div className="bg-slate-800/40 rounded-xl p-4 text-center">
                                 <div className="text-slate-400 text-sm mb-1">Middle (SMA)</div>
                                 <div className="text-xl font-bold text-white">
-                                    ${(technicals.indicators?.bollinger?.middle ?? 0).toFixed(2)}
+                                    ${technicals.indicators.bollinger.middle.toFixed(2)}
                                 </div>
                             </div>
                             <div className="bg-slate-800/40 rounded-xl p-4 text-center">
                                 <div className="text-slate-400 text-sm mb-1">Lower Band</div>
                                 <div className="text-xl font-bold text-emerald-400">
-                                    ${(technicals.indicators?.bollinger?.lower ?? 0).toFixed(2)}
+                                    ${technicals.indicators.bollinger.lower.toFixed(2)}
                                 </div>
                             </div>
                         </div>

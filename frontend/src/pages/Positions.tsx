@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
-import { usePositions, useSyncPortfolio, useResearch, useRefreshResearch } from '../hooks/useMagnusApi'
+import { useState, useEffect, memo } from 'react'
+import { usePositions, useSyncPortfolio, useResearch, useRefreshResearch, useSymbolMetadata, useSymbolRecommendation } from '../hooks/useMagnusApi'
 import {
     AlertCircle, RefreshCw, TrendingUp, TrendingDown, DollarSign,
     Briefcase, Target, Clock, Activity, ExternalLink, ChevronDown, ChevronUp,
-    Zap, PieChart, ArrowUpRight, ArrowDownRight, Brain, Calendar
+    Zap, PieChart, ArrowUpRight, ArrowDownRight, Brain, Calendar,
+    Building2, BarChart3, Lightbulb, AlertTriangle
 } from 'lucide-react'
 import { PieChart as RechartsPie, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 
@@ -18,6 +19,8 @@ export default function Positions() {
 
     const { data: researchData, isLoading: researchLoading } = useResearch(selectedSymbol)
     const refreshResearchMutation = useRefreshResearch()
+    const { data: metadataData, isLoading: metadataLoading } = useSymbolMetadata(selectedSymbol)
+    const { data: recommendationData, isLoading: recommendationLoading } = useSymbolRecommendation(selectedSymbol)
 
     // Derive data early so hooks can use them consistently
     const summary = positions?.summary || { total_equity: 0, buying_power: 0, total_positions: 0 }
@@ -27,7 +30,8 @@ export default function Positions() {
     const totalStockValue = stocks.reduce((sum: number, s: StockPosition) => sum + s.current_value, 0)
     const totalOptionValue = options.reduce((sum: number, o: OptionPosition) => sum + Math.abs(o.current_value), 0)
     const totalPL = [...stocks, ...options].reduce((sum: number, p: StockPosition | OptionPosition) => sum + p.pl, 0)
-    const totalTheta = options.reduce((sum: number, o: OptionPosition) => sum + (o.greeks?.theta || 0) * o.quantity * 100, 0)
+    // Theta from backend is already per-contract ($), just multiply by quantity
+    const totalTheta = options.reduce((sum: number, o: OptionPosition) => sum + (o.greeks?.theta || 0) * o.quantity, 0)
 
     // Effect to select first stock
     useEffect(() => {
@@ -250,15 +254,179 @@ export default function Positions() {
                         </div>
                     </div>
 
+                    {/* Company Metadata Widget */}
+                    {selectedSymbol && (
+                        <div className="glass-card p-5">
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                                    <Building2 className="w-4 h-4 text-blue-400" />
+                                </div>
+                                <h3 className="font-semibold text-white">Company Info</h3>
+                            </div>
+
+                            <div className="text-center py-2 mb-3">
+                                <span className="text-2xl font-bold bg-gradient-to-r from-primary to-blue-400 bg-clip-text text-transparent">
+                                    {selectedSymbol}
+                                </span>
+                                {metadataData?.name && (
+                                    <p className="text-xs text-slate-400 mt-1">{metadataData.name}</p>
+                                )}
+                            </div>
+
+                            {metadataLoading ? (
+                                <div className="text-center py-4">
+                                    <div className="w-6 h-6 mx-auto relative">
+                                        <div className="absolute inset-0 rounded-full border-2 border-slate-700"></div>
+                                        <div className="absolute inset-0 rounded-full border-2 border-blue-400 border-t-transparent animate-spin"></div>
+                                    </div>
+                                </div>
+                            ) : metadataData ? (
+                                <div className="space-y-2 text-sm">
+                                    {metadataData.sector && (
+                                        <div className="flex justify-between">
+                                            <span className="text-slate-500">Sector</span>
+                                            <span className="text-slate-300">{metadataData.sector}</span>
+                                        </div>
+                                    )}
+                                    {metadataData.market_cap_formatted && (
+                                        <div className="flex justify-between">
+                                            <span className="text-slate-500">Market Cap</span>
+                                            <span className="text-slate-300">{metadataData.market_cap_formatted}</span>
+                                        </div>
+                                    )}
+                                    {metadataData.pe_ratio && (
+                                        <div className="flex justify-between">
+                                            <span className="text-slate-500">P/E Ratio</span>
+                                            <span className="text-slate-300">{metadataData.pe_ratio}</span>
+                                        </div>
+                                    )}
+                                    {metadataData.next_earnings && (
+                                        <div className="flex justify-between">
+                                            <span className="text-slate-500">Next Earnings</span>
+                                            <span className="text-amber-400">{metadataData.next_earnings}</span>
+                                        </div>
+                                    )}
+                                    {metadataData.analyst_rating && (
+                                        <div className="flex justify-between">
+                                            <span className="text-slate-500">Analyst Rating</span>
+                                            <span className={`font-medium ${
+                                                metadataData.analyst_rating.toLowerCase().includes('buy') ? 'text-emerald-400' :
+                                                metadataData.analyst_rating.toLowerCase().includes('sell') ? 'text-red-400' : 'text-slate-300'
+                                            }`}>{metadataData.analyst_rating}</span>
+                                        </div>
+                                    )}
+                                    <div className="pt-2">
+                                        <a
+                                            href={`https://www.tradingview.com/chart/?symbol=${selectedSymbol}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="flex items-center justify-center gap-2 w-full py-2 px-3 bg-slate-800/50 hover:bg-slate-700/50 rounded-lg text-sm text-slate-300 transition-colors"
+                                        >
+                                            <BarChart3 className="w-4 h-4" />
+                                            View Chart
+                                            <ExternalLink className="w-3 h-3" />
+                                        </a>
+                                    </div>
+                                </div>
+                            ) : null}
+                        </div>
+                    )}
+
+                    {/* AI Recommendation Widget */}
+                    {selectedSymbol && (
+                        <div className="glass-card p-5">
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                                    <Lightbulb className="w-4 h-4 text-purple-400" />
+                                </div>
+                                <h3 className="font-semibold text-white">AI Recommendation</h3>
+                            </div>
+
+                            {recommendationLoading ? (
+                                <div className="text-center py-6">
+                                    <div className="w-8 h-8 mx-auto mb-3 relative">
+                                        <div className="absolute inset-0 rounded-full border-2 border-slate-700"></div>
+                                        <div className="absolute inset-0 rounded-full border-2 border-purple-400 border-t-transparent animate-spin"></div>
+                                    </div>
+                                    <p className="text-sm text-slate-400">Analyzing...</p>
+                                </div>
+                            ) : recommendationData?.recommendation ? (
+                                <div className="space-y-3">
+                                    {/* Recommendation Badge */}
+                                    <div className="text-center">
+                                        <span className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold ${
+                                            recommendationData.recommendation.recommendation === 'Hold/Add' ? 'bg-emerald-500/20 text-emerald-400' :
+                                            recommendationData.recommendation.recommendation === 'Take Profits' ? 'bg-amber-500/20 text-amber-400' :
+                                            recommendationData.recommendation.recommendation === 'Close/Roll' ? 'bg-amber-500/20 text-amber-400' :
+                                            recommendationData.recommendation.recommendation === 'Cut Losses' ? 'bg-red-500/20 text-red-400' :
+                                            recommendationData.recommendation.recommendation === 'Review/Trim' ? 'bg-red-500/20 text-red-400' :
+                                            'bg-slate-500/20 text-slate-300'
+                                        }`}>
+                                            {recommendationData.recommendation.recommendation === 'Hold/Add' && <TrendingUp className="w-4 h-4" />}
+                                            {recommendationData.recommendation.recommendation === 'Take Profits' && <DollarSign className="w-4 h-4" />}
+                                            {(recommendationData.recommendation.recommendation === 'Cut Losses' || recommendationData.recommendation.recommendation === 'Review/Trim') && <AlertTriangle className="w-4 h-4" />}
+                                            {recommendationData.recommendation.recommendation}
+                                        </span>
+                                    </div>
+
+                                    {/* Confidence */}
+                                    <div className="flex items-center justify-between p-2 bg-slate-800/50 rounded-lg">
+                                        <span className="text-xs text-slate-500">Confidence</span>
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-16 h-1.5 rounded-full bg-slate-700 overflow-hidden">
+                                                <div
+                                                    className="h-full rounded-full bg-purple-400"
+                                                    style={{ width: `${recommendationData.recommendation.confidence}%` }}
+                                                />
+                                            </div>
+                                            <span className="text-xs text-slate-300">{recommendationData.recommendation.confidence}%</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Reasoning */}
+                                    {recommendationData.recommendation.reasoning && (
+                                        <p className="text-xs text-slate-400 leading-relaxed">
+                                            {recommendationData.recommendation.reasoning}
+                                        </p>
+                                    )}
+
+                                    {/* Action Items */}
+                                    {recommendationData.recommendation.actions?.length > 0 && (
+                                        <div className="space-y-1">
+                                            {recommendationData.recommendation.actions.map((action: string, idx: number) => (
+                                                <div key={idx} className="flex items-start gap-2 text-xs">
+                                                    <span className="text-purple-400 mt-0.5">-</span>
+                                                    <span className="text-slate-300">{action}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* DTE Warning */}
+                                    {recommendationData.recommendation.dte_warning && (
+                                        <div className="flex items-center gap-2 p-2 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                                            <AlertTriangle className="w-4 h-4 text-amber-400" />
+                                            <span className="text-xs text-amber-400">Expiration approaching - monitor closely</span>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="text-center py-4 text-slate-400">
+                                    <p className="text-sm">Select a position to see AI recommendation</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     {/* AI Research Widget */}
                     {selectedSymbol && (
                         <div className="glass-card p-5">
                             <div className="flex items-center justify-between mb-4">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                                        <Brain className="w-4 h-4 text-purple-400" />
+                                    <div className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center">
+                                        <Brain className="w-4 h-4 text-indigo-400" />
                                     </div>
-                                    <h3 className="font-semibold text-white">AI Research</h3>
+                                    <h3 className="font-semibold text-white">Deep Research</h3>
                                 </div>
                                 <button
                                     onClick={() => refreshResearchMutation.mutate(selectedSymbol)}
@@ -269,26 +437,20 @@ export default function Positions() {
                                 </button>
                             </div>
 
-                            <div className="text-center py-2">
-                                <span className="text-2xl font-bold bg-gradient-to-r from-primary to-purple-400 bg-clip-text text-transparent">
-                                    {selectedSymbol}
-                                </span>
-                            </div>
-
                             {researchLoading || refreshResearchMutation.isPending ? (
                                 <div className="text-center py-6">
                                     <div className="w-8 h-8 mx-auto mb-3 relative">
                                         <div className="absolute inset-0 rounded-full border-2 border-slate-700"></div>
-                                        <div className="absolute inset-0 rounded-full border-2 border-purple-400 border-t-transparent animate-spin"></div>
+                                        <div className="absolute inset-0 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin"></div>
                                     </div>
-                                    <p className="text-sm text-slate-400">Analyzing...</p>
+                                    <p className="text-sm text-slate-400">Running deep analysis...</p>
                                 </div>
                             ) : researchData ? (
-                                <div className="mt-4 space-y-3">
-                                    <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-xl">
-                                        <span className="text-sm text-slate-400">AI Score</span>
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between p-2 bg-slate-800/50 rounded-lg">
+                                        <span className="text-xs text-slate-500">AI Score</span>
                                         <div className="flex items-center gap-2">
-                                            <div className="w-20 h-2 rounded-full bg-slate-700 overflow-hidden">
+                                            <div className="w-16 h-1.5 rounded-full bg-slate-700 overflow-hidden">
                                                 <div
                                                     className={`h-full rounded-full ${
                                                         researchData.overall_score >= 70 ? 'bg-emerald-400' :
@@ -297,7 +459,7 @@ export default function Positions() {
                                                     style={{ width: `${researchData.overall_score}%` }}
                                                 />
                                             </div>
-                                            <span className={`font-bold text-sm ${
+                                            <span className={`text-xs font-bold ${
                                                 researchData.overall_score >= 70 ? 'text-emerald-400' :
                                                 researchData.overall_score >= 40 ? 'text-amber-400' : 'text-red-400'
                                             }`}>
@@ -305,13 +467,13 @@ export default function Positions() {
                                             </span>
                                         </div>
                                     </div>
-                                    <div className="text-sm text-slate-400 leading-relaxed">
-                                        {researchData.summary?.substring(0, 150)}...
-                                    </div>
+                                    <p className="text-xs text-slate-400 leading-relaxed">
+                                        {researchData.summary?.substring(0, 120)}...
+                                    </p>
                                 </div>
                             ) : (
-                                <div className="text-center py-6 text-slate-400">
-                                    <p className="text-sm">Click refresh to analyze {selectedSymbol}</p>
+                                <div className="text-center py-4 text-slate-400">
+                                    <p className="text-xs">Click refresh for multi-agent analysis</p>
                                 </div>
                             )}
                         </div>
@@ -377,7 +539,7 @@ interface StatCardProps {
     iconBg?: string
 }
 
-function StatCard({ title, value, change, subtitle, icon, iconColor = 'text-primary', iconBg = 'bg-primary/20' }: StatCardProps) {
+const StatCard = memo(function StatCard({ title, value, change, subtitle, icon, iconColor = 'text-primary', iconBg = 'bg-primary/20' }: StatCardProps) {
     return (
         <div className="stat-card group">
             <div className="flex items-start justify-between">
@@ -400,7 +562,7 @@ function StatCard({ title, value, change, subtitle, icon, iconColor = 'text-prim
             </div>
         </div>
     )
-}
+})
 
 interface StocksTableProps {
     stocks: StockPosition[]
@@ -559,6 +721,16 @@ function OptionsTable({ options, expanded, onToggle, onSelect, selectedSymbol }:
                                         {(option.pl_pct ?? 0) >= 0 ? '+' : ''}{(option.pl_pct ?? 0).toFixed(1)}%
                                     </div>
                                 </div>
+                                <a
+                                    href={`https://www.tradingview.com/chart/?symbol=${option.symbol}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="btn-icon p-1.5"
+                                    title={`View ${option.symbol} on TradingView`}
+                                >
+                                    <ExternalLink className="w-4 h-4" />
+                                </a>
                                 <div className={`p-2 rounded-lg transition-colors ${isExpanded ? 'bg-primary/20 text-primary' : 'text-slate-400'}`}>
                                     {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                                 </div>

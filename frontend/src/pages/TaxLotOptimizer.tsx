@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { axiosInstance } from '../lib/axios'
 import {
     Calculator, RefreshCw, DollarSign, TrendingUp, TrendingDown,
-    Calendar, AlertTriangle, CheckCircle, Filter, BarChart3
+    AlertTriangle, CheckCircle, Filter
 } from 'lucide-react'
 import clsx from 'clsx'
 

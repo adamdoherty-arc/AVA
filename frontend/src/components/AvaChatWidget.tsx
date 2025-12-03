@@ -22,15 +22,8 @@ interface ModelInfo {
     tier?: 'auto' | 'free' | 'cheap' | 'standard' | 'premium'
 }
 
-// AVA avatar images for rotation
-const AVA_IMAGES = [
-    '/ava/AvaPink.jpg',
-    '/ava/AvaSkinny.jpg',
-    '/ava/AvaNewTry.jpg',
-    '/ava/AvaBigTry.jpg',
-    '/ava/NancyFace.jpg',
-    '/ava/AvaBig.jpg',
-]
+// AVA avatar image - static NancyFace
+const AVA_IMAGE = '/ava/NancyFace.jpg'
 
 // Status labels for loading states
 const LOADING_LABELS = ['Thinking', 'Analyzing', 'Processing', 'Computing']
@@ -55,17 +48,15 @@ export function AvaChatWidget() {
         'deepseek-chat': { name: 'DeepSeek Chat', description: '$0.14/1M tokens', speed: '~80 tok/s' },
         'claude-sonnet': { name: 'Claude Sonnet 4.5', description: 'Best reasoning', speed: '~50 tok/s' },
     })
-    const [avatarIndex, setAvatarIndex] = useState(0)
     const [labelIndex, setLabelIndex] = useState(0)
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const inputRef = useRef<HTMLInputElement>(null)
     const modelSelectRef = useRef<HTMLDivElement>(null)
 
-    // Rotate avatar images when loading
+    // Rotate loading labels when thinking
     useEffect(() => {
         if (loading) {
             const interval = setInterval(() => {
-                setAvatarIndex((prev) => (prev + 1) % AVA_IMAGES.length)
                 setLabelIndex((prev) => (prev + 1) % LOADING_LABELS.length)
             }, 1200)
             return () => clearInterval(interval)
@@ -158,7 +149,7 @@ export function AvaChatWidget() {
                     className="w-14 h-14 rounded-xl overflow-hidden shadow-lg shadow-primary/20 hover:scale-105 transition-transform ring-2 ring-primary/50"
                 >
                     <img
-                        src={AVA_IMAGES[0]}
+                        src={AVA_IMAGE}
                         alt="AVA"
                         className="w-full h-full object-cover"
                     />
@@ -182,12 +173,9 @@ export function AvaChatWidget() {
                     <div className="relative">
                         <div className="w-12 h-12 rounded-xl overflow-hidden shadow-lg ring-2 ring-primary/30">
                             <img
-                                src={loading ? AVA_IMAGES[avatarIndex] : AVA_IMAGES[0]}
+                                src={AVA_IMAGE}
                                 alt="AVA"
-                                className={clsx(
-                                    "w-full h-full object-cover transition-all duration-500",
-                                    loading && "scale-110"
-                                )}
+                                className="w-full h-full object-cover"
                             />
                         </div>
                         <div className={clsx(
@@ -217,27 +205,17 @@ export function AvaChatWidget() {
             <div className="px-4 py-5 border-b border-slate-800/50 text-center bg-slate-900/30">
                 <div className="relative w-36 h-36 mx-auto mb-4">
                     {/* Outer ring */}
-                    <div className={clsx(
-                        "absolute inset-0 rounded-2xl bg-gradient-to-br from-primary to-violet-600 p-[3px] transition-all duration-700",
-                        loading && 'animate-spin-slow'
-                    )}>
+                    <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-primary to-violet-600 p-[3px]">
                         <div className="w-full h-full rounded-2xl bg-slate-900" />
                     </div>
 
                     {/* Avatar image */}
                     <div className="absolute inset-1 rounded-xl overflow-hidden">
                         <img
-                            src={AVA_IMAGES[avatarIndex]}
+                            src={AVA_IMAGE}
                             alt="AVA"
-                            className={clsx(
-                                "w-full h-full object-cover transition-all duration-700",
-                                loading && "scale-105"
-                            )}
+                            className="w-full h-full object-cover"
                         />
-                        {/* Overlay gradient when loading */}
-                        {loading && (
-                            <div className="absolute inset-0 bg-gradient-to-t from-primary/30 to-transparent animate-pulse" />
-                        )}
                     </div>
 
                     {/* Status indicator */}
@@ -340,7 +318,7 @@ export function AvaChatWidget() {
                     )}>
                         {msg.role === 'assistant' && (
                             <div className="w-6 h-6 rounded-lg overflow-hidden flex-shrink-0 ring-1 ring-primary/30">
-                                <img src={AVA_IMAGES[0]} alt="AVA" className="w-full h-full object-cover" />
+                                <img src={AVA_IMAGE} alt="AVA" className="w-full h-full object-cover" />
                             </div>
                         )}
 
@@ -395,7 +373,7 @@ export function AvaChatWidget() {
                     <div className="flex gap-2 justify-start">
                         <div className="w-6 h-6 rounded-lg overflow-hidden flex-shrink-0 ring-1 ring-primary/30">
                             <img
-                                src={AVA_IMAGES[avatarIndex]}
+                                src={AVA_IMAGE}
                                 alt="AVA"
                                 className="w-full h-full object-cover"
                             />

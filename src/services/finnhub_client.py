@@ -17,8 +17,15 @@ Free Tier: 60 API calls per minute (very generous!)
 
 API Key: Get FREE at https://finnhub.io/register
 
+OPTIMIZATIONS APPLIED:
+1. Minimal rate limiting (tracks per-minute calls, no blocking sleep)
+2. Redis/In-Memory caching with proper TTLs
+3. Async-compatible design
+4. Circuit breaker pattern for resilience
+
 Author: Magnus Trading Platform
 Created: 2025-11-21
+Updated: 2025-11-29 - Added circuit breaker pattern
 """
 
 import os
@@ -26,60 +33,208 @@ import requests
 import logging
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
-from functools import lru_cache
+from enum import Enum
+from dataclasses import dataclass, field
 import time
 
 logger = logging.getLogger(__name__)
 
 
+class CircuitState(Enum):
+    """Circuit breaker states"""
+    CLOSED = "closed"      # Normal operation
+    OPEN = "open"          # Blocking requests
+    HALF_OPEN = "half_open"  # Testing recovery
+
+
+@dataclass
+class CircuitBreaker:
+    """
+    Circuit breaker pattern for API resilience.
+    Prevents cascading failures by temporarily blocking requests to a failing service.
+    """
+    failure_threshold: int = 5
+    recovery_timeout: float = 60.0
+    _failure_count: int = field(default=0, init=False, repr=False)
+    _last_failure_time: Optional[float] = field(default=None, init=False, repr=False)
+    _state: CircuitState = field(default=CircuitState.CLOSED, init=False, repr=False)
+
+    def record_success(self) -> None:
+        """Record a successful request - reset circuit"""
+        self._failure_count = 0
+        self._state = CircuitState.CLOSED
+
+    def record_failure(self) -> None:
+        """Record a failed request - may trip circuit"""
+        self._failure_count += 1
+        self._last_failure_time = time.time()
+        if self._failure_count >= self.failure_threshold:
+            self._state = CircuitState.OPEN
+            logger.warning(f"Finnhub circuit breaker OPEN after {self._failure_count} failures")
+
+    def can_execute(self) -> bool:
+        """Check if request can proceed"""
+        if self._state == CircuitState.CLOSED:
+            return True
+        if self._state == CircuitState.OPEN:
+            if self._last_failure_time:
+                elapsed = time.time() - self._last_failure_time
+                if elapsed >= self.recovery_timeout:
+                    self._state = CircuitState.HALF_OPEN
+                    logger.info("Finnhub circuit breaker HALF_OPEN - testing recovery")
+                    return True
+            return False
+        return True  # HALF_OPEN allows one test request
+
+    @property
+    def state(self) -> CircuitState:
+        return self._state
+
+
 class FinnhubClient:
-    """Client for Finnhub FREE API"""
+    """
+    Client for Finnhub FREE API with optimized rate limiting and circuit breaker.
+
+    Performance Improvements:
+    - Non-blocking rate limiting (tracks per-minute calls)
+    - Redis/In-memory caching for frequently accessed data
+    - 60 calls/minute limit respected without blocking sleeps
+    - Circuit breaker pattern for resilience (trips after 5 failures, 60s recovery)
+    """
 
     BASE_URL = "https://finnhub.io/api/v1"
 
     # Demo API key (get your own free key)
     DEFAULT_API_KEY = "demo"
 
-    def __init__(self, api_key: Optional[str] = None):
+    # Cache TTLs
+    CACHE_TTL_QUOTE = 30          # 30 seconds for quotes
+    CACHE_TTL_NEWS = 300          # 5 minutes for news
+    CACHE_TTL_PROFILE = 3600      # 1 hour for company profiles
+    CACHE_TTL_METRICS = 1800      # 30 minutes for metrics
+
+    # Rate limit: 60 calls per minute
+    RATE_LIMIT_PER_MINUTE = 60
+
+    def __init__(self, api_key: Optional[str] = None, failure_threshold: int = 5, recovery_timeout: float = 60.0):
         """
-        Initialize Finnhub client.
+        Initialize Finnhub client with circuit breaker.
 
         Args:
             api_key: Finnhub API key (get FREE at finnhub.io)
                     Falls back to env var FINNHUB_API_KEY
+            failure_threshold: Number of failures before circuit opens (default: 5)
+            recovery_timeout: Seconds before circuit attempts recovery (default: 60)
         """
         self.api_key = api_key or os.getenv('FINNHUB_API_KEY', self.DEFAULT_API_KEY)
         self.session = requests.Session()
         self.call_count = 0
         self.last_call_time = None
 
-        logger.info(f"✅ Finnhub client initialized (API key: {self.api_key[:8]}...)")
+        # Rate limiting: track calls in current minute
+        self._minute_calls = 0
+        self._minute_reset = datetime.now()
 
-    def _make_request(self, endpoint: str, params: Optional[Dict] = None) -> Optional[Any]:
+        # Circuit breaker for resilience
+        self._circuit_breaker = CircuitBreaker(
+            failure_threshold=failure_threshold,
+            recovery_timeout=recovery_timeout
+        )
+
+        # Try to use distributed cache
+        try:
+            from backend.infrastructure.cache import get_cache
+            self._cache = get_cache()
+            self._use_cache = True
+        except ImportError:
+            self._use_cache = False
+            self._local_cache: Dict[str, tuple] = {}
+
+        logger.info(f"Finnhub client initialized with circuit breaker (API key: {self.api_key[:8]}...)")
+
+    @property
+    def circuit_state(self) -> str:
+        """Get current circuit breaker state"""
+        return self._circuit_breaker.state.value
+
+    def _check_rate_limit(self) -> bool:
         """
-        Make API request with rate limiting.
+        Check if we're within rate limits for this minute.
+
+        Returns:
+            True if we can make a request, False if at limit.
+        """
+        now = datetime.now()
+        # Reset counter if we're in a new minute
+        if (now - self._minute_reset).total_seconds() >= 60:
+            self._minute_reset = now
+            self._minute_calls = 0
+        return self._minute_calls < self.RATE_LIMIT_PER_MINUTE
+
+    def _get_cached(self, key: str) -> Optional[Any]:
+        """Get cached value (sync-compatible)."""
+        if self._use_cache:
+            try:
+                import asyncio
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    return None  # Can't use async cache in sync context
+                return loop.run_until_complete(self._cache.get(key))
+            except Exception:
+                return None
+        else:
+            # Use local cache with TTL check
+            if key in self._local_cache:
+                value, expiry = self._local_cache[key]
+                if datetime.now() < expiry:
+                    return value
+                del self._local_cache[key]
+            return None
+
+    def _set_cache(self, key: str, value: Any, ttl: int = 300) -> None:
+        """Set cached value (sync-compatible)."""
+        if self._use_cache:
+            try:
+                import asyncio
+                loop = asyncio.get_event_loop()
+                if not loop.is_running():
+                    loop.run_until_complete(self._cache.set(key, value, ttl))
+            except Exception:
+                pass
+        else:
+            expiry = datetime.now() + timedelta(seconds=ttl)
+            self._local_cache[key] = (value, expiry)
+
+    def _make_request(
+        self, endpoint: str, params: Optional[Dict] = None
+    ) -> Optional[Any]:
+        """
+        Make API request with smart rate limiting and circuit breaker protection.
 
         Args:
             endpoint: API endpoint
             params: Query parameters
 
         Returns:
-            JSON response
+            JSON response or None if blocked/failed
         """
         if params is None:
             params = {}
+
+        # Check circuit breaker first
+        if not self._circuit_breaker.can_execute():
+            logger.warning(f"Finnhub circuit breaker OPEN - request blocked: {endpoint}")
+            return None
+
+        # Check rate limit - log warning if approaching limit
+        if not self._check_rate_limit():
+            logger.warning("Finnhub rate limit reached (60/min)")
+            return None
 
         # Add API key
         params['token'] = self.api_key
 
         url = f"{self.BASE_URL}/{endpoint}"
-
-        # Rate limiting (60 calls/min = 1 per second, but be conservative)
-        if self.last_call_time:
-            elapsed = time.time() - self.last_call_time
-            if elapsed < 1.1:  # Wait 1.1 seconds between calls
-                wait_time = 1.1 - elapsed
-                time.sleep(wait_time)
 
         try:
             response = self.session.get(url, params=params, timeout=30)
@@ -87,29 +242,35 @@ class FinnhubClient:
 
             self.last_call_time = time.time()
             self.call_count += 1
+            self._minute_calls += 1
 
             data = response.json()
 
-            # Check for errors
+            # Check for API-level errors
             if isinstance(data, dict) and 'error' in data:
                 logger.error(f"Finnhub API error: {data['error']}")
+                self._circuit_breaker.record_failure()
                 return None
 
-            logger.info(f"✅ Finnhub API call #{self.call_count} successful")
+            # Success - reset circuit breaker
+            self._circuit_breaker.record_success()
+            logger.debug(f"Finnhub API call #{self.call_count} successful")
             return data
 
         except requests.exceptions.RequestException as e:
-            logger.error(f"Finnhub request failed: {e}")
+            self._circuit_breaker.record_failure()
+            logger.error(f"Finnhub request failed ({self._circuit_breaker.state.value}): {e}")
             return None
 
     # ========================================================================
     # STOCK QUOTES & PRICES
     # ========================================================================
 
-    @lru_cache(maxsize=200)
     def get_quote(self, symbol: str) -> Optional[Dict]:
         """
         Get real-time quote for a symbol (FREE).
+
+        Uses caching with 30-second TTL.
 
         Args:
             symbol: Stock ticker
@@ -117,12 +278,20 @@ class FinnhubClient:
         Returns:
             Quote with current price, change, high, low, etc.
         """
+        # Check cache first
+        cache_key = f"finnhub:quote:{symbol}"
+        cached = self._get_cached(cache_key)
+        if cached:
+            return cached
+
         data = self._make_request('quote', {'symbol': symbol})
 
         if not data:
             return None
 
-        return {
+        ts = data.get('t')
+        timestamp = datetime.fromtimestamp(ts).isoformat() if ts else None
+        result = {
             'symbol': symbol,
             'current_price': data.get('c', 0),
             'change': data.get('d', 0),
@@ -131,8 +300,12 @@ class FinnhubClient:
             'low': data.get('l', 0),
             'open': data.get('o', 0),
             'previous_close': data.get('pc', 0),
-            'timestamp': datetime.fromtimestamp(data.get('t', 0)).isoformat() if data.get('t') else None
+            'timestamp': timestamp
         }
+
+        # Cache the result
+        self._set_cache(cache_key, result, self.CACHE_TTL_QUOTE)
+        return result
 
     def get_candles(
         self,
@@ -528,13 +701,14 @@ class FinnhubClient:
         return analysis
 
     def get_usage_stats(self) -> Dict:
-        """Get API usage statistics"""
+        """Get API usage statistics including circuit breaker state"""
         return {
             'total_calls': self.call_count,
             'calls_per_minute_limit': 60,
             'last_call': self.last_call_time,
             'api_key': f"{self.api_key[:8]}...",
-            'free_tier': True
+            'free_tier': True,
+            'circuit_breaker_state': self.circuit_state
         }
 
 

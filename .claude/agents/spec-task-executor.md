@@ -53,6 +53,54 @@ npx @pimzino/claude-code-spec-workflow@latest get-content "/path/to/project/.cla
 4. **Documentation**: Update relevant documentation if needed
 5. **Dependencies**: Only add dependencies that are already used in the project
 
+## AVA Platform Infrastructure Patterns
+When implementing tasks, use these established patterns:
+
+### Caching
+```python
+from backend.infrastructure.cache import get_cache
+
+cache = get_cache()
+# Use get_or_fetch for stampede protection
+result = await cache.get_or_fetch("key", fetch_func, ttl=300)
+```
+
+### Parallel API Fetching
+```python
+from concurrent.futures import ThreadPoolExecutor
+import asyncio
+
+_executor = ThreadPoolExecutor(max_workers=10)
+
+async def fetch_parallel(items):
+    loop = asyncio.get_event_loop()
+    results = await asyncio.gather(
+        *[loop.run_in_executor(_executor, fetch_one, item) for item in items]
+    )
+    return results
+```
+
+### Database Batch Operations
+```python
+from psycopg2.extras import execute_values
+
+# Batch INSERT/UPDATE
+execute_values(cursor, "INSERT INTO table VALUES %s", data)
+```
+
+### Rate-Limited API Clients
+```python
+# Per-minute tracking (no blocking sleeps!)
+def _check_rate_limit(self) -> bool:
+    now = datetime.now()
+    if (now - self._minute_reset).total_seconds() >= 60:
+        self._minute_reset = now
+        self._minute_calls = 0
+    return self._minute_calls < RATE_LIMIT
+```
+
+See `docs/PERFORMANCE_OPTIMIZATIONS.md` for detailed patterns.
+
 ## Task Completion Protocol
 When you complete a task:
 1. Update tasks.md: Change the task status from [ ] to [x]

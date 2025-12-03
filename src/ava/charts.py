@@ -20,8 +20,9 @@ Usage:
     # Generate portfolio chart
     chart_path = gen.generate_portfolio_chart(balances_data)
 
-    # Send via Telegram
-    await update.message.reply_photo(photo=open(chart_path, 'rb'))
+    # Send via Telegram (use context manager to avoid resource leak!)
+    with open(chart_path, 'rb') as photo_file:
+        await update.message.reply_photo(photo=photo_file)
 """
 
 import os

@@ -1,6 +1,8 @@
 """
 AI-Native Research Agent
 Continuously discovers improvements from external sources
+
+Updated: 2025-11-29 - Now uses FREE LLM providers (Groq/Ollama) by default
 """
 
 import asyncio
@@ -17,9 +19,11 @@ from bs4 import BeautifulSoup
 import psycopg2
 from psycopg2.extras import RealDictCursor, execute_batch
 from sentence_transformers import SentenceTransformer
-import openai
 from dotenv import load_dotenv
 import os
+
+from src.ava.core.llm_engine import LLMClient, LLMProvider
+from src.ava.core.config import get_config
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -31,18 +35,18 @@ load_dotenv()
 class ResearchAgent:
     """
     Autonomous research agent that discovers improvements from multiple sources
+    Now uses FREE LLM providers (Groq/Ollama) by default!
     """
 
-    def __init__(self, db_config: Dict[str, str], use_local_llm: bool = False):
+    def __init__(self, db_config: Dict[str, str], use_local_llm: bool = True):
         """
         Initialize the research agent
 
         Args:
             db_config: Database connection configuration
-            use_local_llm: Use local LLM (Ollama) instead of OpenAI for cost savings
+            use_local_llm: DEPRECATED - now uses centralized config for LLM provider
         """
         self.db_config = db_config
-        self.use_local_llm = use_local_llm
 
         # Initialize similarity model (runs locally, no API costs)
         logger.info("Loading sentence transformer model...")
@@ -51,7 +55,7 @@ class ResearchAgent:
         # Initialize API clients
         self.reddit = None
         self.github = None
-        self.openai_client = None
+        self.llm = None
 
         self._initialize_clients()
 
@@ -77,14 +81,27 @@ class ResearchAgent:
         except Exception as e:
             logger.warning(f"Failed to initialize GitHub client: {e}")
 
-        # OpenAI API
-        if not self.use_local_llm:
-            try:
-                openai.api_key = os.getenv('OPENAI_API_KEY')
-                self.openai_client = openai
-                logger.info("OpenAI client initialized")
-            except Exception as e:
-                logger.warning(f"Failed to initialize OpenAI client: {e}")
+        # LLM Client - Use centralized config for FREE provider
+        try:
+            config = get_config()
+            provider_map = {
+                "ollama": LLMProvider.OLLAMA,
+                "groq": LLMProvider.GROQ,
+                "huggingface": LLMProvider.HUGGINGFACE,
+                "anthropic": LLMProvider.ANTHROPIC,
+                "openai": LLMProvider.OPENAI,
+            }
+            provider = provider_map.get(config.ai.provider.lower(), LLMProvider.GROQ)
+
+            self.llm = LLMClient(
+                provider=provider,
+                model=config.ai.default_model,
+                cache_enabled=True,
+                cache_ttl=600  # 10 minute cache for research
+            )
+            logger.info(f"LLM client initialized with FREE provider: {provider.value}")
+        except Exception as e:
+            logger.warning(f"Failed to initialize LLM client: {e}")
 
     def get_db_connection(self) -> None:
         """Get database connection"""
@@ -252,7 +269,7 @@ class ResearchAgent:
 
     def analyze_relevance(self, finding: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Use AI to analyze relevance and score the finding
+        Use AI to analyze relevance and score the finding (FREE via Groq/Ollama)
 
         Args:
             finding: Finding dictionary
@@ -260,63 +277,45 @@ class ResearchAgent:
         Returns:
             Analysis results with scores
         """
-        prompt = f"""You are an AI assistant evaluating the relevance of a research finding
-to the Magnus Trading Platform, a Python-based options trading system.
+        prompt = f"""Evaluate this research finding for the Magnus Trading Platform.
 
 Finding:
 Title: {finding['source_title']}
 Source: {finding['source_type']}
 Content: {finding['content'][:2000]}
 
-Analyze this finding and provide scores (0-100) for:
-
-1. relevance_score: How relevant is this to options trading platforms?
-2. applicability_score: How easily can this be applied to Magnus?
-3. novelty_score: How novel/unique is this idea?
-4. implementation_difficulty: How hard would this be to implement?
-
-Also provide:
-- summary: 2-3 sentence summary
-- keywords: List of relevant keywords (array)
-- technologies: Technologies/libraries mentioned (array)
-- recommendation: Should this be converted to an enhancement? (yes/no/maybe)
-
-Return ONLY valid JSON format:
+Provide scores (0-100) and analysis as JSON:
 {{
   "relevance_score": 85,
   "applicability_score": 70,
   "novelty_score": 60,
   "implementation_difficulty": 40,
-  "summary": "...",
+  "summary": "2-3 sentence summary",
   "keywords": ["options", "backtesting"],
   "technologies": ["pandas", "scikit-learn"],
-  "recommendation": "yes"
+  "recommendation": "yes/no/maybe"
 }}
 """
 
         try:
-            if self.use_local_llm:
-                # Use local LLM (Ollama)
-                response = requests.post(
-                    'http://localhost:11434/api/generate',
-                    json={
-                        'model': 'llama2',
-                        'prompt': prompt,
-                        'stream': False
-                    }
-                )
-                analysis_text = response.json()['response']
-            else:
-                # Use OpenAI
-                response = self.openai_client.chat.completions.create(
-                    model='gpt-4',
-                    messages=[{'role': 'user', 'content': prompt}],
-                    temperature=0.3
-                )
-                analysis_text = response.choices[0].message.content
+            if not self.llm:
+                raise ValueError("LLM client not initialized")
 
-            # Parse JSON response
-            # Extract JSON from markdown code blocks if present
+            # Use async LLM call
+            async def get_analysis():
+                return await self.llm.generate(
+                    system="You are an AI analyst evaluating research findings "
+                           "for a Python options trading platform. Return valid JSON only.",
+                    messages=[{'role': 'user', 'content': prompt}],
+                    temperature=0.3,
+                    max_tokens=500
+                )
+
+            # Run async
+            response = asyncio.run(get_analysis())
+            analysis_text = response.content
+
+            # Parse JSON response - extract from code blocks if present
             if '```json' in analysis_text:
                 analysis_text = analysis_text.split('```json')[1].split('```')[0].strip()
             elif '```' in analysis_text:
@@ -331,14 +330,15 @@ Return ONLY valid JSON format:
                 'implementation_difficulty': analysis.get('implementation_difficulty', 50),
                 'content_summary': analysis.get('summary', ''),
                 'keywords': analysis.get('keywords', []),
-                'extracted_technologies': {'technologies': analysis.get('technologies', [])},
+                'extracted_technologies': {
+                    'technologies': analysis.get('technologies', [])
+                },
                 'ai_analysis': analysis_text,
                 'recommendation': analysis.get('recommendation', 'maybe')
             }
 
         except Exception as e:
             logger.error(f"Error analyzing relevance: {e}")
-            # Return default scores on error
             return {
                 'relevance_score': 50,
                 'applicability_score': 50,

@@ -6,8 +6,8 @@ Advanced NBA game predictions using Elo ratings and statistical models
 import json
 import logging
 import math
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, Optional, Tuple, Any
-from datetime import datetime, timedelta
 from datetime import datetime, timedelta
 import os
 from .llm_explanation_enhancer import get_llm_enhancer
@@ -219,31 +219,28 @@ class NBAPredictor:
         # Enhance with LLM if available
         try:
             enhancer = get_llm_enhancer()
-            loser = away_team if winner == home_team else home_team
-            
-            # Prepare context for LLM
-            context = {
-                'home_team': home_team,
-                'away_team': away_team,
-                'home_elo': home_elo,
-                'away_elo': away_elo,
+
+            # Build adjustments dict for LLM enhancer
+            llm_adjustments = {
+                'home_court': self.HOME_COURT_ADVANTAGE,
                 'rest_days_home': rest_days_home,
                 'rest_days_away': rest_days_away,
-                'home_court_advantage': self.HOME_COURT_ADVANTAGE
+                'elo_diff': abs(home_elo - away_elo)
             }
-            
+
             return enhancer.enhance_explanation(
                 sport="NBA",
+                home_team=home_team,
+                away_team=away_team,
                 winner=winner,
-                loser=loser,
                 probability=probability,
                 features={
                     'home_elo': home_elo,
                     'away_elo': away_elo,
                     'elo_diff': abs(home_elo - away_elo)
                 },
-                context=context,
-                template_explanation=template_explanation
+                adjustments=llm_adjustments,
+                template_fallback=template_explanation
             )
         except Exception as e:
             self.logger.warning(f"Failed to enhance explanation with LLM: {e}")
@@ -305,10 +302,10 @@ class NBAPredictor:
     def get_top_teams(self, n: int = 10) -> list:
         """
         Get top N teams by Elo rating
-        
+
         Args:
             n: Number of teams to return
-        
+
         Returns:
             List of (team, rating) tuples sorted by rating
         """
@@ -318,6 +315,66 @@ class NBAPredictor:
             reverse=True
         )
         return sorted_teams[:n]
+
+    def _predict_single_game(self, game: dict) -> tuple:
+        """Helper for parallel prediction - returns (game_id, prediction)"""
+        game_id = game.get(
+            'game_id',
+            f"{game.get('home_team', '')}_{game.get('away_team', '')}"
+        )
+        try:
+            prediction = self.predict_game(
+                home_team=game.get('home_team', game.get('home_team_abbr', '')),
+                away_team=game.get('away_team', game.get('away_team_abbr', '')),
+                home_record=game.get('home_record', ''),
+                away_record=game.get('away_record', ''),
+                rest_days_home=game.get('rest_days_home', 1),
+                rest_days_away=game.get('rest_days_away', 1)
+            )
+            return (game_id, prediction)
+        except Exception as e:
+            self.logger.warning(f"NBA prediction failed for {game_id}: {e}")
+            return (game_id, None)
+
+    def predict_batch(
+        self,
+        games: list,
+        max_parallel: int = 10
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        Predict outcomes for multiple NBA games in parallel.
+
+        Args:
+            games: List of game dicts with 'game_id', 'home_team', 'away_team'
+            max_parallel: Maximum parallel workers (default 10)
+
+        Returns:
+            Dictionary mapping game_id to prediction result
+        """
+        if not games:
+            return {}
+
+        results = {}
+
+        # Use ThreadPoolExecutor for true parallel execution
+        with ThreadPoolExecutor(max_workers=min(max_parallel, len(games))) as executor:
+            futures = {
+                executor.submit(self._predict_single_game, game): game
+                for game in games
+            }
+
+            for future in as_completed(futures):
+                try:
+                    game_id, prediction = future.result()
+                    results[game_id] = prediction
+                except Exception as e:
+                    game = futures[future]
+                    gid = game.get('game_id', 'unknown')
+                    self.logger.error(f"NBA batch error for {gid}: {e}")
+                    results[gid] = None
+
+        self.logger.info(f"NBA batch predicted {len(results)} games in parallel")
+        return results
 
 
 # Singleton instance

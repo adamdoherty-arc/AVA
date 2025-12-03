@@ -7,8 +7,7 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import {
-    LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-    ResponsiveContainer, AreaChart, Area
+    LineChart, ResponsiveContainer, AreaChart, Area
 } from 'recharts'
 
 interface SystemMetrics {

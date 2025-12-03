@@ -74,54 +74,238 @@ class AgentAwareNLPHandler:
             logger.info(f"📚 RAG system not available: {e}")
             self.rag = None
 
-        # Agent routing keywords
+        # Comprehensive agent routing map - covers ALL 36 agents
+        # Each keyword maps to capability names that agents register with
         self.routing_map = {
-            # Portfolio & Positions
-            'portfolio': ['portfolio_analysis', 'robinhood_integration'],
-            'positions': ['portfolio_analysis', 'position_management'],
-            'balance': ['portfolio_analysis'],
-            'greeks': ['portfolio_analysis', 'options_analysis'],
+            # ===== PORTFOLIO & POSITIONS (portfolio_agent, position_agent) =====
+            'portfolio': ['portfolio_analysis', 'position_tracking', 'greeks_analysis'],
+            'positions': ['portfolio_analysis', 'position_management', 'position_tracking'],
+            'balance': ['portfolio_analysis', 'portfolio_summary'],
+            'holdings': ['portfolio_analysis', 'position_tracking'],
+            'account': ['portfolio_analysis', 'portfolio_summary'],
+            'pnl': ['portfolio_analysis', 'performance_tracking'],
+            'profit': ['portfolio_analysis', 'performance_tracking'],
+            'loss': ['portfolio_analysis', 'performance_tracking'],
+            'greeks': ['portfolio_analysis', 'options_analysis', 'greeks_analysis'],
+            'delta': ['portfolio_analysis', 'options_analysis', 'greeks_analysis'],
+            'gamma': ['portfolio_analysis', 'options_analysis', 'greeks_analysis'],
+            'vega': ['portfolio_analysis', 'options_analysis', 'greeks_analysis'],
 
-            # Technical Analysis
-            'analyze': ['technical_analysis', 'market_data'],
-            'technical': ['technical_analysis'],
-            'chart': ['technical_analysis'],
-            'support': ['technical_analysis', 'supply_demand'],
-            'resistance': ['technical_analysis', 'supply_demand'],
-            'rsi': ['technical_analysis'],
-            'macd': ['technical_analysis'],
+            # ===== THETA & TIME DECAY (portfolio_agent, options_analysis_agent) =====
+            'theta': ['portfolio_analysis', 'options_analysis', 'theta_analysis'],
+            'decay': ['portfolio_analysis', 'options_analysis', 'theta_analysis'],
+            'time decay': ['portfolio_analysis', 'options_analysis', 'theta_analysis'],
+            'premium erosion': ['portfolio_analysis', 'theta_analysis'],
 
-            # Options
-            'options': ['options_analysis', 'options_flow'],
-            'flow': ['options_flow'],
-            'unusual': ['options_flow'],
-            'sweep': ['options_flow'],
-            'strategy': ['options_analysis', 'strategy_generation'],
-            'spread': ['options_analysis'],
-            'premium': ['premium_scanning'],
+            # ===== OPTIONS ANALYSIS (options_analysis_agent, options_flow_agent) =====
+            'options': ['options_analysis', 'options_flow_analysis'],
+            'option': ['options_analysis', 'options_flow_analysis'],
+            'put': ['options_analysis', 'csp_analysis'],
+            'call': ['options_analysis', 'cc_analysis'],
+            'strike': ['options_analysis'],
+            'expiration': ['options_analysis', 'options_screening'],
+            'dte': ['options_analysis', 'options_screening'],
+            'csp': ['options_analysis', 'csp_analysis', 'premium_scanning'],
+            'covered call': ['options_analysis', 'cc_analysis', 'premium_scanning'],
+            'wheel': ['options_analysis', 'wheel_strategy'],
+            'assignment': ['options_analysis', 'risk_assessment'],
+            'iv': ['options_analysis', 'iv_analysis'],
+            'implied volatility': ['options_analysis', 'iv_analysis'],
+            'iv rank': ['options_analysis', 'iv_analysis'],
 
-            # Sports Betting
-            'game': ['sports_betting', 'kalshi'],
-            'nfl': ['nfl_markets', 'sports_betting'],
-            'nba': ['sports_betting'],
-            'predict': ['sports_betting', 'game_analysis'],
+            # ===== OPTIONS FLOW (options_flow_agent) =====
+            'flow': ['options_flow_analysis', 'unusual_activity'],
+            'unusual': ['options_flow_analysis', 'unusual_activity'],
+            'sweep': ['options_flow_analysis', 'unusual_activity'],
+            'dark pool': ['options_flow_analysis', 'unusual_activity'],
+            'institutional': ['options_flow_analysis', 'unusual_activity'],
+            'whale': ['options_flow_analysis', 'unusual_activity'],
+            'smart money': ['options_flow_analysis', 'unusual_activity'],
+
+            # ===== PREMIUM SCANNER (premium_scanner_agent) =====
+            'scan': ['premium_scanning', 'opportunity_scan'],
+            'scanner': ['premium_scanning', 'opportunity_scan'],
+            'find': ['premium_scanning', 'opportunity_scan'],
+            'search': ['premium_scanning', 'opportunity_scan'],
+            'opportunities': ['premium_scanning', 'opportunity_scan'],
+            'best plays': ['premium_scanning', 'opportunity_scan'],
+            'premium': ['premium_scanning', 'premium_analysis'],
+
+            # ===== STRATEGY (strategy_agent) =====
+            'strategy': ['strategy_generation', 'options_analysis'],
+            'strategies': ['strategy_generation', 'options_analysis'],
+            'spread': ['strategy_generation', 'options_analysis'],
+            'iron condor': ['strategy_generation', 'options_analysis'],
+            'straddle': ['strategy_generation', 'options_analysis'],
+            'strangle': ['strategy_generation', 'options_analysis'],
+            'vertical': ['strategy_generation', 'options_analysis'],
+            'calendar': ['strategy_generation', 'calendar_spreads'],
+            'diagonal': ['strategy_generation', 'options_analysis'],
+
+            # ===== TECHNICAL ANALYSIS (technical_agent) =====
+            'technical': ['technical_analysis', 'chart_analysis'],
+            'chart': ['technical_analysis', 'chart_analysis'],
+            'trend': ['technical_analysis', 'trend_analysis'],
+            'pattern': ['technical_analysis', 'chart_patterns'],
+            'indicator': ['technical_analysis', 'technical_indicators'],
+            'rsi': ['technical_analysis', 'technical_indicators'],
+            'macd': ['technical_analysis', 'technical_indicators'],
+            'moving average': ['technical_analysis', 'technical_indicators'],
+            'bollinger': ['technical_analysis', 'technical_indicators'],
+            'volume': ['technical_analysis', 'volume_analysis'],
+
+            # ===== SUPPLY & DEMAND (supply_demand_agent) =====
+            'support': ['supply_demand_analysis', 'technical_analysis'],
+            'resistance': ['supply_demand_analysis', 'technical_analysis'],
+            'supply': ['supply_demand_analysis'],
+            'demand': ['supply_demand_analysis'],
+            'zone': ['supply_demand_analysis'],
+            'level': ['supply_demand_analysis', 'technical_analysis'],
+
+            # ===== FUNDAMENTAL ANALYSIS (fundamental_agent) =====
+            'fundamental': ['fundamental_analysis', 'valuation_analysis'],
+            'valuation': ['fundamental_analysis', 'valuation_analysis'],
+            'pe ratio': ['fundamental_analysis', 'valuation_analysis'],
+            'revenue': ['fundamental_analysis', 'financial_analysis'],
+            'growth': ['fundamental_analysis', 'financial_analysis'],
+            'debt': ['fundamental_analysis', 'financial_analysis'],
+            'cash flow': ['fundamental_analysis', 'financial_analysis'],
+            'dividend': ['fundamental_analysis', 'dividend_analysis'],
+            'financials': ['fundamental_analysis', 'financial_analysis'],
+
+            # ===== SENTIMENT (sentiment_agent) =====
+            'sentiment': ['sentiment_analysis', 'news_analysis'],
+            'news': ['sentiment_analysis', 'news_analysis'],
+            'social': ['sentiment_analysis', 'social_analysis'],
+            'analyst': ['sentiment_analysis', 'analyst_ratings'],
+            'rating': ['sentiment_analysis', 'analyst_ratings'],
+            'upgrade': ['sentiment_analysis', 'analyst_ratings'],
+            'downgrade': ['sentiment_analysis', 'analyst_ratings'],
+
+            # ===== SECTOR ANALYSIS (sector_agent) =====
+            'sector': ['sector_analysis', 'market_analysis'],
+            'industry': ['sector_analysis', 'market_analysis'],
+            'rotation': ['sector_analysis', 'market_analysis'],
+
+            # ===== EARNINGS (earnings_agent) =====
+            'earnings': ['earnings_analysis', 'earnings_calendar'],
+            'eps': ['earnings_analysis', 'earnings_calendar'],
+            'quarterly': ['earnings_analysis', 'earnings_calendar'],
+            'guidance': ['earnings_analysis', 'earnings_calendar'],
+            'beat': ['earnings_analysis'],
+            'miss': ['earnings_analysis'],
+            'report': ['earnings_analysis', 'earnings_calendar'],
+
+            # ===== MARKET DATA (market_data_agent) =====
+            'price': ['market_data', 'price_lookup'],
+            'quote': ['market_data', 'price_lookup'],
+            'market': ['market_data', 'market_analysis'],
+            'stock': ['market_data', 'price_lookup'],
+            'current price': ['market_data', 'price_lookup'],
+            'analyze': ['market_data', 'technical_analysis'],
+
+            # ===== RISK MANAGEMENT (risk_management_agent) =====
+            'risk': ['risk_assessment', 'risk_management'],
+            'exposure': ['risk_assessment', 'portfolio_analysis'],
+            'var': ['risk_assessment', 'risk_management'],
+            'drawdown': ['risk_assessment', 'risk_management'],
+            'hedge': ['risk_assessment', 'risk_management'],
+            'protect': ['risk_assessment', 'risk_management'],
+            'position size': ['risk_assessment', 'position_sizing'],
+            'sizing': ['risk_assessment', 'position_sizing'],
+
+            # ===== SPORTS BETTING (sports agents) =====
+            'game': ['game_analysis', 'sports_betting'],
+            'nfl': ['nfl_markets', 'sports_betting', 'game_analysis'],
+            'nba': ['sports_betting', 'game_analysis'],
+            'ncaa': ['sports_betting', 'game_analysis'],
+            'mlb': ['sports_betting', 'game_analysis'],
+            'football': ['nfl_markets', 'sports_betting'],
+            'basketball': ['sports_betting', 'game_analysis'],
+            'baseball': ['sports_betting', 'game_analysis'],
+            'predict': ['game_analysis', 'sports_betting'],
+            'prediction': ['game_analysis', 'sports_betting'],
+            'bet': ['sports_betting', 'betting_strategy'],
+            'betting': ['sports_betting', 'betting_strategy'],
+            'wager': ['sports_betting', 'betting_strategy'],
+
+            # ===== ODDS & KALSHI (odds_comparison_agent, kalshi_markets_agent) =====
             'odds': ['odds_comparison', 'sports_betting'],
-            'kalshi': ['kalshi_markets'],
+            'line': ['odds_comparison', 'sports_betting'],
+            'spread': ['odds_comparison', 'sports_betting', 'strategy_generation'],
+            'moneyline': ['odds_comparison', 'sports_betting'],
+            'over under': ['odds_comparison', 'sports_betting'],
+            'kalshi': ['kalshi_markets', 'prediction_markets'],
+            'polymarket': ['prediction_markets'],
+            'prediction market': ['kalshi_markets', 'prediction_markets'],
 
-            # Research & Knowledge
+            # ===== RESEARCH & KNOWLEDGE (research_agent, knowledge_agent, documentation_agent) =====
             'what': ['knowledge_base', 'research'],
+            'what is': ['knowledge_base', 'research'],
             'how': ['knowledge_base', 'research'],
+            'how to': ['knowledge_base', 'research'],
             'why': ['knowledge_base', 'research'],
             'explain': ['knowledge_base', 'research'],
+            'learn': ['knowledge_base', 'documentation'],
+            'teach': ['knowledge_base', 'documentation'],
+            'help': ['knowledge_base', 'documentation'],
+            'guide': ['knowledge_base', 'documentation'],
+            'documentation': ['documentation', 'knowledge_base'],
 
-            # Monitoring
-            'watch': ['watchlist_monitoring'],
-            'alert': ['alert_management'],
-            'monitor': ['watchlist_monitoring', 'price_action'],
+            # ===== WATCHLIST & MONITORING (watchlist_monitor_agent, price_action_agent) =====
+            'watch': ['watchlist_monitoring', 'price_action_monitoring'],
+            'watchlist': ['watchlist_monitoring'],
+            'monitor': ['watchlist_monitoring', 'price_action_monitoring'],
+            'tracking': ['watchlist_monitoring', 'position_tracking'],
+            'price action': ['price_action_monitoring', 'technical_analysis'],
 
-            # Tasks
+            # ===== ALERTS (alert_agent) =====
+            'alert': ['alert_management', 'notification'],
+            'alerts': ['alert_management', 'notification'],
+            'notify': ['alert_management', 'notification'],
+            'notification': ['alert_management', 'notification'],
+            'reminder': ['alert_management', 'task_management'],
+
+            # ===== XTRADES (xtrades_monitor_agent) =====
+            'xtrades': ['xtrades_monitoring', 'trade_copying'],
+            'xtrade': ['xtrades_monitoring', 'trade_copying'],
+            'follow': ['xtrades_monitoring', 'trade_copying'],
+            'copy trade': ['xtrades_monitoring', 'trade_copying'],
+            'trader': ['xtrades_monitoring'],
+
+            # ===== ANALYTICS (analytics_agent) =====
+            'analytics': ['performance_analytics', 'portfolio_analytics'],
+            'performance': ['performance_analytics', 'portfolio_analysis'],
+            'statistics': ['performance_analytics', 'portfolio_analytics'],
+            'stats': ['performance_analytics', 'portfolio_analytics'],
+            'win rate': ['performance_analytics'],
+            'profit factor': ['performance_analytics'],
+
+            # ===== DISCORD (discord_agent) =====
+            'discord': ['discord_integration', 'notification'],
+
+            # ===== TASKS & SETTINGS (task_management_agent, settings_agent) =====
             'task': ['task_management'],
             'todo': ['task_management'],
+            'tasks': ['task_management'],
+            'setting': ['settings_management'],
+            'settings': ['settings_management'],
+            'config': ['settings_management'],
+            'configure': ['settings_management'],
+            'preference': ['settings_management'],
+
+            # ===== POSITION MANAGEMENT (position_agent) =====
+            'close': ['position_management', 'trade_execution'],
+            'roll': ['position_management', 'options_analysis'],
+            'adjust': ['position_management', 'options_analysis'],
+            'exit': ['position_management', 'trade_execution'],
+            'open': ['position_management', 'trade_execution'],
+
+            # ===== CACHE & SYSTEM (cache_metrics_agent) =====
+            'cache': ['cache_metrics', 'system_monitoring'],
+            'system': ['system_monitoring', 'cache_metrics'],
+            'health': ['system_monitoring'],
+            'status': ['system_monitoring', 'portfolio_analysis'],
         }
 
     def parse_query(self, user_text: str, context: Optional[Dict] = None) -> Dict:

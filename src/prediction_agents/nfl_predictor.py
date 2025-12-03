@@ -678,25 +678,26 @@ class NFLPredictor(BaseSportsPredictor):
         # Enhance with LLM if available
         try:
             enhancer = get_llm_enhancer()
-            loser = away_team if winner == home_team else home_team
-            
-            # Prepare context for LLM
-            context = {
-                'home_team': home_team,
-                'away_team': away_team,
-                'adjustments': adjustments,
-                'elo_diff': features.get('elo_diff', 0),
-                'home_field_advantage': self.HOME_FIELD_ADVANTAGE
+
+            # Build adjustments dict for LLM enhancer
+            llm_adjustments = {
+                'home_field': self.HOME_FIELD_ADVANTAGE,
+                'is_divisional': adjustments.get('divisional', False),
+                'momentum': adjustments.get('momentum', 0),
+                'matchup': adjustments.get('matchup', 0),
+                'injury_impact': adjustments.get('injury', 0),
+                'elo_diff': features.get('elo_diff', 0)
             }
-            
+
             return enhancer.enhance_explanation(
                 sport="NFL",
+                home_team=home_team,
+                away_team=away_team,
                 winner=winner,
-                loser=loser,
                 probability=probability,
                 features=features,
-                context=context,
-                template_explanation=template_explanation
+                adjustments=llm_adjustments,
+                template_fallback=template_explanation
             )
         except Exception as e:
             self.logger.warning(f"Failed to enhance explanation with LLM: {e}")

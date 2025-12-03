@@ -7,9 +7,12 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 from pydantic import BaseModel
 import logging
+import asyncio
 import robin_stocks.robinhood as rh
 from backend.services.portfolio_service import get_portfolio_service, PortfolioService
+from backend.services.metadata_service import get_metadata_service, MetadataService
 from src.database.connection_pool import get_db_connection
+from src.services.llm_service import LLMService
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +20,124 @@ router = APIRouter(
     prefix="/api/portfolio",
     tags=["portfolio"]
 )
+
+
+# ============ Sync Helper Functions (run via asyncio.to_thread) ============
+
+def _fetch_journal_entries_sync(limit: int, symbol: Optional[str], status: str) -> Dict[str, Any]:
+    """Sync function to fetch journal entries - called via asyncio.to_thread()"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        query = """
+            SELECT id, symbol, trade_type, direction, entry_price, exit_price,
+                   quantity, entry_date, exit_date, setup, thesis, emotion, lessons, tags,
+                   CASE WHEN exit_price IS NOT NULL THEN
+                       (exit_price - entry_price) * quantity
+                   ELSE NULL END as pnl
+            FROM trade_journal
+            WHERE 1=1
+        """
+        params = []
+
+        if symbol:
+            query += " AND symbol = %s"
+            params.append(symbol.upper())
+
+        if status == "open":
+            query += " AND exit_date IS NULL"
+        elif status == "closed":
+            query += " AND exit_date IS NOT NULL"
+
+        query += " ORDER BY entry_date DESC LIMIT %s"
+        params.append(limit)
+
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+
+        trades = []
+        total_pnl = 0
+        wins = 0
+        losses = 0
+
+        for row in rows:
+            pnl = row[14] if row[14] else 0
+            if pnl > 0:
+                wins += 1
+            elif pnl < 0:
+                losses += 1
+            total_pnl += pnl
+
+            trades.append({
+                "id": row[0],
+                "symbol": row[1],
+                "trade_type": row[2],
+                "direction": row[3],
+                "entry_price": float(row[4]) if row[4] else 0,
+                "exit_price": float(row[5]) if row[5] else None,
+                "quantity": row[6],
+                "entry_date": str(row[7]) if row[7] else None,
+                "exit_date": str(row[8]) if row[8] else None,
+                "setup": row[9],
+                "thesis": row[10],
+                "emotion": row[11],
+                "lessons": row[12],
+                "tags": row[13] if row[13] else [],
+                "pnl": round(pnl, 2) if pnl else None,
+                "status": "closed" if row[8] else "open"
+            })
+
+        win_rate = (wins / (wins + losses) * 100) if (wins + losses) > 0 else 0
+
+        return {
+            "trades": trades,
+            "stats": {
+                "total_trades": len(trades),
+                "win_rate": round(win_rate, 1),
+                "wins": wins,
+                "losses": losses,
+                "total_pnl": round(total_pnl, 2)
+            },
+            "generated_at": datetime.now().isoformat()
+        }
+
+
+def _create_journal_entry_sync(entry) -> Dict[str, Any]:
+    """Sync function to create journal entry - called via asyncio.to_thread()"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT INTO trade_journal
+            (symbol, trade_type, direction, entry_price, exit_price, quantity,
+             entry_date, exit_date, setup, thesis, emotion, lessons, tags)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (
+            entry.symbol.upper(),
+            entry.trade_type,
+            entry.direction,
+            entry.entry_price,
+            entry.exit_price,
+            entry.quantity,
+            entry.entry_date,
+            entry.exit_date,
+            entry.setup,
+            entry.thesis,
+            entry.emotion,
+            entry.lessons,
+            entry.tags
+        ))
+
+        entry_id = cursor.fetchone()[0]
+        conn.commit()
+
+        return {
+            "id": entry_id,
+            "symbol": entry.symbol.upper(),
+            "message": "Trade journal entry created successfully"
+        }
+
 
 # ============ Positions Endpoints (Already Real) ============
 
@@ -45,6 +166,26 @@ async def get_summary(
         return positions.get("summary", {})
     except Exception as e:
         logger.error(f"Error getting summary: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/sync")
+async def sync_portfolio(
+    service: PortfolioService = Depends(get_portfolio_service)
+) -> Dict[str, Any]:
+    """
+    Force refresh/sync portfolio data from Robinhood.
+    """
+    try:
+        # Force a fresh pull from Robinhood
+        positions = await service.get_positions()
+        return {
+            "status": "success",
+            "message": "Portfolio synced successfully",
+            "positions_count": len(positions.get("stocks", [])) + len(positions.get("options", [])),
+            "synced_at": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error syncing portfolio: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -214,87 +355,12 @@ async def get_journal_entries(
 ):
     """
     Get trade journal entries from database.
+    Uses asyncio.to_thread() for non-blocking DB access.
     """
     try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-
-            # Build query
-            query = """
-                SELECT id, symbol, trade_type, direction, entry_price, exit_price,
-                       quantity, entry_date, exit_date, setup, thesis, emotion, lessons, tags,
-                       CASE WHEN exit_price IS NOT NULL THEN
-                           (exit_price - entry_price) * quantity
-                       ELSE NULL END as pnl
-                FROM trade_journal
-                WHERE 1=1
-            """
-            params = []
-
-            if symbol:
-                query += " AND symbol = %s"
-                params.append(symbol.upper())
-
-            if status == "open":
-                query += " AND exit_date IS NULL"
-            elif status == "closed":
-                query += " AND exit_date IS NOT NULL"
-
-            query += " ORDER BY entry_date DESC LIMIT %s"
-            params.append(limit)
-
-            cursor.execute(query, params)
-            rows = cursor.fetchall()
-
-            trades = []
-            total_pnl = 0
-            wins = 0
-            losses = 0
-
-            for row in rows:
-                pnl = row[14] if row[14] else 0
-                if pnl > 0:
-                    wins += 1
-                elif pnl < 0:
-                    losses += 1
-                total_pnl += pnl
-
-                trades.append({
-                    "id": row[0],
-                    "symbol": row[1],
-                    "trade_type": row[2],
-                    "direction": row[3],
-                    "entry_price": float(row[4]) if row[4] else 0,
-                    "exit_price": float(row[5]) if row[5] else None,
-                    "quantity": row[6],
-                    "entry_date": str(row[7]) if row[7] else None,
-                    "exit_date": str(row[8]) if row[8] else None,
-                    "setup": row[9],
-                    "thesis": row[10],
-                    "emotion": row[11],
-                    "lessons": row[12],
-                    "tags": row[13] if row[13] else [],
-                    "pnl": round(pnl, 2) if pnl else None,
-                    "status": "closed" if row[8] else "open"
-                })
-
-            win_rate = (wins / (wins + losses) * 100) if (wins + losses) > 0 else 0
-
-            return {
-                "trades": trades,
-                "stats": {
-                    "total_trades": len(trades),
-                    "win_rate": round(win_rate, 1),
-                    "wins": wins,
-                    "losses": losses,
-                    "total_pnl": round(total_pnl, 2)
-                },
-                "generated_at": datetime.now().isoformat()
-            }
-
+        return await asyncio.to_thread(_fetch_journal_entries_sync, limit, symbol, status)
     except Exception as e:
         logger.error(f"Error fetching journal entries: {e}")
-        # Return empty response if table doesn't exist yet
         return {
             "trades": [],
             "stats": {
@@ -312,42 +378,10 @@ async def get_journal_entries(
 async def create_journal_entry(entry: JournalEntry):
     """
     Create a new trade journal entry in database.
+    Uses asyncio.to_thread() for non-blocking DB access.
     """
     try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-
-            cursor.execute("""
-                INSERT INTO trade_journal
-                (symbol, trade_type, direction, entry_price, exit_price, quantity,
-                 entry_date, exit_date, setup, thesis, emotion, lessons, tags)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING id
-            """, (
-                entry.symbol.upper(),
-                entry.trade_type,
-                entry.direction,
-                entry.entry_price,
-                entry.exit_price,
-                entry.quantity,
-                entry.entry_date,
-                entry.exit_date,
-                entry.setup,
-                entry.thesis,
-                entry.emotion,
-                entry.lessons,
-                entry.tags
-            ))
-
-            new_id = cursor.fetchone()[0]
-
-            return {
-                "id": new_id,
-                "created": True,
-                "symbol": entry.symbol,
-                "message": "Trade journal entry created successfully"
-            }
-
+        return await asyncio.to_thread(_create_journal_entry_sync, entry)
     except Exception as e:
         logger.error(f"Error creating journal entry: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -659,21 +693,920 @@ async def delete_alert(alert_id: str):
         logger.error(f"Error deleting alert: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# Create alias router for /api/positions (legacy endpoint)
-positions_router = APIRouter(
-    prefix="/api",
-    tags=["positions-alias"]
-)
 
-@positions_router.get("/positions")
-async def get_positions_alias(
-    service: PortfolioService = Depends(get_portfolio_service)
+# ============ Metadata & AI Recommendations ============
+
+@router.get("/metadata/{symbol}")
+async def get_symbol_metadata(
+    symbol: str,
+    force_refresh: bool = Query(False, description="Force refresh from API"),
+    metadata_service: MetadataService = Depends(get_metadata_service)
 ) -> Dict[str, Any]:
     """
-    Alias endpoint for /api/positions -> /api/portfolio/positions.
+    Get metadata for a symbol (sector, market cap, earnings, analyst ratings, etc.)
     """
     try:
-        return await service.get_positions()
+        return metadata_service.get_symbol_metadata(symbol.upper(), force_refresh)
     except Exception as e:
-        logger.error(f"Error getting positions: {e}")
+        logger.error(f"Error getting metadata for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/metadata")
+async def get_positions_metadata(
+    service: PortfolioService = Depends(get_portfolio_service),
+    metadata_service: MetadataService = Depends(get_metadata_service)
+) -> Dict[str, Any]:
+    """
+    Get metadata for all positions in the portfolio.
+    """
+    try:
+        positions = await service.get_positions()
+
+        # Collect unique symbols
+        symbols = set()
+        for stock in positions.get("stocks", []):
+            symbols.add(stock.get("symbol", ""))
+        for option in positions.get("options", []):
+            symbols.add(option.get("symbol", ""))
+
+        # Get metadata for each symbol
+        metadata = metadata_service.get_batch_metadata(list(symbols))
+
+        return {
+            "metadata": metadata,
+            "symbols_count": len(symbols),
+            "generated_at": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error getting positions metadata: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/recommendations")
+async def get_position_recommendations(
+    service: PortfolioService = Depends(get_portfolio_service),
+    metadata_service: MetadataService = Depends(get_metadata_service)
+) -> Dict[str, Any]:
+    """
+    Get AI recommendations for all positions.
+    """
+    try:
+        positions = await service.get_positions()
+
+        recommendations = []
+
+        # Analyze each stock position
+        for stock in positions.get("stocks", []):
+            rec = metadata_service.get_ai_position_recommendation(stock)
+            recommendations.append({
+                "symbol": stock.get("symbol"),
+                "type": "stock",
+                "current_value": stock.get("current_value"),
+                "pl": stock.get("pl"),
+                "pl_pct": stock.get("pl_pct"),
+                **rec
+            })
+
+        # Analyze each option position
+        for option in positions.get("options", []):
+            rec = metadata_service.get_ai_position_recommendation(option)
+            recommendations.append({
+                "symbol": option.get("symbol"),
+                "type": "option",
+                "strategy": option.get("strategy"),
+                "strike": option.get("strike"),
+                "expiration": option.get("expiration"),
+                "dte": option.get("dte"),
+                "current_value": option.get("current_value"),
+                "pl": option.get("pl"),
+                "pl_pct": option.get("pl_pct"),
+                **rec
+            })
+
+        # Summary
+        action_needed = [r for r in recommendations if r.get("recommendation") not in ["Hold", "Hold/Add"]]
+
+        return {
+            "recommendations": recommendations,
+            "summary": {
+                "total_positions": len(recommendations),
+                "action_needed": len(action_needed),
+                "hold_positions": len(recommendations) - len(action_needed)
+            },
+            "generated_at": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error getting recommendations: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/recommendations/{symbol}")
+async def get_symbol_recommendation(
+    symbol: str,
+    service: PortfolioService = Depends(get_portfolio_service),
+    metadata_service: MetadataService = Depends(get_metadata_service)
+) -> Dict[str, Any]:
+    """
+    Get AI recommendation for a specific position.
+    """
+    try:
+        positions = await service.get_positions()
+
+        # Find the position
+        target_symbol = symbol.upper()
+        position = None
+
+        for stock in positions.get("stocks", []):
+            if stock.get("symbol", "").upper() == target_symbol:
+                position = stock
+                break
+
+        if not position:
+            for option in positions.get("options", []):
+                if option.get("symbol", "").upper() == target_symbol:
+                    position = option
+                    break
+
+        if not position:
+            raise HTTPException(status_code=404, detail=f"Position for {symbol} not found")
+
+        # Get recommendation
+        rec = metadata_service.get_ai_position_recommendation(position)
+
+        # Get metadata
+        metadata = metadata_service.get_symbol_metadata(target_symbol)
+
+        return {
+            "symbol": target_symbol,
+            "position": position,
+            "recommendation": rec,
+            "metadata": metadata,
+            "generated_at": datetime.now().isoformat()
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting recommendation for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============ Enhanced Positions with Metadata ============
+
+@router.get("/positions/enriched")
+async def get_enriched_positions(
+    service: PortfolioService = Depends(get_portfolio_service),
+    metadata_service: MetadataService = Depends(get_metadata_service)
+) -> Dict[str, Any]:
+    """
+    Get all positions enriched with metadata and AI recommendations.
+    """
+    try:
+        positions = await service.get_positions()
+
+        enriched_stocks = []
+        enriched_options = []
+
+        # Enrich stocks
+        for stock in positions.get("stocks", []):
+            symbol = stock.get("symbol", "")
+            metadata = metadata_service.get_symbol_metadata(symbol)
+            rec = metadata_service.get_ai_position_recommendation(stock)
+
+            enriched_stocks.append({
+                **stock,
+                "metadata": {
+                    "name": metadata.get("name"),
+                    "sector": metadata.get("sector"),
+                    "industry": metadata.get("industry"),
+                    "market_cap": metadata.get("market_cap_formatted"),
+                    "pe_ratio": metadata.get("pe_ratio"),
+                    "dividend_yield": metadata.get("dividend_yield"),
+                    "next_earnings": metadata.get("next_earnings"),
+                    "analyst_rating": metadata.get("analyst_rating"),
+                    "analyst_target": metadata.get("analyst_target"),
+                    "52w_high": metadata.get("52w_high"),
+                    "52w_low": metadata.get("52w_low")
+                },
+                "recommendation": rec,
+                "tradingview_url": f"https://www.tradingview.com/chart/?symbol={symbol}"
+            })
+
+        # Enrich options
+        for option in positions.get("options", []):
+            symbol = option.get("symbol", "")
+            metadata = metadata_service.get_symbol_metadata(symbol)
+            rec = metadata_service.get_ai_position_recommendation(option)
+
+            enriched_options.append({
+                **option,
+                "metadata": {
+                    "name": metadata.get("name"),
+                    "sector": metadata.get("sector"),
+                    "next_earnings": metadata.get("next_earnings"),
+                    "analyst_rating": metadata.get("analyst_rating")
+                },
+                "recommendation": rec,
+                "tradingview_url": f"https://www.tradingview.com/chart/?symbol={symbol}"
+            })
+
+        return {
+            "summary": positions.get("summary", {}),
+            "stocks": enriched_stocks,
+            "options": enriched_options,
+            "generated_at": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error getting enriched positions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============ LLM-Powered Deep Analysis ============
+
+# Initialize LLM service (singleton)
+_llm_service: Optional[LLMService] = None
+
+def get_llm_service() -> LLMService:
+    global _llm_service
+    if _llm_service is None:
+        _llm_service = LLMService()
+    return _llm_service
+
+
+def build_deep_analysis_prompt(position: Dict, metadata: Dict, position_type: str) -> str:
+    """Build comprehensive prompt for LLM analysis."""
+    if position_type == "option":
+        greeks = position.get("greeks", {})
+        return f"""You are a world-class options trading advisor. Analyze this position and provide actionable insights.
+
+=== POSITION DETAILS ===
+Symbol: {position.get('symbol')}
+Strategy: {position.get('strategy')} ({position.get('type')} {position.get('option_type')})
+Strike: ${position.get('strike')}
+Expiration: {position.get('expiration')} ({position.get('dte')} DTE)
+Quantity: {position.get('quantity')} contracts
+
+=== FINANCIAL PERFORMANCE ===
+Entry Premium: ${position.get('avg_price', 0):.2f} per contract
+Current Value: ${position.get('current_price', 0):.2f} per contract
+P/L: ${position.get('pl', 0):.2f} ({position.get('pl_pct', 0):+.1f}%)
+Breakeven: ${position.get('breakeven', 0):.2f}
+
+=== GREEKS ===
+Delta: {greeks.get('delta', 0):.1f}% (directional exposure)
+Theta: ${greeks.get('theta', 0):.2f}/day (time decay)
+Gamma: {greeks.get('gamma', 0):.4f} (delta sensitivity)
+Vega: {greeks.get('vega', 0):.2f} (IV sensitivity)
+IV: {greeks.get('iv', 0):.1f}%
+
+=== UNDERLYING STOCK INFO ===
+Company: {metadata.get('name', position.get('symbol'))}
+Sector: {metadata.get('sector', 'Unknown')}
+Industry: {metadata.get('industry', 'Unknown')}
+Market Cap: {metadata.get('market_cap_formatted', 'N/A')}
+Next Earnings: {metadata.get('next_earnings', 'Unknown')}
+Analyst Rating: {metadata.get('analyst_rating', 'N/A')}
+52W High: ${metadata.get('52w_high', 0):.2f}
+52W Low: ${metadata.get('52w_low', 0):.2f}
+
+=== ANALYSIS REQUEST ===
+Provide a comprehensive analysis including:
+
+1. **Position Assessment**: Evaluate current P/L, time decay impact, and probability of profit
+2. **Risk Analysis**: Assignment risk, gamma risk (if near expiration), and IV crush risk
+3. **Actionable Recommendation**: Specific action (Hold/Close/Roll) with clear reasoning
+4. **Roll Opportunities**: If rolling is recommended, suggest specific roll parameters
+5. **Key Watchpoints**: What price levels or events should trigger action
+6. **Earnings Consideration**: If earnings are approaching, how to manage the position
+
+Be specific, quantitative, and actionable. Consider transaction costs (~$0.65/contract).
+"""
+    else:  # Stock position
+        return f"""You are a world-class equity analyst. Analyze this stock position and provide actionable insights.
+
+=== POSITION DETAILS ===
+Symbol: {position.get('symbol')}
+Shares: {position.get('quantity')}
+Average Cost: ${position.get('avg_buy_price', 0):.2f}
+Current Price: ${position.get('current_price', 0):.2f}
+
+=== FINANCIAL PERFORMANCE ===
+Cost Basis: ${position.get('cost_basis', 0):.2f}
+Current Value: ${position.get('current_value', 0):.2f}
+P/L: ${position.get('pl', 0):.2f} ({position.get('pl_pct', 0):+.1f}%)
+
+=== COMPANY INFO ===
+Company: {metadata.get('name', position.get('symbol'))}
+Sector: {metadata.get('sector', 'Unknown')}
+Industry: {metadata.get('industry', 'Unknown')}
+Market Cap: {metadata.get('market_cap_formatted', 'N/A')}
+P/E Ratio: {metadata.get('pe_ratio', 'N/A')}
+Forward P/E: {metadata.get('forward_pe', 'N/A')}
+Dividend Yield: {metadata.get('dividend_yield', 'N/A')}%
+Beta: {metadata.get('beta', 'N/A')}
+Next Earnings: {metadata.get('next_earnings', 'Unknown')}
+Analyst Rating: {metadata.get('analyst_rating', 'N/A')}
+Analyst Target: ${metadata.get('analyst_target', 0):.2f}
+52W High: ${metadata.get('52w_high', 0):.2f}
+52W Low: ${metadata.get('52w_low', 0):.2f}
+
+=== ANALYSIS REQUEST ===
+Provide comprehensive analysis including:
+
+1. **Position Assessment**: Current P/L status and outlook
+2. **Valuation Analysis**: Is the stock fairly valued based on fundamentals?
+3. **Technical Outlook**: Support/resistance levels and trend analysis
+4. **Risk Factors**: Key risks to monitor for this position
+5. **Actionable Recommendation**: Hold/Add/Trim/Sell with reasoning
+6. **Income Strategy**: Covered call opportunities if applicable
+
+Be specific, quantitative, and actionable.
+"""
+
+
+@router.get("/deep-analysis/{symbol}")
+async def get_deep_analysis(
+    symbol: str,
+    model: str = Query("auto", description="LLM model: auto, groq, deepseek, gemini, claude"),
+    service: PortfolioService = Depends(get_portfolio_service),
+    metadata_service: MetadataService = Depends(get_metadata_service)
+) -> Dict[str, Any]:
+    """
+    Get deep LLM-powered analysis for a specific position.
+    Uses advanced AI to provide comprehensive trading insights.
+    """
+    try:
+        positions = await service.get_positions()
+        target_symbol = symbol.upper()
+
+        # Find the position
+        position = None
+        position_type = None
+
+        for stock in positions.get("stocks", []):
+            if stock.get("symbol", "").upper() == target_symbol:
+                position = stock
+                position_type = "stock"
+                break
+
+        if not position:
+            for option in positions.get("options", []):
+                if option.get("symbol", "").upper() == target_symbol:
+                    position = option
+                    position_type = "option"
+                    break
+
+        if not position:
+            raise HTTPException(status_code=404, detail=f"Position for {symbol} not found")
+
+        # Get metadata
+        metadata = metadata_service.get_symbol_metadata(target_symbol)
+
+        # Build prompt
+        prompt = build_deep_analysis_prompt(position, metadata, position_type)
+
+        # Get LLM service
+        llm = get_llm_service()
+
+        # Call LLM (auto-selects free provider: groq > deepseek > gemini)
+        start_time = datetime.now()
+
+        # Map model selection
+        provider = None if model == "auto" else model
+
+        response = llm.generate(
+            prompt=prompt,
+            provider=provider,
+            max_tokens=1500,
+            temperature=0.3,
+            use_cache=True
+        )
+
+        processing_time = (datetime.now() - start_time).total_seconds()
+
+        # Get rule-based recommendation for comparison
+        rule_based = metadata_service.get_ai_position_recommendation(position)
+
+        return {
+            "symbol": target_symbol,
+            "position_type": position_type,
+            "position": position,
+            "metadata": metadata,
+            "analysis": {
+                "llm_analysis": response.get("text", "Analysis unavailable"),
+                "model_used": f"{response.get('provider', 'unknown')}/{response.get('model', 'unknown')}",
+                "cached": response.get("cached", False),
+                "cost": response.get("cost", 0),
+                "processing_time_seconds": round(processing_time, 2)
+            },
+            "rule_based_recommendation": rule_based,
+            "generated_at": datetime.now().isoformat()
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in deep analysis for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/portfolio-analysis")
+async def get_portfolio_analysis(
+    model: str = Query("auto", description="LLM model: auto, groq, deepseek, gemini"),
+    service: PortfolioService = Depends(get_portfolio_service),
+    metadata_service: MetadataService = Depends(get_metadata_service)
+) -> Dict[str, Any]:
+    """
+    Get LLM-powered analysis of entire portfolio.
+    Provides strategic overview and action priorities.
+    """
+    try:
+        positions = await service.get_positions()
+        summary = positions.get("summary", {})
+        stocks = positions.get("stocks", [])
+        options = positions.get("options", [])
+
+        # Build portfolio summary for LLM
+        total_stock_value = sum(s.get("current_value", 0) for s in stocks)
+        total_stock_pl = sum(s.get("pl", 0) for s in stocks)
+        total_option_value = sum(o.get("current_value", 0) for o in options)
+        total_option_pl = sum(o.get("pl", 0) for o in options)
+
+        # Greek aggregates
+        total_delta = sum(o.get("greeks", {}).get("delta", 0) for o in options)
+        total_theta = sum(o.get("greeks", {}).get("theta", 0) for o in options)
+
+        # Positions expiring soon
+        expiring_soon = [o for o in options if o.get("dte", 999) <= 7]
+
+        # Build portfolio summary prompt
+        prompt = f"""You are a world-class portfolio manager. Analyze this options portfolio and provide strategic guidance.
+
+=== PORTFOLIO OVERVIEW ===
+Total Equity: ${summary.get('total_equity', 0):,.2f}
+Buying Power: ${summary.get('buying_power', 0):,.2f}
+
+=== STOCK POSITIONS ({len(stocks)} positions) ===
+Total Value: ${total_stock_value:,.2f}
+Total P/L: ${total_stock_pl:,.2f}
+Positions: {', '.join([f"{s.get('symbol')} ({s.get('pl_pct', 0):+.1f}%)" for s in stocks]) or 'None'}
+
+=== OPTION POSITIONS ({len(options)} positions) ===
+Total Value: ${total_option_value:,.2f}
+Total P/L: ${total_option_pl:,.2f}
+Net Delta: {total_delta:.1f}
+Daily Theta: ${total_theta:.2f}
+
+Active Positions:
+"""
+        for opt in options:
+            prompt += f"""
+- {opt.get('symbol')} {opt.get('strategy')}: ${opt.get('strike')} {opt.get('expiration')} ({opt.get('dte')} DTE)
+  P/L: ${opt.get('pl', 0):.2f} ({opt.get('pl_pct', 0):+.1f}%), Delta: {opt.get('greeks', {}).get('delta', 0):.1f}%"""
+
+        prompt += f"""
+
+=== EXPIRING THIS WEEK ({len(expiring_soon)} positions) ===
+"""
+        for opt in expiring_soon:
+            prompt += f"""- {opt.get('symbol')} ${opt.get('strike')} {opt.get('option_type')} ({opt.get('dte')} DTE) - P/L: ${opt.get('pl', 0):.2f}
+"""
+
+        prompt += """
+=== ANALYSIS REQUEST ===
+Provide a comprehensive portfolio analysis including:
+
+1. **Portfolio Health Assessment**: Overall risk exposure and diversification
+2. **Action Priorities**: Ranked list of positions needing attention (expiring, losing, high delta)
+3. **Risk Management**: Net delta exposure, gamma risk, concentration risk
+4. **Income Optimization**: Theta capture efficiency and opportunities
+5. **Strategic Recommendations**: 3-5 specific actionable items for this week
+6. **Capital Allocation**: Suggestions for deploying buying power
+
+Focus on actionable insights and prioritize by urgency.
+"""
+
+        # Get LLM response
+        llm = get_llm_service()
+        start_time = datetime.now()
+
+        provider = None if model == "auto" else model
+
+        response = llm.generate(
+            prompt=prompt,
+            provider=provider,
+            max_tokens=2000,
+            temperature=0.3,
+            use_cache=True
+        )
+
+        processing_time = (datetime.now() - start_time).total_seconds()
+
+        return {
+            "portfolio_summary": {
+                "total_equity": summary.get("total_equity", 0),
+                "buying_power": summary.get("buying_power", 0),
+                "stock_positions": len(stocks),
+                "option_positions": len(options),
+                "total_stock_value": total_stock_value,
+                "total_stock_pl": total_stock_pl,
+                "total_option_value": total_option_value,
+                "total_option_pl": total_option_pl,
+                "net_delta": total_delta,
+                "daily_theta": total_theta,
+                "expiring_soon": len(expiring_soon)
+            },
+            "analysis": {
+                "llm_analysis": response.get("text", "Analysis unavailable"),
+                "model_used": f"{response.get('provider', 'unknown')}/{response.get('model', 'unknown')}",
+                "cached": response.get("cached", False),
+                "cost": response.get("cost", 0),
+                "processing_time_seconds": round(processing_time, 2)
+            },
+            "positions_needing_attention": [
+                {
+                    "symbol": o.get("symbol"),
+                    "reason": "Expiring soon" if o.get("dte", 999) <= 7 else "High delta" if abs(o.get("greeks", {}).get("delta", 0)) > 50 else "Losing position",
+                    "dte": o.get("dte"),
+                    "pl": o.get("pl"),
+                    "pl_pct": o.get("pl_pct")
+                }
+                for o in options
+                if o.get("dte", 999) <= 7 or abs(o.get("greeks", {}).get("delta", 0)) > 50 or o.get("pl_pct", 0) < -30
+            ],
+            "generated_at": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Error in portfolio analysis: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============ Advanced AI-Powered Analytics ============
+
+from fastapi.responses import StreamingResponse
+from backend.services.advanced_portfolio_analytics import (
+    get_analytics_service,
+    AdvancedPortfolioAnalytics,
+    RiskMetrics,
+    ProbabilityMetrics,
+    AIConsensus,
+    PositionAlert
+)
+import json
+
+
+@router.get("/analytics/risk")
+async def get_advanced_risk_metrics(
+    service: PortfolioService = Depends(get_portfolio_service),
+    metadata_service: MetadataService = Depends(get_metadata_service),
+    analytics: AdvancedPortfolioAnalytics = Depends(get_analytics_service)
+) -> Dict[str, Any]:
+    """
+    Get advanced AI-powered risk metrics for the portfolio.
+
+    Includes:
+    - Greeks exposure (net delta, theta, gamma, vega)
+    - Value at Risk (95% and 99% confidence)
+    - Concentration risk analysis
+    - Gamma risk score
+    - Assignment risk alerts
+    - Overall portfolio risk score
+    """
+    try:
+        positions = await service.get_positions()
+
+        # Get metadata for sector analysis
+        symbols = [s.get("symbol") for s in positions.get("stocks", [])]
+        metadata_cache = {}
+        for symbol in symbols:
+            try:
+                metadata_cache[symbol] = metadata_service.get_symbol_metadata(symbol)
+            except Exception:
+                pass
+
+        risk_metrics = await analytics.analyze_portfolio_risk(positions, metadata_cache)
+
+        return {
+            "greeks_exposure": {
+                "net_delta": round(risk_metrics.greeks.net_delta, 2),
+                "net_gamma": round(risk_metrics.greeks.net_gamma, 4),
+                "net_theta": round(risk_metrics.greeks.net_theta, 2),
+                "net_vega": round(risk_metrics.greeks.net_vega, 2),
+                "weighted_iv": round(risk_metrics.greeks.weighted_iv, 1),
+                "delta_dollars": round(risk_metrics.greeks.delta_dollars, 2)
+            },
+            "value_at_risk": {
+                "var_1d_95": risk_metrics.var_1d_95,
+                "var_1d_99": risk_metrics.var_1d_99,
+                "max_loss_scenario": risk_metrics.max_loss_scenario
+            },
+            "concentration": {
+                "largest_position_pct": round(risk_metrics.largest_position_pct, 1),
+                "top_3_concentration": round(risk_metrics.top_3_concentration, 1),
+                "sector_breakdown": risk_metrics.sector_concentration
+            },
+            "options_risk": {
+                "gamma_risk_score": risk_metrics.gamma_risk_score,
+                "assignment_risk_count": risk_metrics.assignment_risk_count,
+                "expiring_this_week": risk_metrics.expiring_this_week,
+                "expiring_next_week": risk_metrics.expiring_next_week
+            },
+            "overall": {
+                "risk_score": risk_metrics.portfolio_risk_score,
+                "risk_level": risk_metrics.risk_level.value
+            },
+            "generated_at": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Error calculating risk metrics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/analytics/probability")
+async def get_probability_metrics(
+    service: PortfolioService = Depends(get_portfolio_service),
+    analytics: AdvancedPortfolioAnalytics = Depends(get_analytics_service)
+) -> Dict[str, Any]:
+    """
+    Get probability-based analytics for the portfolio.
+
+    Includes:
+    - Portfolio Probability of Profit (PoP)
+    - Expected Value
+    - Theta efficiency score
+    """
+    try:
+        positions = await service.get_positions()
+        prob_metrics = await analytics.calculate_probability_metrics(positions)
+
+        return {
+            "portfolio_pop": prob_metrics.portfolio_pop,
+            "expected_value": prob_metrics.expected_value,
+            "theta_efficiency": prob_metrics.theta_efficiency,
+            "interpretation": {
+                "pop_status": "favorable" if prob_metrics.portfolio_pop > 60 else "neutral" if prob_metrics.portfolio_pop > 40 else "unfavorable",
+                "ev_status": "profitable" if prob_metrics.expected_value > 0 else "loss_expected",
+                "theta_status": "efficient" if prob_metrics.theta_efficiency > 50 else "average" if prob_metrics.theta_efficiency > 25 else "low"
+            },
+            "generated_at": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Error calculating probability metrics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/analytics/consensus/{symbol}")
+async def get_multi_agent_consensus(
+    symbol: str,
+    service: PortfolioService = Depends(get_portfolio_service),
+    metadata_service: MetadataService = Depends(get_metadata_service),
+    analytics: AdvancedPortfolioAnalytics = Depends(get_analytics_service)
+) -> Dict[str, Any]:
+    """
+    Get multi-agent AI consensus recommendation for a specific position.
+
+    Multiple AI agents analyze the position from different perspectives:
+    - Technical Agent: Price action, trend, momentum
+    - Greeks Agent: Options-specific metrics
+    - Risk Agent: Risk/reward analysis
+    - Quantitative Agent: Rule-based signals
+
+    Returns consensus action with confidence score.
+    """
+    try:
+        positions = await service.get_positions()
+        target_symbol = symbol.upper()
+
+        # Find the position
+        position = None
+        for opt in positions.get("options", []):
+            if opt.get("symbol", "").upper() == target_symbol:
+                position = opt
+                break
+
+        if not position:
+            for stock in positions.get("stocks", []):
+                if stock.get("symbol", "").upper() == target_symbol:
+                    position = stock
+                    break
+
+        if not position:
+            raise HTTPException(status_code=404, detail=f"Position not found: {symbol}")
+
+        # Get metadata
+        try:
+            metadata = metadata_service.get_symbol_metadata(target_symbol)
+        except Exception:
+            metadata = None
+
+        # Generate consensus
+        consensus = await analytics.generate_multi_agent_consensus(position, metadata)
+
+        return {
+            "symbol": target_symbol,
+            "consensus": {
+                "action": consensus.action,
+                "confidence": consensus.confidence,
+                "urgency": consensus.urgency,
+                "agents_agree": consensus.agents_agree,
+                "agents_total": consensus.agents_total
+            },
+            "details": {
+                "key_factors": consensus.key_factors,
+                "rationale": consensus.rationale,
+                "dissenting_opinions": consensus.dissenting_opinions
+            },
+            "position_snapshot": {
+                "pl_pct": position.get("pl_pct", 0),
+                "dte": position.get("dte"),
+                "delta": position.get("greeks", {}).get("delta", 0),
+                "strategy": position.get("strategy", position.get("type", "stock"))
+            },
+            "generated_at": datetime.now().isoformat()
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating consensus for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/analytics/alerts")
+async def get_position_alerts(
+    service: PortfolioService = Depends(get_portfolio_service),
+    analytics: AdvancedPortfolioAnalytics = Depends(get_analytics_service)
+) -> Dict[str, Any]:
+    """
+    Get proactive AI-generated position alerts.
+
+    Alert types:
+    - expiring: Positions expiring soon
+    - assignment_risk: High delta near expiration
+    - take_profit: Profitable positions to consider closing
+    - stop_loss: Positions hitting loss thresholds
+
+    Alerts are sorted by severity (critical > warning > info).
+    """
+    try:
+        positions = await service.get_positions()
+        alerts = await analytics.generate_position_alerts(positions)
+
+        return {
+            "alerts": [
+                {
+                    "symbol": a.symbol,
+                    "type": a.alert_type,
+                    "severity": a.severity,
+                    "message": a.message,
+                    "action_required": a.action_required,
+                    "created_at": a.created_at.isoformat()
+                }
+                for a in alerts
+            ],
+            "summary": {
+                "total_alerts": len(alerts),
+                "critical": sum(1 for a in alerts if a.severity == "critical"),
+                "warning": sum(1 for a in alerts if a.severity == "warning"),
+                "info": sum(1 for a in alerts if a.severity == "info")
+            },
+            "generated_at": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Error generating alerts: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/analytics/stream")
+async def stream_portfolio_insights(
+    service: PortfolioService = Depends(get_portfolio_service),
+    analytics: AdvancedPortfolioAnalytics = Depends(get_analytics_service)
+):
+    """
+    Stream real-time portfolio insights using Server-Sent Events (SSE).
+
+    Progressively yields:
+    - Risk metrics
+    - Probability metrics
+    - Position alerts
+    - Status updates with progress percentage
+    """
+    async def event_generator():
+        try:
+            positions = await service.get_positions()
+
+            async for insight in analytics.stream_portfolio_insights(positions):
+                yield f"data: {json.dumps(insight)}\n\n"
+
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
+
+
+@router.get("/analytics/dashboard")
+async def get_analytics_dashboard(
+    service: PortfolioService = Depends(get_portfolio_service),
+    metadata_service: MetadataService = Depends(get_metadata_service),
+    analytics: AdvancedPortfolioAnalytics = Depends(get_analytics_service)
+) -> Dict[str, Any]:
+    """
+    Get comprehensive analytics dashboard data in a single call.
+
+    Combines:
+    - Risk metrics
+    - Probability metrics
+    - Position alerts
+    - Multi-agent consensus for critical positions
+
+    Optimized for dashboard rendering with all data in one request.
+    """
+    try:
+        positions = await service.get_positions()
+        summary = positions.get("summary", {})
+        options = positions.get("options", [])
+
+        # Get metadata for symbols
+        symbols = [s.get("symbol") for s in positions.get("stocks", [])]
+        metadata_cache = {}
+        for symbol in symbols:
+            try:
+                metadata_cache[symbol] = metadata_service.get_symbol_metadata(symbol)
+            except Exception:
+                pass
+
+        # Parallel analytics calculations
+        risk_metrics, prob_metrics, alerts = await asyncio.gather(
+            analytics.analyze_portfolio_risk(positions, metadata_cache),
+            analytics.calculate_probability_metrics(positions),
+            analytics.generate_position_alerts(positions)
+        )
+
+        # Get consensus for critical positions (expiring or high delta)
+        critical_positions = [
+            o for o in options
+            if o.get("dte", 999) <= 7 or abs(o.get("greeks", {}).get("delta", 0)) > 50
+        ]
+
+        consensus_results = []
+        for pos in critical_positions[:3]:  # Limit to top 3 to avoid slow response
+            try:
+                symbol = pos.get("symbol", "")
+                metadata = metadata_cache.get(symbol) or metadata_service.get_symbol_metadata(symbol)
+                consensus = await analytics.generate_multi_agent_consensus(pos, metadata)
+                consensus_results.append({
+                    "symbol": symbol,
+                    "action": consensus.action,
+                    "confidence": consensus.confidence,
+                    "urgency": consensus.urgency,
+                    "key_factors": consensus.key_factors[:2]
+                })
+            except Exception:
+                pass
+
+        return {
+            "portfolio_summary": {
+                "total_equity": summary.get("total_equity", 0),
+                "buying_power": summary.get("buying_power", 0),
+                "positions": summary.get("total_positions", 0)
+            },
+            "risk_dashboard": {
+                "risk_score": risk_metrics.portfolio_risk_score,
+                "risk_level": risk_metrics.risk_level.value,
+                "net_delta": round(risk_metrics.greeks.net_delta, 2),
+                "daily_theta": round(risk_metrics.greeks.net_theta, 2),
+                "var_1d_95": risk_metrics.var_1d_95,
+                "gamma_risk": risk_metrics.gamma_risk_score
+            },
+            "probability_dashboard": {
+                "portfolio_pop": prob_metrics.portfolio_pop,
+                "expected_value": prob_metrics.expected_value,
+                "theta_efficiency": prob_metrics.theta_efficiency
+            },
+            "alerts_summary": {
+                "total": len(alerts),
+                "critical": sum(1 for a in alerts if a.severity == "critical"),
+                "top_alerts": [
+                    {"symbol": a.symbol, "type": a.alert_type, "severity": a.severity, "message": a.message}
+                    for a in alerts[:5]
+                ]
+            },
+            "critical_positions": consensus_results,
+            "generated_at": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Error generating analytics dashboard: {e}")
         raise HTTPException(status_code=500, detail=str(e))

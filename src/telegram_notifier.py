@@ -26,6 +26,7 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime
 from decimal import Decimal
 import time
+import requests
 
 from dotenv import load_dotenv
 
@@ -93,8 +94,8 @@ class TelegramNotifier:
             max_retries: Maximum number of retry attempts for failed sends
             retry_delay: Base delay between retries in seconds
         """
-        # Load environment variables
-        load_dotenv()
+        # Load environment variables (override=True to pick up .env changes)
+        load_dotenv(override=True)
 
         # Configuration
         self.bot_token = bot_token or os.getenv('TELEGRAM_BOT_TOKEN')
@@ -104,33 +105,23 @@ class TelegramNotifier:
         self.max_retries = max_retries
         self.retry_delay = retry_delay
 
-        # Check if python-telegram-bot is installed
-        if not TELEGRAM_AVAILABLE:
-            logger.warning(
-                "python-telegram-bot package not installed. "
-                "Install with: pip install python-telegram-bot"
-            )
-            self.bot = None
-            self.enabled = False
-            return
-
-        # Initialize bot if enabled and configured
-        if self.enabled and self.bot_token and self.chat_id:
+        # Store Bot for backwards compatibility (get_bot_info, etc.)
+        self.bot = None
+        if TELEGRAM_AVAILABLE and self.bot_token:
             try:
                 self.bot = Bot(token=self.bot_token)
-                logger.info("Telegram notifier initialized successfully")
-            except Exception as e:
-                logger.error(f"Failed to initialize Telegram bot: {e}")
-                self.bot = None
-                self.enabled = False
-        else:
-            self.bot = None
-            if self.enabled:
-                logger.warning(
-                    "Telegram enabled but missing credentials. "
-                    "Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env"
-                )
-                self.enabled = False
+            except Exception:
+                pass  # Bot is optional, we use direct HTTP for sending
+
+        # Log initialization status
+        if self.enabled and self.bot_token and self.chat_id:
+            logger.info("Telegram notifier initialized successfully")
+        elif self.enabled:
+            logger.warning(
+                "Telegram enabled but missing credentials. "
+                "Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env"
+            )
+            self.enabled = False
 
     def send_new_trade_alert(self, trade_data: Dict[str, Any]) -> Optional[str]:
         """
@@ -352,6 +343,279 @@ class TelegramNotifier:
             logger.error(f"Error formatting sync error alert: {e}")
             return None
 
+    def send_bet_slip_alert(self, bet_data: Dict[str, Any]) -> Optional[str]:
+        """
+        Send notification when a game is added to the bet slip.
+
+        Provides comprehensive breakdown with AI analysis, odds, EV, and recommendations.
+
+        Args:
+            bet_data: Dictionary containing:
+                - game_id (str): Game identifier
+                - sport (str): Sport type (NFL, NBA, etc.)
+                - home_team (str): Home team name
+                - away_team (str): Away team name
+                - bet_type (str): Type of bet (moneyline, spread, total)
+                - selection (str): Selected outcome (home, away, over, under)
+                - odds (int): American odds
+                - line (float, optional): Spread or total line
+                - game_time (str): When game starts
+                - ai_probability (float, optional): AI predicted probability
+                - ai_edge (float, optional): AI calculated edge
+                - ai_confidence (str, optional): AI confidence level
+                - ai_reasoning (str, optional): AI reasoning
+                - stake (float, optional): Suggested stake
+                - potential_payout (float, optional): Potential payout
+
+        Returns:
+            Telegram message ID if successful, None otherwise
+        """
+        if not self._is_available():
+            return None
+
+        try:
+            # Extract data
+            sport = bet_data.get('sport', 'Sports')
+            home_team = bet_data.get('home_team', 'Home')
+            away_team = bet_data.get('away_team', 'Away')
+            bet_type = bet_data.get('bet_type', 'Bet')
+            selection = bet_data.get('selection', 'N/A')
+            odds = bet_data.get('odds', -110)
+            line = bet_data.get('line')
+            game_time = bet_data.get('game_time', 'TBD')
+
+            # AI Analysis
+            ai_prob = bet_data.get('ai_probability')
+            ai_edge = bet_data.get('ai_edge')
+            ai_confidence = bet_data.get('ai_confidence', 'medium')
+            ai_reasoning = bet_data.get('ai_reasoning', '')
+
+            # Financials
+            stake = bet_data.get('stake', 0)
+            potential_payout = bet_data.get('potential_payout', 0)
+            ev_percent = bet_data.get('ev_percentage', 0)
+            kelly_fraction = bet_data.get('kelly_fraction', 0)
+
+            # Format odds display
+            odds_display = f"{odds:+d}" if odds != 0 else "EVEN"
+
+            # Calculate implied probability from odds
+            if odds < 0:
+                implied_prob = abs(odds) / (abs(odds) + 100)
+            else:
+                implied_prob = 100 / (odds + 100) if odds > 0 else 0.5
+
+            # Format selection display
+            selection_display = selection.upper()
+            if selection.lower() == 'home':
+                selection_display = home_team
+            elif selection.lower() == 'away':
+                selection_display = away_team
+
+            # Line display for spreads/totals
+            line_str = ""
+            if line is not None and bet_type in ['spread', 'total_over', 'total_under']:
+                if bet_type == 'spread':
+                    line_str = f" ({line:+.1f})"
+                else:
+                    line_str = f" ({line})"
+
+            # Confidence emoji
+            confidence_emoji = {
+                'high': '\U0001F7E2',    # Green circle
+                'medium': '\U0001F7E1',  # Yellow circle
+                'low': '\U0001F534'       # Red circle
+            }.get(ai_confidence.lower() if ai_confidence else 'medium', '\U0001F7E1')
+
+            # EV indicator
+            if ev_percent and ev_percent > 10:
+                ev_emoji = '\U0001F4B0'  # Money bag - great value
+            elif ev_percent and ev_percent > 5:
+                ev_emoji = '\U0001F4B5'  # Dollar - good value
+            elif ev_percent and ev_percent > 0:
+                ev_emoji = '\U00002705'  # Check - positive EV
+            else:
+                ev_emoji = '\U000026A0'  # Warning - negative/no EV
+
+            # Build message
+            message = (
+                f"\U0001F3C8 *BET SLIP ALERT* \U0001F3C8\n\n"
+                f"\U0001F3AF *{sport.upper()}*\n"
+                f"_{away_team} @ {home_team}_\n"
+                f"\U0001F4C5 {game_time}\n\n"
+                f"━━━━━━━━━━━━━━━━━\n"
+                f"\U0001F3B2 *BET DETAILS*\n"
+                f"━━━━━━━━━━━━━━━━━\n"
+                f"\u2022 Type: `{bet_type.replace('_', ' ').title()}`\n"
+                f"\u2022 Pick: *{selection_display}*{line_str}\n"
+                f"\u2022 Odds: `{odds_display}`\n"
+                f"\u2022 Implied: `{implied_prob*100:.1f}%`\n"
+            )
+
+            # AI Analysis Section
+            if ai_prob or ai_edge or ai_reasoning:
+                message += (
+                    f"\n━━━━━━━━━━━━━━━━━\n"
+                    f"\U0001F916 *AI ANALYSIS*\n"
+                    f"━━━━━━━━━━━━━━━━━\n"
+                )
+
+                if ai_prob:
+                    message += f"{confidence_emoji} AI Prob: `{ai_prob*100:.1f}%`\n"
+
+                if ai_edge:
+                    edge_sign = "+" if ai_edge > 0 else ""
+                    message += f"{ev_emoji} Edge: `{edge_sign}{ai_edge*100:.1f}%`\n"
+
+                if ai_confidence:
+                    message += f"\U0001F4CA Confidence: `{ai_confidence.upper()}`\n"
+
+                if ai_reasoning:
+                    # Truncate reasoning if too long
+                    reasoning_short = ai_reasoning[:200] + "..." if len(ai_reasoning) > 200 else ai_reasoning
+                    message += f"\n\U0001F4DD _{reasoning_short}_\n"
+
+            # Value Metrics
+            if ev_percent or kelly_fraction:
+                message += (
+                    f"\n━━━━━━━━━━━━━━━━━\n"
+                    f"\U0001F4B0 *VALUE METRICS*\n"
+                    f"━━━━━━━━━━━━━━━━━\n"
+                )
+
+                if ev_percent:
+                    ev_sign = "+" if ev_percent > 0 else ""
+                    message += f"\u2022 Expected Value: `{ev_sign}{ev_percent:.1f}%`\n"
+
+                if kelly_fraction and kelly_fraction > 0:
+                    message += f"\u2022 Kelly Bet: `{kelly_fraction*100:.1f}%` of bankroll\n"
+
+            # Stake and Payout
+            if stake > 0 or potential_payout > 0:
+                message += (
+                    f"\n━━━━━━━━━━━━━━━━━\n"
+                    f"\U0001F4B8 *POSITION*\n"
+                    f"━━━━━━━━━━━━━━━━━\n"
+                )
+
+                if stake > 0:
+                    message += f"\u2022 Stake: `${stake:,.2f}`\n"
+
+                if potential_payout > 0:
+                    message += f"\u2022 To Win: `${potential_payout:,.2f}`\n"
+
+            # Recommendation
+            if ev_percent and ev_percent > 5 and ai_confidence and ai_confidence.lower() in ['high', 'medium']:
+                message += f"\n\U0001F680 *RECOMMENDATION:* STRONG VALUE\n"
+            elif ev_percent and ev_percent > 2:
+                message += f"\n\U0001F4A1 *RECOMMENDATION:* LEAN BET\n"
+            elif ev_percent and ev_percent > 0:
+                message += f"\n\U00002705 *RECOMMENDATION:* SMALL POSITION\n"
+            else:
+                message += f"\n\U000026A0 *RECOMMENDATION:* PROCEED WITH CAUTION\n"
+
+            message += f"\n\U0001F553 Added: `{self._format_datetime(datetime.now())}`"
+
+            return self._send_message(message)
+
+        except Exception as e:
+            logger.error(f"Error formatting bet slip alert: {e}")
+            return None
+
+    def send_parlay_alert(self, parlay_data: Dict[str, Any]) -> Optional[str]:
+        """
+        Send notification for a multi-leg parlay bet.
+
+        Args:
+            parlay_data: Dictionary containing:
+                - legs: List of bet leg dictionaries
+                - total_odds: Combined decimal odds
+                - stake: Bet amount
+                - potential_payout: Total payout if all legs win
+                - combined_probability: AI combined win probability
+                - expected_value: Overall EV
+                - kelly_fraction: Recommended bet size
+                - correlation_warnings: Any correlated leg warnings
+
+        Returns:
+            Telegram message ID if successful, None otherwise
+        """
+        if not self._is_available():
+            return None
+
+        try:
+            legs = parlay_data.get('legs', [])
+            total_odds = parlay_data.get('total_odds', 1)
+            stake = parlay_data.get('stake', 0)
+            potential_payout = parlay_data.get('potential_payout', 0)
+            combined_prob = parlay_data.get('combined_probability', 0)
+            ev = parlay_data.get('expected_value', 0)
+            kelly = parlay_data.get('kelly_fraction', 0)
+            warnings = parlay_data.get('correlation_warnings', [])
+
+            # Convert decimal odds to American
+            if total_odds >= 2:
+                american_odds = int((total_odds - 1) * 100)
+            else:
+                american_odds = int(-100 / (total_odds - 1)) if total_odds > 1 else 0
+
+            message = (
+                f"\U0001F3B0 *PARLAY ALERT* \U0001F3B0\n\n"
+                f"\U0001F4CA *{len(legs)} LEG PARLAY*\n"
+                f"━━━━━━━━━━━━━━━━━\n"
+            )
+
+            # Add each leg
+            for i, leg in enumerate(legs, 1):
+                sport = leg.get('sport', '')
+                matchup = f"{leg.get('away_team', '')} @ {leg.get('home_team', '')}"
+                bet_type = leg.get('bet_type', '').replace('_', ' ').title()
+                selection = leg.get('selection', '')
+                odds = leg.get('odds', -110)
+
+                message += f"\n*Leg {i}:* {sport}\n"
+                message += f"  {matchup}\n"
+                message += f"  {bet_type}: {selection} ({odds:+d})\n"
+
+            # Summary
+            message += (
+                f"\n━━━━━━━━━━━━━━━━━\n"
+                f"\U0001F4B0 *PARLAY SUMMARY*\n"
+                f"━━━━━━━━━━━━━━━━━\n"
+                f"\u2022 Combined Odds: `{american_odds:+d}` ({total_odds:.2f}x)\n"
+                f"\u2022 AI Win Prob: `{combined_prob*100:.1f}%`\n"
+                f"\u2022 Expected Value: `{ev:+.1f}%`\n"
+            )
+
+            if stake > 0:
+                message += f"\u2022 Stake: `${stake:,.2f}`\n"
+            if potential_payout > 0:
+                message += f"\u2022 To Win: `${potential_payout:,.2f}`\n"
+            if kelly > 0:
+                message += f"\u2022 Kelly Fraction: `{kelly*100:.2f}%`\n"
+
+            # Correlation warnings
+            if warnings:
+                message += f"\n\U000026A0 *WARNINGS:*\n"
+                for warning in warnings[:3]:
+                    message += f"  \u2022 {warning}\n"
+
+            # Recommendation
+            if ev > 5:
+                message += f"\n\U0001F680 *RECOMMENDATION:* STRONG PARLAY\n"
+            elif ev > 0:
+                message += f"\n\U0001F4A1 *RECOMMENDATION:* POSITIVE VALUE\n"
+            else:
+                message += f"\n\U000026A0 *RECOMMENDATION:* HIGH RISK\n"
+
+            message += f"\n\U0001F553 Created: `{self._format_datetime(datetime.now())}`"
+
+            return self._send_message(message)
+
+        except Exception as e:
+            logger.error(f"Error formatting parlay alert: {e}")
+            return None
+
     def send_daily_summary(self, summary_data: Dict[str, Any]) -> Optional[str]:
         """
         Send daily summary of trading activity.
@@ -416,6 +680,9 @@ class TelegramNotifier:
         """
         Internal method to send messages with retry logic and error handling.
 
+        Uses synchronous HTTP requests to avoid async event loop conflicts
+        when called from FastAPI async context.
+
         Args:
             text: Message text to send
             parse_mode: Telegram parse mode
@@ -427,63 +694,54 @@ class TelegramNotifier:
         if not self._is_available():
             return None
 
+        # Use direct HTTP API call instead of async Bot class
+        # This avoids event loop conflicts in FastAPI
+        api_url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
+
         for attempt in range(self.max_retries):
             try:
-                # Handle both async (v20+) and sync (older) versions
-                import asyncio
-                import inspect
+                payload = {
+                    'chat_id': self.chat_id,
+                    'text': text,
+                    'parse_mode': parse_mode,
+                    'disable_web_page_preview': disable_web_page_preview
+                }
 
-                send_result = self.bot.send_message(
-                    chat_id=self.chat_id,
-                    text=text,
-                    parse_mode=parse_mode,
-                    disable_web_page_preview=disable_web_page_preview
-                )
+                response = requests.post(api_url, json=payload, timeout=30)
 
-                # If it's a coroutine (async), run it with asyncio
-                if inspect.iscoroutine(send_result):
-                    try:
-                        loop = asyncio.get_event_loop()
-                        if loop.is_closed():
-                            loop = asyncio.new_event_loop()
-                            asyncio.set_event_loop(loop)
-                        message = loop.run_until_complete(send_result)
-                    except RuntimeError:
-                        # No event loop, create new one
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
-                        message = loop.run_until_complete(send_result)
+                if response.status_code == 200:
+                    result = response.json()
+                    if result.get('ok'):
+                        message_id = result.get('result', {}).get('message_id')
+                        logger.info(f"Telegram message sent successfully: {message_id}")
+                        return str(message_id)
+                    else:
+                        error_desc = result.get('description', 'Unknown error')
+                        logger.error(f"Telegram API error: {error_desc}")
+                        return None
+
+                elif response.status_code == 429:
+                    # Rate limited
+                    retry_after = response.json().get('parameters', {}).get('retry_after', 5)
+                    logger.warning(f"Rate limited. Waiting {retry_after} seconds...")
+                    time.sleep(retry_after)
+                    continue
+
                 else:
-                    message = send_result
+                    logger.error(f"Telegram API returned status {response.status_code}: {response.text}")
+                    return None
 
-                logger.info(f"Telegram message sent successfully: {message.message_id}")
-                return str(message.message_id)
-
-            except RetryAfter as e:
-                # Rate limiting - wait the required time
-                wait_time = e.retry_after
-                logger.warning(f"Rate limited. Waiting {wait_time} seconds...")
-                time.sleep(wait_time)
-
-            except TimedOut:
-                # Timeout - retry with exponential backoff
+            except requests.exceptions.Timeout:
                 wait_time = self.retry_delay * (2 ** attempt)
                 logger.warning(f"Request timed out. Retrying in {wait_time}s...")
                 time.sleep(wait_time)
 
-            except NetworkError as e:
-                # Network error - retry with exponential backoff
+            except requests.exceptions.ConnectionError as e:
                 wait_time = self.retry_delay * (2 ** attempt)
-                logger.warning(f"Network error: {e}. Retrying in {wait_time}s...")
+                logger.warning(f"Connection error: {e}. Retrying in {wait_time}s...")
                 time.sleep(wait_time)
 
-            except TelegramError as e:
-                # Other Telegram errors - log and return None
-                logger.error(f"Telegram error: {e}")
-                return None
-
             except Exception as e:
-                # Unexpected error - log and return None
                 logger.error(f"Unexpected error sending Telegram message: {e}")
                 return None
 
@@ -501,8 +759,8 @@ class TelegramNotifier:
             logger.debug("Telegram notifications are disabled")
             return False
 
-        if not self.bot:
-            logger.debug("Telegram bot not initialized")
+        if not self.bot_token or not self.chat_id:
+            logger.debug("Telegram credentials not configured")
             return False
 
         return True

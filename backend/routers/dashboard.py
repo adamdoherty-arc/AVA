@@ -20,7 +20,7 @@ async def get_portfolio_summary():
     """
     Get portfolio summary metrics.
     """
-    return dashboard_service.get_portfolio_summary()
+    return await dashboard_service.get_portfolio_summary()
 
 @router.get("/activity")
 async def get_recent_activity(limit: int = 10):
@@ -34,12 +34,18 @@ async def get_performance_history(period: str = "1M"):
     """
     Get performance history.
     """
-    return dashboard_service.get_performance_history(period)
+    history = dashboard_service.get_performance_history(period)
+    # Format for frontend: expects {history: [{date, value}, ...]}
+    return {
+        "history": [
+            {"date": str(h.get("date", ""))[:10], "value": h.get("portfolio_value", 0)}
+            for h in history
+        ]
+    }
 
 @router.get("/portfolio")
 async def get_portfolio():
     """
     Alias for portfolio summary - used by QA health checks.
     """
-    return dashboard_service.get_portfolio_summary()
-
+    return await dashboard_service.get_portfolio_summary()

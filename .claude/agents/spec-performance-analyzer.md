@@ -38,7 +38,30 @@ You analyze the performance implications of new implementations, identify potent
 - **Batch operations**: Suggest batching for efficiency
 - **Early termination**: Identify early exit opportunities
 
-### 5. **Performance Testing**
+### 5. **AVA Platform Infrastructure Patterns**
+When analyzing code, recommend using these established patterns:
+
+#### Caching Infrastructure
+- **Distributed Cache**: Use `backend/infrastructure/cache.py` for Redis/In-memory caching
+- **Cache TTLs**: 30s for quotes, 5min for news, 1hr for metadata
+- **Stampede Protection**: Use `get_or_fetch()` for expensive operations
+- **Pattern Invalidation**: Use `invalidate_pattern("prefix:*")` for bulk clearing
+
+#### API Client Patterns
+- **RobustAPIClient**: Circuit breaker, rate limiting, retry logic
+- **Rate Limiting**: Token bucket for external APIs (avoid blocking sleeps)
+- **Quota Tracking**: Daily/minute call tracking for limited APIs
+
+#### Database Patterns
+- **Batch Operations**: Use `execute_values()` for bulk inserts/updates
+- **Parallel Fetching**: `asyncio.gather()` with `ThreadPoolExecutor`
+- **Index Usage**: Check `migrations/performance_indexes_migration.sql`
+
+#### Async Patterns
+- **Thread Pool**: `ThreadPoolExecutor` for sync operations in async context
+- **run_in_executor**: Wrap blocking calls for async compatibility
+
+### 6. **Performance Testing**
 - **Benchmark suggestions**: Recommend performance tests
 - **Load testing**: Identify areas needing load tests
 - **Profiling points**: Suggest where to add metrics

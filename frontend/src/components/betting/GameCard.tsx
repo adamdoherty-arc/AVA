@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 
 interface GameCardProps {
     game: {
@@ -17,7 +17,7 @@ interface GameCardProps {
     onClick?: () => void;
 }
 
-const GameCard: React.FC<GameCardProps> = ({ game, onClick }) => {
+const GameCard: React.FC<GameCardProps> = memo(({ game, onClick }) => {
     return (
         <div
             className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer mb-3"
@@ -56,6 +56,8 @@ const GameCard: React.FC<GameCardProps> = ({ game, onClick }) => {
             </div>
         </div>
     );
-};
+});
+
+GameCard.displayName = 'GameCard';
 
 export default GameCard;

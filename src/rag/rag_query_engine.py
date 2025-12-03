@@ -5,7 +5,9 @@ This module handles:
 1. Similarity search in Qdrant
 2. Re-ranking retrieved trades
 3. Context assembly for LLM
-4. Generating recommendations with Claude
+4. Generating recommendations (FREE via Groq/Ollama)
+
+Updated: 2025-11-29 - Now uses FREE LLM providers by default
 
 Author: Magnus Wheel Strategy Dashboard
 Created: 2025-11-06
@@ -13,8 +15,9 @@ Created: 2025-11-06
 
 import os
 import sys
-from typing import Dict, List, Optional, Any, Tuple
-from datetime import datetime, timedelta
+import asyncio
+from typing import Dict, List, Optional, Any
+from datetime import datetime
 from pathlib import Path
 import json
 
@@ -24,10 +27,11 @@ sys.path.append(str(Path(__file__).parent.parent))
 from sentence_transformers import SentenceTransformer
 from qdrant_client import QdrantClient
 from qdrant_client.models import Filter, FieldCondition, MatchValue, Range
-import anthropic
-import yfinance as yf
 from dotenv import load_dotenv
 import logging
+
+from src.ava.core.llm_engine import LLMClient, LLMProvider
+from src.ava.core.config import get_config
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -40,14 +44,14 @@ load_dotenv()
 class RAGQueryEngine:
     """
     RAG-powered query engine for options trading recommendations
+    Now uses FREE LLM providers (Groq/Ollama) by default!
     """
 
     def __init__(
         self,
         embedding_model: str = "sentence-transformers/all-mpnet-base-v2",
         qdrant_url: Optional[str] = None,
-        qdrant_api_key: Optional[str] = None,
-        anthropic_api_key: Optional[str] = None
+        qdrant_api_key: Optional[str] = None
     ):
         """
         Initialize RAG query engine
@@ -56,7 +60,6 @@ class RAGQueryEngine:
             embedding_model: Hugging Face model name
             qdrant_url: Qdrant cluster URL
             qdrant_api_key: Qdrant API key
-            anthropic_api_key: Anthropic API key
         """
         # Initialize embedding model
         logger.info(f"Loading embedding model: {embedding_model}")
@@ -76,12 +79,24 @@ class RAGQueryEngine:
 
         self.collection_name = "options_trades"
 
-        # Initialize Claude client
-        self.anthropic_api_key = anthropic_api_key or os.getenv('ANTHROPIC_API_KEY')
-        if not self.anthropic_api_key:
-            raise ValueError("ANTHROPIC_API_KEY must be set")
+        # Initialize FREE LLM client using centralized config
+        config = get_config()
+        provider_map = {
+            "ollama": LLMProvider.OLLAMA,
+            "groq": LLMProvider.GROQ,
+            "huggingface": LLMProvider.HUGGINGFACE,
+            "anthropic": LLMProvider.ANTHROPIC,
+            "openai": LLMProvider.OPENAI,
+        }
+        provider = provider_map.get(config.ai.provider.lower(), LLMProvider.GROQ)
 
-        self.claude = anthropic.Anthropic(api_key=self.anthropic_api_key)
+        self.llm = LLMClient(
+            provider=provider,
+            model=config.ai.default_model,
+            cache_enabled=True,
+            cache_ttl=300
+        )
+        logger.info(f"LLM initialized with FREE provider: {provider.value}")
 
         # Re-ranking weights
         self.rerank_weights = {
@@ -518,7 +533,7 @@ Respond ONLY with the JSON object, no additional text.
         max_tokens: int = 2048
     ) -> Dict[str, Any]:
         """
-        Get RAG-powered recommendation for new alert
+        Get RAG-powered recommendation for new alert (FREE via Groq/Ollama)
 
         Args:
             alert: New alert dictionary
@@ -541,24 +556,25 @@ Respond ONLY with the JSON object, no additional text.
             # Build prompt
             prompt = self.build_prompt(alert, top_trades, stats)
 
-            # Call Claude
-            logger.info("Calling Claude Sonnet 4.5 for recommendation...")
-            response = self.claude.messages.create(
-                model="claude-sonnet-4-5-20250929",
-                max_tokens=max_tokens,
-                temperature=temperature,
-                system="""You are an expert options trading advisor.
+            # Call LLM (FREE via Groq/Ollama)
+            logger.info("Calling FREE LLM for recommendation...")
+
+            async def get_llm_response():
+                return await self.llm.generate(
+                    system="""You are an expert options trading advisor.
 You analyze trade alerts by comparing them to historical outcomes.
 You always provide evidence-based recommendations with clear reasoning.
 You identify risks and suggest adjustments to improve probability of success.
 You respond ONLY with valid JSON, no additional commentary.""",
-                messages=[
-                    {"role": "user", "content": prompt}
-                ]
-            )
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=max_tokens,
+                    temperature=temperature
+                )
+
+            response = asyncio.run(get_llm_response())
 
             # Parse response
-            recommendation = self.parse_claude_response(response.content[0].text)
+            recommendation = self.parse_claude_response(response.content)
 
             # Add metadata
             recommendation['similar_trades_found'] = len(similar_trades)
@@ -566,7 +582,10 @@ You respond ONLY with valid JSON, no additional commentary.""",
             recommendation['statistics'] = stats
             recommendation['timestamp'] = datetime.now().isoformat()
 
-            logger.info(f"Recommendation: {recommendation['recommendation']} (Confidence: {recommendation['confidence']}%)")
+            logger.info(
+                f"Recommendation: {recommendation['recommendation']} "
+                f"(Confidence: {recommendation['confidence']}%)"
+            )
 
             return recommendation
 

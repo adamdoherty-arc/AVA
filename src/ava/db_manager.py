@@ -68,12 +68,12 @@ class DatabaseConnectionManager:
     _lock = threading.Lock()
     _pool: Optional[pool.ThreadedConnectionPool] = None
 
-    # Configuration
-    MIN_CONNECTIONS = 2
-    MAX_CONNECTIONS = 10
-    MAX_RETRIES = 3
-    RETRY_DELAY = 1.0  # seconds
-    CONNECTION_TIMEOUT = 10  # seconds
+    # Configuration - Use environment variables with sensible defaults
+    MIN_CONNECTIONS = int(os.getenv("DB_POOL_MIN_CONNECTIONS", "2"))
+    MAX_CONNECTIONS = int(os.getenv("DB_POOL_MAX_CONNECTIONS", "10"))
+    MAX_RETRIES = int(os.getenv("DB_MAX_RETRIES", "3"))
+    RETRY_DELAY = float(os.getenv("DB_RETRY_DELAY", "1.0"))  # seconds
+    CONNECTION_TIMEOUT = int(os.getenv("DB_CONNECTION_TIMEOUT", "10"))  # seconds
 
     def __new__(cls):
         """Ensure singleton pattern"""

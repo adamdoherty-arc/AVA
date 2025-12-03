@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useState, useMemo } from 'react'
+import { useQuery, useMutation } from '@tanstack/react-query'
 import { axiosInstance } from '../lib/axios'
 import {
     BookOpen, RefreshCw, Plus, TrendingUp, TrendingDown, DollarSign,
@@ -35,7 +35,6 @@ interface JournalStats {
 }
 
 export default function TradeJournal() {
-    const queryClient = useQueryClient()
     const [showAddForm, setShowAddForm] = useState(false)
     const [filterTag, setFilterTag] = useState('')
     const [filterStrategy, setFilterStrategy] = useState('')
@@ -57,8 +56,8 @@ export default function TradeJournal() {
         best_trade: 0, worst_trade: 0, avg_hold_time: '0d'
     }
 
-    const allTags = [...new Set(entries.flatMap(e => e.tags))]
-    const allStrategies = [...new Set(entries.map(e => e.strategy))]
+    const allTags = useMemo(() => [...new Set(entries.flatMap(e => e.tags))], [entries])
+    const allStrategies = useMemo(() => [...new Set(entries.map(e => e.strategy))], [entries])
 
     return (
         <div className="space-y-6">

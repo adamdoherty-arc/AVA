@@ -3,7 +3,9 @@ Autonomous AI Agent - Continuously Works Through Enhancement Tasks
 ===================================================================
 
 This agent runs 24/7, selecting tasks from the database and implementing them
-autonomously using specialized Claude agents.
+autonomously using specialized AI agents.
+
+Updated: 2025-11-29 - Now uses FREE LLM providers (Groq/Ollama) by default
 
 Features:
 - Database-driven task queue
@@ -12,19 +14,22 @@ Features:
 - Error handling and retry logic
 - Progress tracking
 - Human approval gates (optional)
-- Cost control and rate limiting
+- Cost control and rate limiting (now FREE with Groq!)
 """
 
 import os
 import sys
 import time
 import logging
+import asyncio
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
-import anthropic
+
+from src.ava.core.llm_engine import LLMClient, LLMProvider
+from src.ava.core.config import get_config
 
 # Fix Windows console encoding
 if sys.platform == 'win32':

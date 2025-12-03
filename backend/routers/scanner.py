@@ -1,10 +1,12 @@
 """Scanner Router - API endpoints for premium scanning
 NO MOCK DATA - All endpoints use real data sources
+
+Performance: Uses asyncio.to_thread() for non-blocking DB calls
 """
 
 from fastapi import APIRouter, HTTPException, Depends, Query, BackgroundTasks
 from fastapi.responses import StreamingResponse
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 import logging
 import json
@@ -15,6 +17,56 @@ from backend.services.scanner_service import get_scanner_service, ScannerService
 from src.database.connection_pool import get_db_connection
 
 logger = logging.getLogger(__name__)
+
+
+# ============ Sync Helper Functions (run via asyncio.to_thread) ============
+
+def _fetch_scan_history_sync(limit: int) -> Dict[str, Any]:
+    """Sync function to fetch scan history - called via asyncio.to_thread()"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT scan_id, symbols, dte, max_price, min_premium_pct, result_count, created_at
+            FROM premium_scan_history
+            ORDER BY created_at DESC
+            LIMIT %s
+        """, (limit,))
+        rows = cursor.fetchall()
+        history = [{
+            "scan_id": row[0],
+            "symbols": row[1],
+            "symbol_count": len(row[1]) if row[1] else 0,
+            "dte": row[2],
+            "max_price": float(row[3]) if row[3] else 0,
+            "min_premium_pct": float(row[4]) if row[4] else 0,
+            "result_count": row[5],
+            "created_at": row[6].isoformat() if row[6] else None
+        } for row in rows]
+        return {"history": history, "count": len(history)}
+
+
+def _fetch_scan_by_id_sync(scan_id: str) -> Dict[str, Any]:
+    """Sync function to fetch a scan by ID - called via asyncio.to_thread()"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT scan_id, symbols, dte, max_price, min_premium_pct, result_count, results, created_at
+            FROM premium_scan_history
+            WHERE scan_id = %s
+        """, (scan_id,))
+        row = cursor.fetchone()
+        if not row:
+            return None
+        return {
+            "scan_id": row[0],
+            "symbols": row[1],
+            "dte": row[2],
+            "max_price": float(row[3]) if row[3] else 0,
+            "min_premium_pct": float(row[4]) if row[4] else 0,
+            "result_count": row[5],
+            "results": row[6] if row[6] else [],
+            "created_at": row[7].isoformat() if row[7] else None
+        }
 
 router = APIRouter(
     prefix="/api/scanner",
@@ -28,8 +80,8 @@ _scan_progress = {}
 class ScanRequest(BaseModel):
     """Request body for scanning premiums"""
     symbols: List[str]
-    max_price: float = 250  # Increased to include more stocks like NVDA, TSLA
-    min_premium_pct: float = 0.5  # Lowered to show more opportunities
+    max_price: float = 50
+    min_premium_pct: float = 1.0
     dte: int = 30
     save_to_db: bool = True
 
@@ -37,8 +89,8 @@ class ScanRequest(BaseModel):
 class MultiDTEScanRequest(BaseModel):
     """Request body for multi-DTE scanning"""
     symbols: List[str]
-    max_price: float = 250  # Increased to include more stocks
-    min_premium_pct: float = 0.5  # Lowered to show more opportunities
+    max_price: float = 50
+    min_premium_pct: float = 1.0
     dte_targets: List[int] = [7, 14, 30, 45]
 
 
@@ -88,47 +140,6 @@ def save_scan_results_to_db(scan_id: str, request: ScanRequest, results: List[di
     except Exception as e:
         logger.error(f"Error saving scan results: {e}")
 
-
-
-
-@router.get("/opportunities")
-async def get_scanner_opportunities(
-    limit: int = Query(50, description="Maximum results"),
-    service: ScannerService = Depends(get_scanner_service)
-):
-    """
-    Get recent premium opportunities from scanner history.
-    """
-    try:
-        # Get recent scan results from database
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT scan_id, symbols, dte, result_count, results, created_at
-                FROM premium_scan_history
-                ORDER BY created_at DESC
-                LIMIT 1
-            """)
-            row = cursor.fetchone()
-            
-            if row:
-                return {
-                    "scan_id": row[0],
-                    "symbols": row[1],
-                    "dte": row[2],
-                    "result_count": row[3],
-                    "opportunities": row[4] if row[4] else [],
-                    "generated_at": row[5].isoformat() if row[5] else None
-                }
-            else:
-                return {
-                    "opportunities": [],
-                    "result_count": 0,
-                    "message": "No scan results found. Run a scan first."
-                }
-    except Exception as e:
-        logger.error(f"Error getting opportunities: {e}")
-        return {"opportunities": [], "error": str(e)}
 
 @router.post("/scan")
 async def scan_premiums(
@@ -239,38 +250,10 @@ async def scan_premiums_stream(request: ScanRequest):
 async def get_scan_history(limit: int = Query(10, description="Maximum scans to return")):
     """
     Get previous scan results from database.
+    Uses asyncio.to_thread() for non-blocking database access.
     """
     try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-
-            cursor.execute("""
-                SELECT scan_id, symbols, dte, max_price, min_premium_pct, result_count, created_at
-                FROM premium_scan_history
-                ORDER BY created_at DESC
-                LIMIT %s
-            """, (limit,))
-
-            rows = cursor.fetchall()
-
-            history = []
-            for row in rows:
-                history.append({
-                    "scan_id": row[0],
-                    "symbols": row[1],
-                    "symbol_count": len(row[1]) if row[1] else 0,
-                    "dte": row[2],
-                    "max_price": float(row[3]) if row[3] else 0,
-                    "min_premium_pct": float(row[4]) if row[4] else 0,
-                    "result_count": row[5],
-                    "created_at": row[6].isoformat() if row[6] else None
-                })
-
-            return {
-                "history": history,
-                "count": len(history)
-            }
-
+        return await asyncio.to_thread(_fetch_scan_history_sync, limit)
     except Exception as e:
         logger.error(f"Error fetching scan history: {e}")
         return {"history": [], "count": 0, "error": str(e)}
@@ -280,38 +263,157 @@ async def get_scan_history(limit: int = Query(10, description="Maximum scans to 
 async def get_scan_by_id(scan_id: str):
     """
     Get a specific scan's full results by ID.
+    Uses asyncio.to_thread() for non-blocking database access.
     """
     try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-
-            cursor.execute("""
-                SELECT scan_id, symbols, dte, max_price, min_premium_pct, result_count, results, created_at
-                FROM premium_scan_history
-                WHERE scan_id = %s
-            """, (scan_id,))
-
-            row = cursor.fetchone()
-
-            if not row:
-                raise HTTPException(status_code=404, detail="Scan not found")
-
-            return {
-                "scan_id": row[0],
-                "symbols": row[1],
-                "dte": row[2],
-                "max_price": float(row[3]) if row[3] else 0,
-                "min_premium_pct": float(row[4]) if row[4] else 0,
-                "result_count": row[5],
-                "results": row[6] if row[6] else [],
-                "created_at": row[7].isoformat() if row[7] else None
-            }
-
+        result = await asyncio.to_thread(_fetch_scan_by_id_sync, scan_id)
+        if not result:
+            raise HTTPException(status_code=404, detail="Scan not found")
+        return result
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error fetching scan {scan_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/stored-premiums")
+async def get_stored_premiums(
+    symbol: Optional[str] = Query(None, description="Filter by symbol"),
+    option_type: Optional[str] = Query(None, description="PUT or CALL"),
+    min_premium_pct: float = Query(1.0, description="Minimum premium percentage"),
+    max_dte: int = Query(45, description="Maximum DTE"),
+    min_dte: int = Query(0, description="Minimum DTE"),
+    sort_by: str = Query("annualized_return", description="Sort field"),
+    limit: int = Query(100, description="Maximum results")
+):
+    """
+    Get stored premium opportunities from database.
+    These are pre-scanned and periodically updated.
+    """
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+
+            # Build dynamic query
+            query = """
+                SELECT symbol, company_name, option_type, strike, expiration, dte,
+                       stock_price, bid, ask, mid, premium, premium_pct,
+                       annualized_return, monthly_return,
+                       delta, gamma, theta, vega, implied_volatility,
+                       volume, open_interest, break_even, pop, last_updated
+                FROM premium_opportunities
+                WHERE dte >= %s AND dte <= %s
+                  AND premium_pct >= %s
+            """
+            params = [min_dte, max_dte, min_premium_pct]
+
+            if symbol:
+                query += " AND symbol = %s"
+                params.append(symbol.upper())
+
+            if option_type:
+                query += " AND option_type = %s"
+                params.append(option_type.upper())
+
+            # Sort options
+            sort_map = {
+                'annualized_return': 'annualized_return DESC NULLS LAST',
+                'monthly_return': 'monthly_return DESC NULLS LAST',
+                'premium_pct': 'premium_pct DESC NULLS LAST',
+                'dte': 'dte ASC',
+                'symbol': 'symbol ASC',
+                'delta': 'ABS(delta) ASC NULLS LAST'
+            }
+            order = sort_map.get(sort_by, 'annualized_return DESC NULLS LAST')
+            query += f" ORDER BY {order} LIMIT %s"
+            params.append(limit)
+
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+
+            results = []
+            for row in rows:
+                results.append({
+                    'symbol': row[0],
+                    'company_name': row[1],
+                    'option_type': row[2],
+                    'strike': float(row[3]) if row[3] else None,
+                    'expiration': row[4].isoformat() if row[4] else None,
+                    'dte': row[5],
+                    'stock_price': float(row[6]) if row[6] else None,
+                    'bid': float(row[7]) if row[7] else None,
+                    'ask': float(row[8]) if row[8] else None,
+                    'mid': float(row[9]) if row[9] else None,
+                    'premium': float(row[10]) if row[10] else None,
+                    'premium_pct': float(row[11]) if row[11] else None,
+                    'annualized_return': float(row[12]) if row[12] else None,
+                    'monthly_return': float(row[13]) if row[13] else None,
+                    'delta': float(row[14]) if row[14] else None,
+                    'gamma': float(row[15]) if row[15] else None,
+                    'theta': float(row[16]) if row[16] else None,
+                    'vega': float(row[17]) if row[17] else None,
+                    'implied_volatility': float(row[18]) if row[18] else None,
+                    'volume': row[19],
+                    'open_interest': row[20],
+                    'break_even': float(row[21]) if row[21] else None,
+                    'pop': float(row[22]) if row[22] else None,
+                    'last_updated': row[23].isoformat() if row[23] else None
+                })
+
+            # Get last update time
+            cursor.execute("SELECT MAX(last_updated) FROM premium_opportunities")
+            last_update = cursor.fetchone()[0]
+
+            return {
+                'count': len(results),
+                'results': results,
+                'last_updated': last_update.isoformat() if last_update else None,
+                'filters': {
+                    'symbol': symbol,
+                    'option_type': option_type,
+                    'min_premium_pct': min_premium_pct,
+                    'min_dte': min_dte,
+                    'max_dte': max_dte
+                }
+            }
+
+    except Exception as e:
+        logger.error(f"Error fetching stored premiums: {e}")
+        return {'count': 0, 'results': [], 'error': str(e)}
+
+
+@router.get("/premium-stats")
+async def get_premium_stats():
+    """Get statistics about stored premium data."""
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                SELECT
+                    COUNT(*) as total_opportunities,
+                    COUNT(DISTINCT symbol) as unique_symbols,
+                    AVG(premium_pct) as avg_premium_pct,
+                    MAX(annualized_return) as max_annualized,
+                    MIN(last_updated) as oldest_data,
+                    MAX(last_updated) as newest_data
+                FROM premium_opportunities
+            """)
+            row = cursor.fetchone()
+
+            return {
+                'total_opportunities': row[0],
+                'unique_symbols': row[1],
+                'avg_premium_pct': round(float(row[2]), 2) if row[2] else 0,
+                'max_annualized_return': round(float(row[3]), 2) if row[3] else 0,
+                'oldest_data': row[4].isoformat() if row[4] else None,
+                'newest_data': row[5].isoformat() if row[5] else None,
+                'data_fresh': row[5] is not None and (datetime.now() - row[5]).total_seconds() < 3600
+            }
+    except Exception as e:
+        logger.error(f"Error fetching premium stats: {e}")
+        return {'error': str(e)}
 
 
 @router.post("/scan-multi-dte")
@@ -364,8 +466,8 @@ async def quick_scan(
 async def dte_scanner(
     symbols: str = Query("TSLA,NVDA,AMD,PLTR,SOFI,SNAP", description="Comma-separated symbols"),
     max_dte: int = Query(7, description="Maximum days to expiration"),
-    min_premium_pct: float = Query(0.3, description="Minimum premium percentage"),
-    max_strike: float = Query(250, description="Maximum strike price"),
+    min_premium_pct: float = Query(0.5, description="Minimum premium percentage"),
+    max_strike: float = Query(100, description="Maximum strike price"),
     service: ScannerService = Depends(get_scanner_service)
 ):
     """
@@ -431,7 +533,7 @@ async def dte_comparison(
     try:
         results = service.scan_multiple_dte(
             symbols=default_symbols,
-            max_price=250,
+            max_price=200,
             min_premium_pct=0.5,
             dte_targets=[7, 14, 30, 45]
         )
@@ -689,500 +791,309 @@ async def get_aggregated_symbols():
 async def get_scanner_watchlists():
     """
     Get all available watchlists for the premium scanner.
-    Sources: Predefined popular lists, All Stocks (stock_data), Database watchlists (tv_watchlists_api), TradingView watchlists, Robinhood.
-    NO MOCK DATA - Real database queries only.
+    Reads from scanner_watchlists cache table for fast response.
+    Data is populated by scripts/sync_watchlists.py
     """
-    watchlists = []
-
-    # Predefined popular watchlists for wheel strategy
-    predefined_watchlists = [
-        {
-            "source": "predefined",
-            "id": "popular",
-            "name": "Popular Wheel Stocks",
-            "symbols": [
-                'AAPL', 'AMD', 'AMZN', 'BAC', 'C', 'CCL', 'CSCO', 'F', 'GE', 'GOOG',
-                'INTC', 'META', 'MSFT', 'NVDA', 'PLTR', 'PYPL', 'SNAP', 'SOFI', 'T',
-                'TSLA', 'UAL', 'UBER', 'WFC', 'XOM'
-            ]
-        },
-        {
-            "source": "predefined",
-            "id": "high_iv",
-            "name": "High IV Stocks",
-            "symbols": [
-                'MARA', 'RIOT', 'COIN', 'GME', 'AMC', 'RIVN', 'LCID', 'NIO', 'PLUG',
-                'SPCE', 'BBBY', 'HOOD', 'SOFI', 'PLTR', 'SNAP', 'PINS'
-            ]
-        },
-        {
-            "source": "predefined",
-            "id": "blue_chip",
-            "name": "Blue Chip Stocks",
-            "symbols": [
-                'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'NVDA', 'JPM', 'V', 'MA',
-                'JNJ', 'UNH', 'PG', 'HD', 'DIS', 'VZ', 'KO', 'PEP', 'MRK', 'WMT'
-            ]
-        },
-        {
-            "source": "predefined",
-            "id": "under_25",
-            "name": "Under $25 (Low Capital)",
-            "symbols": [
-                'F', 'SOFI', 'PLTR', 'NIO', 'SNAP', 'T', 'CCL', 'AAL', 'PLUG', 'RIOT',
-                'SIRI', 'NOK', 'HOOD', 'GRAB', 'OPEN', 'WISH', 'CLOV', 'BB'
-            ]
-        },
-        {
-            "source": "predefined",
-            "id": "tech_focused",
-            "name": "Tech Focused",
-            "symbols": [
-                'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'NVDA', 'AMD', 'INTC', 'CRM',
-                'ORCL', 'ADBE', 'NOW', 'SHOP', 'SQ', 'PYPL', 'UBER', 'ABNB', 'SNOW'
-            ]
-        }
-    ]
-    watchlists.extend(predefined_watchlists)
-
-    # All Stocks from stock_data table (comprehensive database of stocks)
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT DISTINCT symbol
-                FROM stock_data
-                WHERE symbol IS NOT NULL AND symbol != ''
-                ORDER BY symbol
-            """)
-            all_symbols = [row[0] for row in cursor.fetchall()]
-            if all_symbols:
-                watchlists.append({
-                    "source": "database",
-                    "id": "all_stocks",
-                    "name": "All Stocks",
-                    "symbols": all_symbols
-                })
-    except Exception as e:
-        logger.warning(f"Error fetching all stocks from stock_data: {e}")
-
-    # Database watchlists from tv_watchlists_api (primary synced TradingView data)
-    # This table has symbols stored directly as ARRAY column in format 'EXCHANGE:SYMBOL'
-    try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-
-            # Get watchlists directly from tv_watchlists_api (symbols are stored as array)
-            cursor.execute("""
-                SELECT
-                    watchlist_id,
-                    name,
-                    symbols,
-                    symbol_count
-                FROM tv_watchlists_api
-                WHERE symbol_count > 0
-                ORDER BY symbol_count DESC, name
+                SELECT watchlist_id, source, name, symbols, symbol_count, last_synced
+                FROM scanner_watchlists
+                WHERE is_active = true
+                ORDER BY sort_order ASC, name ASC
             """)
             rows = cursor.fetchall()
 
-            for row in rows:
-                watchlist_id, name, full_symbols, count = row
-                if full_symbols:
-                    # Filter to only stock exchanges (NYSE, NASDAQ, AMEX, ARCA, BATS)
-                    # Symbols are stored as 'EXCHANGE:SYMBOL' format
-                    stock_exchanges = ('NYSE', 'NASDAQ', 'AMEX', 'ARCA', 'BATS')
-                    stock_symbols = []
-                    for fs in full_symbols:
-                        if ':' in fs:
-                            exchange, symbol = fs.split(':', 1)
-                            if exchange.upper() in stock_exchanges:
-                                stock_symbols.append(symbol)
-
-                    if stock_symbols:  # Only add if has stock symbols
-                        watchlists.append({
-                            "source": "database",
-                            "id": f"db_{watchlist_id}",
-                            "name": name,
-                            "symbols": stock_symbols
-                        })
-
-    except Exception as e:
-        logger.warning(f"Error fetching database watchlists (tv_watchlists_api): {e}")
-
-    # TradingView watchlists from tradingview_watchlists table (alternate sync)
-    try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT tw.id, tw.name, array_agg(ts.symbol) as symbols
-                FROM tradingview_watchlists tw
-                LEFT JOIN tradingview_symbols ts ON ts.watchlist_id = tw.id
-                GROUP BY tw.id, tw.name
-                ORDER BY tw.name
-            """)
-            rows = cursor.fetchall()
-
+            watchlists = []
             for row in rows:
                 watchlists.append({
-                    "source": "tradingview",
-                    "id": f"tv_{row[0]}",
-                    "name": f"TV: {row[1]}",
-                    "symbols": row[2] if row[2] and row[2][0] else []
+                    "source": row[1],
+                    "id": row[0],
+                    "name": row[2],
+                    "symbols": row[3] or []
                 })
 
-    except Exception as e:
-        logger.warning(f"Error fetching TradingView watchlists: {e}")
-
-    # Robinhood portfolio as a watchlist
-    try:
-        from backend.services.portfolio_service import get_portfolio_service
-        service = get_portfolio_service()
-        positions = await service.get_positions()
-
-        stock_symbols = [s.get("symbol") for s in positions.get("stocks", []) if s.get("symbol")]
-        if stock_symbols:
-            watchlists.append({
-                "source": "robinhood",
-                "id": "rh_portfolio",
-                "name": "RH: My Portfolio",
-                "symbols": stock_symbols
-            })
-
-    except Exception as e:
-        logger.warning(f"Error fetching Robinhood portfolio: {e}")
-
-    return {
-        "watchlists": watchlists,
-        "total": len(watchlists),
-        "generated_at": datetime.now().isoformat()
-    }
-
-
-# =============================================================================
-# AI-POWERED ENDPOINTS
-# =============================================================================
-
-class AIScanRequest(BaseModel):
-    """Request body for AI-powered scanning"""
-    symbols: List[str]
-    max_price: float = 250
-    min_premium_pct: float = 0.5
-    dte: int = 30
-    min_ai_score: int = 0  # Minimum AI score to include (0-100)
-    top_n: Optional[int] = None  # Return only top N results
-    save_to_db: bool = True
-
-
-@router.post("/scan-ai")
-async def scan_with_ai(
-    request: AIScanRequest,
-    background_tasks: BackgroundTasks
-):
-    """
-    AI-Powered Premium Scanner
-
-    Scans for premium opportunities with multi-criteria AI scoring.
-    Each opportunity is scored on:
-    - Fundamental factors (P/E, market cap, sector)
-    - Technical factors (volume, OI, bid-ask spread)
-    - Greeks analysis (delta, IV, premium ratio)
-    - Risk assessment (max loss, probability, breakeven)
-    - Sentiment analysis
-
-    Returns opportunities sorted by AI score with insights.
-    """
-    try:
-        from src.ai_premium_scanner import get_ai_scanner
-
-        scanner = get_ai_scanner()
-        results = scanner.scan_with_ai(
-            symbols=request.symbols,
-            max_price=request.max_price,
-            min_premium_pct=request.min_premium_pct,
-            dte=request.dte,
-            min_ai_score=request.min_ai_score,
-            top_n=request.top_n
-        )
-
-        # Save to database in background if requested
-        if request.save_to_db and results.get('opportunities'):
-            scan_id = f"ai_{str(uuid.uuid4())[:8]}"
-            save_request = ScanRequest(
-                symbols=request.symbols,
-                max_price=request.max_price,
-                min_premium_pct=request.min_premium_pct,
-                dte=request.dte,
-                save_to_db=True
-            )
-            background_tasks.add_task(
-                save_scan_results_to_db,
-                scan_id,
-                save_request,
-                results['opportunities']
-            )
-            results['scan_id'] = scan_id
-            results['saved'] = True
-
-        return results
-
-    except Exception as e:
-        logger.error(f"Error in AI scan: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/scan-ai-stream")
-async def scan_with_ai_stream(request: AIScanRequest):
-    """
-    AI-Powered Premium Scanner with streaming progress.
-    Uses Server-Sent Events to report progress and AI scoring.
-    """
-    async def generate():
-        try:
-            from src.ai_premium_scanner import get_ai_scanner
-
-            scanner = get_ai_scanner()
-            scan_id = f"ai_{str(uuid.uuid4())[:8]}"
-            total_symbols = len(request.symbols)
-
-            # Send start event
-            yield f"data: {json.dumps({'type': 'start', 'scan_id': scan_id, 'total': total_symbols, 'ai_enabled': True})}\n\n"
-
-            all_results = []
-            batch_size = 3  # Smaller batches for AI processing
-
-            for i in range(0, total_symbols, batch_size):
-                batch = request.symbols[i:i + batch_size]
-                completed = min(i + batch_size, total_symbols)
-                progress = round((completed / total_symbols) * 100)
-
-                # Send progress update
-                yield f"data: {json.dumps({'type': 'progress', 'current': completed, 'total': total_symbols, 'percent': progress, 'symbols': batch, 'phase': 'scanning'})}\n\n"
-
-                try:
-                    # Scan batch with AI scoring
-                    batch_results = scanner.scan_with_ai(
-                        symbols=batch,
-                        max_price=request.max_price,
-                        min_premium_pct=request.min_premium_pct,
-                        dte=request.dte,
-                        min_ai_score=request.min_ai_score
-                    )
-
-                    batch_opps = batch_results.get('opportunities', [])
-                    all_results.extend(batch_opps)
-
-                    # Send batch results with AI info
-                    yield f"data: {json.dumps({'type': 'batch', 'count': len(batch_opps), 'total_so_far': len(all_results), 'ai_scored': True})}\n\n"
-
-                except Exception as e:
-                    yield f"data: {json.dumps({'type': 'error', 'batch': batch, 'error': str(e)})}\n\n"
-
-                await asyncio.sleep(0.1)
-
-            # Sort by AI score
-            all_results.sort(key=lambda x: x.get('ai_score', 0), reverse=True)
-
-            # Apply top_n limit
-            if request.top_n and request.top_n > 0:
-                all_results = all_results[:request.top_n]
-
-            # Generate final insights
-            yield f"data: {json.dumps({'type': 'progress', 'phase': 'generating_insights'})}\n\n"
-
-            final_results = scanner.scan_with_ai(
-                symbols=[],  # Empty - we'll use cached results
-                dte=request.dte
-            )
-            final_results['opportunities'] = all_results
-            final_results['total_found'] = len(all_results)
-
-            # Recalculate insights for all results
-            if all_results:
-                final_results['ai_insights'] = scanner._generate_insights(all_results[:10])
-                final_results['stats'] = scanner._calculate_stats(all_results)
-
-            # Save to database
-            if request.save_to_db and all_results:
-                save_request = ScanRequest(
-                    symbols=request.symbols,
-                    max_price=request.max_price,
-                    min_premium_pct=request.min_premium_pct,
-                    dte=request.dte,
-                    save_to_db=True
-                )
-                save_scan_results_to_db(scan_id, save_request, all_results)
-
-            # Send complete event
-            yield f"data: {json.dumps({'type': 'complete', 'scan_id': scan_id, 'count': len(all_results), 'results': all_results, 'stats': final_results.get('stats'), 'ai_insights': final_results.get('ai_insights'), 'saved': request.save_to_db})}\n\n"
-
-        except Exception as e:
-            yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
-
-    return StreamingResponse(
-        generate(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "Access-Control-Allow-Origin": "*"
-        }
-    )
-
-
-@router.post("/analyze-opportunity")
-async def analyze_opportunity(opportunity: dict):
-    """
-    Get detailed AI analysis for a specific opportunity.
-
-    Provides:
-    - Multi-criteria scoring breakdown
-    - Risk/reward assessment
-    - LLM-generated analysis (if available)
-    - Trade recommendation
-    """
-    try:
-        from src.ai_premium_scanner import get_ai_scanner
-
-        scanner = get_ai_scanner()
-
-        # Score the opportunity
-        scored = scanner.score_opportunity(opportunity)
-
-        # Try to get LLM analysis
-        llm_analysis = None
-        try:
-            import asyncio
-            llm_analysis = await scanner.generate_llm_analysis(scored)
-        except Exception as e:
-            logger.debug(f"LLM analysis not available: {e}")
-
-        return {
-            "opportunity": scored,
-            "scores": {
-                "ai_score": scored.get('ai_score'),
-                "fundamental": scored.get('fundamental_score'),
-                "technical": scored.get('technical_score'),
-                "greeks": scored.get('greeks_score'),
-                "risk": scored.get('risk_score'),
-                "sentiment": scored.get('sentiment_score'),
-            },
-            "recommendation": scored.get('ai_recommendation'),
-            "confidence": scored.get('ai_confidence'),
-            "llm_analysis": llm_analysis,
-            "generated_at": datetime.now().isoformat()
-        }
-
-    except Exception as e:
-        logger.error(f"Error analyzing opportunity: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/ai-insights")
-async def get_ai_insights(
-    symbols: str = Query("AAPL,AMD,TSLA,NVDA,SOFI,PLTR", description="Comma-separated symbols"),
-    dte: int = Query(30, description="Days to expiration"),
-    top_n: int = Query(20, description="Number of top opportunities to analyze")
-):
-    """
-    Get AI-generated insights for specified symbols.
-
-    Returns:
-    - Market conditions analysis
-    - Top opportunity picks
-    - Sector analysis
-    - Risk assessment
-    - Trade recommendations
-    """
-    try:
-        from src.ai_premium_scanner import get_ai_scanner
-
-        scanner = get_ai_scanner()
-        symbol_list = [s.strip().upper() for s in symbols.split(',')]
-
-        results = scanner.scan_with_ai(
-            symbols=symbol_list,
-            max_price=250,
-            min_premium_pct=0.5,
-            dte=dte,
-            top_n=top_n
-        )
-
-        return {
-            "insights": results.get('ai_insights'),
-            "stats": results.get('stats'),
-            "top_opportunities": results.get('opportunities', [])[:5],
-            "symbols_analyzed": len(symbol_list),
-            "total_found": results.get('total_found', 0),
-            "generated_at": datetime.now().isoformat()
-        }
-
-    except Exception as e:
-        logger.error(f"Error generating AI insights: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/recommendation-summary")
-async def get_recommendation_summary():
-    """
-    Get a summary of AI recommendations from recent scans.
-    Groups opportunities by recommendation level.
-    """
-    try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-
-            # Get most recent scan results
-            cursor.execute("""
-                SELECT results
-                FROM premium_scan_history
-                ORDER BY created_at DESC
-                LIMIT 1
-            """)
-            row = cursor.fetchone()
-
-            if not row or not row[0]:
-                return {
-                    "summary": {},
-                    "message": "No scan results available. Run an AI scan first."
-                }
-
-            results = row[0]
-
-            # Group by recommendation
-            summary = {
-                'STRONG_BUY': [],
-                'BUY': [],
-                'HOLD': [],
-                'CAUTION': [],
-                'AVOID': []
-            }
-
-            for opp in results:
-                rec = opp.get('ai_recommendation', 'HOLD')
-                if rec in summary:
-                    summary[rec].append({
-                        'symbol': opp.get('symbol'),
-                        'strike': opp.get('strike'),
-                        'expiration': opp.get('expiration'),
-                        'ai_score': opp.get('ai_score'),
-                        'monthly_return': opp.get('monthly_return'),
-                        'premium': opp.get('premium')
-                    })
-
-            # Sort each group by AI score
-            for rec in summary:
-                summary[rec] = sorted(
-                    summary[rec],
-                    key=lambda x: x.get('ai_score', 0),
-                    reverse=True
-                )[:10]  # Top 10 per category
+            # Get last sync time
+            cursor.execute("SELECT MAX(last_synced) FROM scanner_watchlists WHERE is_active = true")
+            last_sync = cursor.fetchone()[0]
 
             return {
-                "summary": summary,
-                "counts": {rec: len(opps) for rec, opps in summary.items()},
+                "watchlists": watchlists,
+                "total": len(watchlists),
+                "last_synced": last_sync.isoformat() if last_sync else None,
                 "generated_at": datetime.now().isoformat()
             }
 
     except Exception as e:
-        logger.error(f"Error getting recommendation summary: {e}")
+        logger.error(f"Error fetching watchlists from cache: {e}")
+        # Fallback to minimal predefined watchlists if cache is empty
+        return {
+            "watchlists": [
+                {
+                    "source": "predefined",
+                    "id": "popular",
+                    "name": "Popular Stocks",
+                    "symbols": ["AAPL", "MSFT", "NVDA", "TSLA", "AMD", "AMZN", "GOOG", "META", "PLTR", "SOFI"]
+                }
+            ],
+            "total": 1,
+            "error": "Cache not available, showing fallback",
+            "generated_at": datetime.now().isoformat()
+        }
+
+
+# ============ Universe-Based Endpoints ============
+
+@router.get("/universe/stats")
+async def get_universe_stats(
+    service: ScannerService = Depends(get_scanner_service)
+):
+    """
+    Get statistics about the stock and ETF universe.
+    Returns counts, optionable symbols, and summary metrics.
+    """
+    try:
+        return service.get_universe_stats()
+    except Exception as e:
+        logger.error(f"Error getting universe stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/universe/sectors")
+async def get_sectors(
+    service: ScannerService = Depends(get_scanner_service)
+):
+    """
+    Get all available sectors from the stock universe.
+    """
+    try:
+        sectors = service.get_sectors()
+        return {
+            "sectors": sectors,
+            "count": len(sectors)
+        }
+    except Exception as e:
+        logger.error(f"Error getting sectors: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/universe/categories")
+async def get_etf_categories(
+    service: ScannerService = Depends(get_scanner_service)
+):
+    """
+    Get all available ETF categories from the universe.
+    """
+    try:
+        categories = service.get_categories()
+        return {
+            "categories": categories,
+            "count": len(categories)
+        }
+    except Exception as e:
+        logger.error(f"Error getting ETF categories: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/universe/optionable")
+async def get_optionable_symbols(
+    asset_type: str = Query("all", description="stock, etf, or all"),
+    max_price: Optional[float] = Query(None, description="Max stock price"),
+    sectors: Optional[str] = Query(None, description="Comma-separated sectors"),
+    limit: int = Query(500, description="Maximum symbols to return"),
+    service: ScannerService = Depends(get_scanner_service)
+):
+    """
+    Get all optionable symbols from the universe.
+    Pre-filtered based on has_options=true in the database.
+    """
+    try:
+        sector_list = None
+        if sectors:
+            sector_list = [s.strip() for s in sectors.split(',')]
+
+        symbols = service.get_optionable_symbols(
+            asset_type=asset_type,
+            max_price=max_price,
+            sectors=sector_list,
+            limit=limit
+        )
+        return {
+            "symbols": symbols,
+            "count": len(symbols),
+            "asset_type": asset_type,
+            "generated_at": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error getting optionable symbols: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class UniverseScanRequest(BaseModel):
+    """Request for scanning from universe"""
+    max_price: float = 100.0
+    min_premium_pct: float = 1.0
+    dte: int = 30
+    sectors: Optional[List[str]] = None
+    include_etfs: bool = True
+    min_volume: int = 100000
+    limit: int = 200
+
+
+@router.post("/universe/scan")
+async def scan_from_universe(
+    request: UniverseScanRequest,
+    background_tasks: BackgroundTasks,
+    service: ScannerService = Depends(get_scanner_service)
+):
+    """
+    Scan symbols automatically from the universe.
+
+    This is the recommended method for production scans as it:
+    - Automatically filters for optionable symbols
+    - Applies price and volume filters
+    - Supports sector filtering
+    - Includes ETFs optionally
+    """
+    try:
+        scan_id = str(uuid.uuid4())[:8]
+
+        results = service.scan_from_universe(
+            max_price=request.max_price,
+            min_premium_pct=request.min_premium_pct,
+            dte=request.dte,
+            sectors=request.sectors,
+            include_etfs=request.include_etfs,
+            min_volume=request.min_volume,
+            limit=request.limit
+        )
+
+        return {
+            "scan_id": scan_id,
+            "count": len(results),
+            "dte": request.dte,
+            "sectors": request.sectors,
+            "include_etfs": request.include_etfs,
+            "results": results,
+            "generated_at": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error scanning from universe: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/universe/scan-sector/{sector}")
+async def scan_by_sector(
+    sector: str,
+    max_price: float = Query(100.0, description="Maximum stock price"),
+    min_premium_pct: float = Query(1.0, description="Minimum premium %"),
+    dte: int = Query(30, description="Target DTE"),
+    limit: int = Query(50, description="Maximum results"),
+    service: ScannerService = Depends(get_scanner_service)
+):
+    """
+    Scan all optionable stocks in a specific sector.
+    """
+    try:
+        results = service.scan_by_sector(
+            sector=sector,
+            max_price=max_price,
+            min_premium_pct=min_premium_pct,
+            dte=dte,
+            limit=limit
+        )
+        return {
+            "sector": sector,
+            "count": len(results),
+            "dte": dte,
+            "results": results,
+            "generated_at": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error scanning sector {sector}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/universe/scan-etfs")
+async def scan_etfs(
+    categories: Optional[str] = Query(None, description="Comma-separated categories"),
+    max_price: float = Query(100.0, description="Maximum ETF price"),
+    min_premium_pct: float = Query(0.5, description="Minimum premium %"),
+    dte: int = Query(30, description="Target DTE"),
+    limit: int = Query(50, description="Maximum results"),
+    service: ScannerService = Depends(get_scanner_service)
+):
+    """
+    Scan ETFs for premium opportunities.
+    """
+    try:
+        category_list = None
+        if categories:
+            category_list = [c.strip() for c in categories.split(',')]
+
+        results = service.scan_etfs(
+            categories=category_list,
+            max_price=max_price,
+            min_premium_pct=min_premium_pct,
+            dte=dte,
+            limit=limit
+        )
+        return {
+            "categories": category_list,
+            "count": len(results),
+            "dte": dte,
+            "results": results,
+            "generated_at": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error scanning ETFs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/universe/symbol/{symbol}")
+async def get_symbol_details(
+    symbol: str,
+    service: ScannerService = Depends(get_scanner_service)
+):
+    """
+    Get detailed information about a symbol from the universe.
+    """
+    try:
+        details = service.get_symbol_details(symbol.upper())
+        if details:
+            return {
+                "symbol": symbol.upper(),
+                "details": details,
+                "generated_at": datetime.now().isoformat()
+            }
+        else:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Symbol {symbol} not found in universe"
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting symbol details: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/universe/cache/invalidate")
+async def invalidate_universe_cache(
+    service: ScannerService = Depends(get_scanner_service)
+):
+    """
+    Invalidate all universe and scanner caches.
+    Useful after updating universe data.
+    """
+    try:
+        result = service.invalidate_cache()
+        return {
+            "status": "success",
+            "message": "Cache invalidated",
+            **result
+        }
+    except Exception as e:
+        logger.error(f"Error invalidating cache: {e}")
         raise HTTPException(status_code=500, detail=str(e))

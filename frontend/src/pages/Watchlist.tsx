@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { axiosInstance } from '../lib/axios'
 import {
     Search, RefreshCw, TrendingUp, TrendingDown, BarChart2,
-    Eye, Target, DollarSign, Activity, Zap, ChevronRight
+    Eye, Target, Activity, Zap, ChevronRight
 } from 'lucide-react'
 import clsx from 'clsx'
 

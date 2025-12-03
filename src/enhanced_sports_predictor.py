@@ -1,16 +1,20 @@
 """
 Enhanced Sports Predictor
 Combines research, odds, statistics, and AI to generate comprehensive predictions
+
+Updated: 2025-11-29 - Now uses FREE LLM providers (Groq/Ollama) by default
 """
 
 import logging
+import asyncio
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime
-import anthropic
 import os
 from dotenv import load_dotenv
 
 from src.sports_prediction_research import SportsResearchAggregator
+from src.ava.core.llm_engine import LLMClient, LLMProvider
+from src.ava.core.config import get_config
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -23,18 +27,34 @@ class EnhancedSportsPredictor:
     - Research from GitHub, Medium, Reddit
     - Statistical models (Elo, power rankings)
     - Betting odds and line movements
-    - AI-powered analysis with Claude
+    - AI-powered analysis (FREE via Groq/Ollama)
     """
 
     def __init__(self) -> None:
         self.research_aggregator = SportsResearchAggregator()
-        self.anthropic_key = os.getenv('ANTHROPIC_API_KEY')
 
-        if self.anthropic_key:
-            self.claude = anthropic.Anthropic(api_key=self.anthropic_key)
-        else:
-            self.claude = None
-            logger.warning("No Anthropic API key found - AI analysis will be limited")
+        # Use centralized config for FREE LLM provider
+        config = get_config()
+        provider_map = {
+            "ollama": LLMProvider.OLLAMA,
+            "groq": LLMProvider.GROQ,
+            "huggingface": LLMProvider.HUGGINGFACE,
+            "anthropic": LLMProvider.ANTHROPIC,
+            "openai": LLMProvider.OPENAI,
+        }
+        provider = provider_map.get(config.ai.provider.lower(), LLMProvider.GROQ)
+
+        try:
+            self.llm = LLMClient(
+                provider=provider,
+                model=config.ai.default_model,
+                cache_enabled=True,
+                cache_ttl=300
+            )
+            logger.info(f"LLM initialized with FREE provider: {provider.value}")
+        except Exception as e:
+            self.llm = None
+            logger.warning(f"Failed to initialize LLM: {e} - AI analysis will be limited")
 
     # ========================================================================
     # MAIN PREDICTION ENGINE
@@ -230,8 +250,8 @@ class EnhancedSportsPredictor:
     # ========================================================================
 
     def _get_ai_analysis(self, game_data: Dict, research: Dict, odds: Dict, factors: List[Dict]) -> Dict:
-        """Get AI-powered analysis using Claude"""
-        if not self.claude:
+        """Get AI-powered analysis using FREE LLM (Groq/Ollama)"""
+        if not self.llm:
             return {
                 'analysis': 'AI analysis unavailable',
                 'confidence': 0.5,
@@ -242,7 +262,7 @@ class EnhancedSportsPredictor:
         away_team = game_data.get('away_team')
         sport = game_data.get('sport', 'nfl')
 
-        # Construct prompt for Claude
+        # Construct prompt
         prompt = f"""Analyze this {sport.upper()} game and provide a prediction:
 
 **Matchup:** {away_team} @ {home_team}
@@ -277,13 +297,27 @@ KEY_FACTOR: [Most important factor]
 """
 
         try:
-            response = self.claude.messages.create(
-                model="claude-3-5-sonnet-20241022",
-                max_tokens=500,
-                messages=[{"role": "user", "content": prompt}]
-            )
+            # Use async LLM call - run in event loop
+            async def get_response():
+                return await self.llm.generate(
+                    system="You are an expert sports analyst specializing in NFL and college football predictions.",
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=500,
+                    temperature=0.3
+                )
 
-            analysis_text = response.content[0].text
+            # Run async call
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # If already in async context, create task
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, get_response())
+                    response = future.result(timeout=30)
+            else:
+                response = asyncio.run(get_response())
+
+            analysis_text = response.content
             return self._parse_ai_response(analysis_text)
 
         except Exception as e:
