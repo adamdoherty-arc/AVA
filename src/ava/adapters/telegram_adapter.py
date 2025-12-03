@@ -39,7 +39,7 @@ class TelegramAVAAdapter:
         
         logger.info("TelegramAVAAdapter initialized")
 
-    def _register_handlers(self):
+    def _register_handlers(self) -> None:
         """Register Telegram bot handlers"""
         # Command handlers
         self.application.add_handler(CommandHandler("start", self._start_command))
@@ -153,12 +153,12 @@ class TelegramAVAAdapter:
         # Edit message with response
         await query.edit_message_text(full_response)
 
-    def start(self):
+    def start(self) -> None:
         """Start the Telegram bot"""
         logger.info("Starting Telegram bot...")
         self.application.run_polling(allowed_updates=Update.ALL_TYPES)
 
-    async def stop(self):
+    async def stop(self) -> None:
         """Stop the Telegram bot"""
         logger.info("Stopping Telegram bot...")
         await self.application.stop()

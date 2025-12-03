@@ -65,7 +65,7 @@ class RateLimiter:
     # Cleanup configuration
     CLEANUP_INTERVAL = 300  # seconds (5 minutes)
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize rate limiter"""
         self._user_states: Dict[int, UserLimitState] = {}
         self._global_requests: list = []  # Timestamps of all requests in current minute
@@ -79,7 +79,7 @@ class RateLimiter:
             f"{self.GLOBAL_MINUTE_LIMIT} req/min global"
         )
 
-    def _cleanup_expired_entries(self):
+    def _cleanup_expired_entries(self) -> None:
         """Remove expired entries to prevent memory leaks"""
         current_time = time.time()
 

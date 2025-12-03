@@ -155,7 +155,7 @@ class UITheme:
             }
         }
 
-    def apply_custom_css(self):
+    def apply_custom_css(self) -> None:
         """Apply custom CSS styling to the entire app"""
         css = f"""
         <style>

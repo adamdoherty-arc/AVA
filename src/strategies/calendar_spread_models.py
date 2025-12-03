@@ -74,7 +74,7 @@ class CalendarSpreadOpportunity:
     rank: int = 0
     strategy_name: str = "Calendar Spread"
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Calculate derived metrics"""
         if self.net_debit > 0:
             self.profit_potential = self.max_profit / self.net_debit

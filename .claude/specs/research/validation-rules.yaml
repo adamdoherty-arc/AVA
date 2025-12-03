@@ -1,0 +1,38 @@
+# Research Validation Rules
+
+query_validation:
+  - name: "Query not empty"
+    rule: "query.length > 0"
+
+  - name: "Query length limit"
+    rule: "query.length <= 4000"
+
+response_quality:
+  - name: "Answer provided"
+    rule: "answer is not empty"
+
+  - name: "Sources cited"
+    rule: "sources array not empty when answer given"
+
+  - name: "Similarity threshold"
+    rule: "Top sources have similarity >= 0.7"
+
+consistency_checks:
+  - name: "Context matches query"
+    rule: "Position context relevant when included"
+
+  - name: "Source relevance"
+    rule: "Sources relate to query topic"
+
+data_freshness:
+  documents:
+    max_stale_days: 7
+  position_context:
+    max_stale_minutes: 5
+
+null_checks:
+  never_null:
+    - answer
+  warn_if_null:
+    - sources
+    - position_context

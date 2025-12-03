@@ -36,7 +36,7 @@ class EnhancedZoneAnalyzer:
     Maximum: 100 (capped)
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize all analyzers"""
         self.base_analyzer = ZoneAnalyzer()
         self.smc = SmartMoneyIndicators()

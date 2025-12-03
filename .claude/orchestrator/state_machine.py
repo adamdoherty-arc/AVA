@@ -254,7 +254,7 @@ class StateMachine:
         checkpoints = sorted(self.checkpoint_dir.glob("checkpoint_*.json"))
         return checkpoints[-1] if checkpoints else None
 
-    def reset(self):
+    def reset(self) -> None:
         """Reset to initial state"""
         self.state = OrchestratorState.IDLE
         self.context = {}

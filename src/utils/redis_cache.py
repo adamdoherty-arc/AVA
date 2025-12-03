@@ -21,7 +21,7 @@ except ImportError:
 class RedisCache:
     """Redis cache wrapper with fallback"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.client = None
         self.enabled = False
 

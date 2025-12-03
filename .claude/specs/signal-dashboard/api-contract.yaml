@@ -1,0 +1,72 @@
+# Signal Dashboard API Contract
+
+endpoints:
+  - path: /api/signals
+    method: GET
+    description: Get all signals
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          signals:
+            type: array
+            items:
+              type: object
+              required:
+                - symbol
+                - signal_type
+                - timestamp
+              properties:
+                id:
+                  type: string
+                symbol:
+                  type: string
+                signal_type:
+                  type: string
+                  enum: [buy, sell, hold, bullish, bearish, neutral]
+                source:
+                  type: string
+                confidence:
+                  type: number
+                timestamp:
+                  type: string
+                status:
+                  type: string
+                  enum: [active, expired, triggered]
+                message:
+                  type: string
+
+  - path: /api/signals/active
+    method: GET
+    description: Get active signals only
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          active_signals:
+            type: array
+          count:
+            type: integer
+
+  - path: /api/signals/history
+    method: GET
+    description: Get signal history
+    parameters:
+      days:
+        type: integer
+        default: 7
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          history:
+            type: array
+          success_rate:
+            type: number
+
+error_responses:
+  503:
+    description: Signal service unavailable

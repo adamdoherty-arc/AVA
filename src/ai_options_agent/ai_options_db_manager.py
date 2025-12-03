@@ -20,7 +20,7 @@ load_dotenv()
 class AIOptionsDBManager:
     """Manages AI options analysis data in Magnus PostgreSQL database"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.db_config = {
             'host': os.getenv('DB_HOST', 'localhost'),
             'port': os.getenv('DB_PORT', '5432'),
@@ -29,7 +29,7 @@ class AIOptionsDBManager:
             'database': os.getenv('DB_NAME', 'magnus')
         }
 
-    def get_connection(self):
+    def get_connection(self) -> None:
         """Get database connection"""
         return psycopg2.connect(**self.db_config)
 
@@ -92,10 +92,10 @@ class AIOptionsDBManager:
             # Add symbol filter if provided
             if symbols:
                 symbol_placeholders = ','.join(['%s'] * len(symbols))
-                query = query.format(symbol_filter=f"AND sp.symbol IN ({symbol_placeholders})")
+                query = queryf-string")
                 params = (dte_range[0], dte_range[1], delta_range[0], delta_range[1]) + tuple(symbols) + (limit * 2,)
             else:
-                query = query.format(symbol_filter='')
+                query = queryf-string
                 params = (dte_range[0], dte_range[1], delta_range[0], delta_range[1], limit * 2)
 
             cur.execute(query, params)

@@ -26,7 +26,7 @@ load_dotenv()
 class StockDataSync:
     """Syncs stock market data and premiums to database"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.conn = psycopg2.connect(
             host=os.getenv('DB_HOST', 'localhost'),
             port=os.getenv('DB_PORT', 5432),
@@ -36,7 +36,7 @@ class StockDataSync:
         )
         self.create_tables()
 
-    def create_tables(self):
+    def create_tables(self) -> None:
         """Create stock data tables"""
         cur = self.conn.cursor()
 
@@ -271,7 +271,7 @@ class StockDataSync:
             logger.error(f"Error syncing premiums for {symbol}: {e}")
             return False
 
-    def sync_all_watchlist_symbols(self):
+    def sync_all_watchlist_symbols(self) -> None:
         """Sync all symbols from TradingView watchlists"""
         cur = self.conn.cursor()
 
@@ -304,7 +304,7 @@ class StockDataSync:
 
         logger.info(f"Sync complete: {success_count} stocks, {premium_count} with premiums")
 
-    def close(self):
+    def close(self) -> None:
         """Close database connection"""
         self.conn.close()
 

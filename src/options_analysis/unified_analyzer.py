@@ -348,7 +348,7 @@ class UnifiedOptionsAnalyzer:
         else:
             return 'ADJUST'
 
-    def clear_cache(self):
+    def clear_cache(self) -> None:
         """Clear analysis cache"""
         self._cache = {}
         logger.info("Analysis cache cleared")

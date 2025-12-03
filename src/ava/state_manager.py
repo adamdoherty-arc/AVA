@@ -73,7 +73,7 @@ class StateContext:
     step: int = 0
     data: Dict[str, Any] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.data is None:
             self.data = {}
 
@@ -89,7 +89,7 @@ class StateRecord:
     updated_at: str = None
     expires_at: str = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.context is None:
             self.context = StateContext()
         if self.history is None:
@@ -142,7 +142,7 @@ class StateManager:
             ConversationState.PROCESSING: 5,
         }
 
-    async def connect(self):
+    async def connect(self) -> None:
         """Connect to Redis"""
         if not self.redis:
             self.redis = await redis.from_url(
@@ -154,7 +154,7 @@ class StateManager:
             await self.redis.ping()
             logger.info(f"✅ StateManager connected to Redis: {self.redis_url}")
 
-    async def disconnect(self):
+    async def disconnect(self) -> None:
         """Disconnect from Redis"""
         if self.redis:
             await self.redis.close()

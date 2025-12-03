@@ -16,7 +16,7 @@ from .calendar_spread_models import CalendarSpreadOpportunity, OptionContract
 class CalendarSpreadFinder:
     """Find and evaluate calendar spread opportunities"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.min_volume = 10  # Minimum daily volume
         self.min_oi = 50  # Minimum open interest
         self.strike_range_pct = 0.15  # ±15% from current price

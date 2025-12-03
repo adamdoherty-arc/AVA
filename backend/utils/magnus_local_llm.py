@@ -352,7 +352,7 @@ Provide:
 
         template = prompt_templates.get(analysis_type, "")
         context_str = str(context) if context else "Not provided"
-        prompt = template.format(symbol=symbol, context=context_str)
+        prompt = templatef-string
 
         # Use BALANCED complexity for most trading analysis
         return self.query(
@@ -372,7 +372,7 @@ Provide:
             )
         }
 
-    def clear_cache(self):
+    def clear_cache(self) -> None:
         """Clear response cache"""
         self._cache.clear()
         logger.info("Cache cleared")

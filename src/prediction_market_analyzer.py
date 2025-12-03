@@ -13,7 +13,7 @@ class PredictionMarketAnalyzer:
     Uses quantitative factors: mispricing, liquidity, time value, risk-reward
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.weights = {
             'liquidity': 0.30,      # 30% - Can you enter/exit easily?
             'time_value': 0.25,     # 25% - Time until resolution

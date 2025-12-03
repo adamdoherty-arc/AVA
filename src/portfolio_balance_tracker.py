@@ -17,7 +17,7 @@ load_dotenv()
 class PortfolioBalanceTracker:
     """Tracks daily portfolio balances and P/L in database"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.db_config = {
             'host': os.getenv('DB_HOST', 'localhost'),
             'port': os.getenv('DB_PORT', '5432'),
@@ -27,11 +27,11 @@ class PortfolioBalanceTracker:
         }
         self.initialize_tables()
 
-    def get_connection(self):
+    def get_connection(self) -> None:
         """Get database connection"""
         return psycopg2.connect(**self.db_config)
 
-    def initialize_tables(self):
+    def initialize_tables(self) -> None:
         """Create daily balance tables if they don't exist"""
         conn = self.get_connection()
         cur = conn.cursor()

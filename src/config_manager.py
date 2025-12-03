@@ -44,7 +44,7 @@ class ConfigManager:
                     cls._instance._initialized = False
         return cls._instance
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize configuration manager (only once)"""
         if self._initialized:
             return
@@ -60,7 +60,7 @@ class ConfigManager:
 
         logger.info(f"ConfigManager initialized with {len(self._config)} sections")
 
-    def _load_all_configs(self):
+    def _load_all_configs(self) -> None:
         """Load all YAML configuration files"""
         config_files = {
             "default": self._config_dir / "default.yaml",
@@ -92,7 +92,7 @@ class ConfigManager:
         # Apply environment variable overrides
         self._apply_env_overrides()
 
-    def _apply_env_overrides(self):
+    def _apply_env_overrides(self) -> None:
         """
         Apply environment variable overrides.
         Pattern: MAGNUS_SECTION_KEY overrides config[section][key]
@@ -263,7 +263,7 @@ class ConfigManager:
         """
         return int(self.get(f"cache.{cache_type}_ttl", 300))
 
-    def reload_config(self):
+    def reload_config(self) -> None:
         """
         Reload configuration from files.
         Useful for hot-reloading without restarting the application.

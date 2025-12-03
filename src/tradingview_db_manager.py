@@ -20,12 +20,12 @@ load_dotenv(override=True)
 class TradingViewDBManager:
     """Manages TradingView watchlists in Magnus PostgreSQL database"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         # PERFORMANCE FIX: Removed direct connection config - using connection pool
         # This prevents connection leaks and exhaustion (service crashes after 2-3 hours)
         self.initialize_tables()
 
-    def get_connection(self):
+    def get_connection(self) -> None:
         """
         DEPRECATED: Get database connection
 
@@ -38,7 +38,7 @@ class TradingViewDBManager:
         pool = DatabaseConnectionPool()
         return pool._pool.getconn()
 
-    def initialize_tables(self):
+    def initialize_tables(self) -> None:
         """Create watchlist tables if they don't exist"""
         # PERFORMANCE FIX: Using connection pool context manager
         # Automatic commit/rollback and connection return to pool
@@ -521,4 +521,4 @@ class TradingViewDBManager:
 
     def load_saved_watchlists(self) -> Dict[str, List[str]]:
         """Load all saved watchlists from database"""
-        return self.get_all_symbols_dict()
+        return self.get_all_symbols()

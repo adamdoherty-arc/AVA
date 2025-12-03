@@ -47,7 +47,7 @@ class PositionRecommendationService:
         recommendations = await service.get_recommendations(use_cache=True)
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the recommendation service"""
         # Initialize components
         self.data_aggregator = PositionDataAggregator()
@@ -79,7 +79,7 @@ class PositionRecommendationService:
         # Cache TTL
         self.cache_ttl_seconds = 1800  # 30 minutes
 
-    def get_db_connection(self):
+    def get_db_connection(self) -> None:
         """Get database connection"""
         return psycopg2.connect(**self.db_config)
 
@@ -329,7 +329,7 @@ class PositionRecommendationService:
             logger.error(f"Error generating recommendation for {symbol}: {e}")
             return None
 
-    def clear_cache(self):
+    def clear_cache(self) -> None:
         """Clear all cached recommendations"""
         if self.redis_client:
             try:

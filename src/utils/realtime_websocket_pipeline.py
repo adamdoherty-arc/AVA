@@ -302,7 +302,7 @@ class WebSocketServer:
                 self.server_task.get_loop()
             )
 
-    def start(self):
+    def start(self) -> None:
         """Start the WebSocket server in a background thread."""
         if self.is_running:
             logger.warning("Server already running")
@@ -337,7 +337,7 @@ class WebSocketServer:
 
         logger.info("WebSocket server started in background")
 
-    def stop(self):
+    def stop(self) -> None:
         """Stop the WebSocket server."""
         self.is_running = False
         logger.info("WebSocket server stopped")
@@ -387,7 +387,7 @@ class StreamlitWebSocketClient:
         # Background thread
         self.client_thread = None
 
-    async def _connect_and_listen(self):
+    async def _connect_and_listen(self) -> None:
         """Connect to server and listen for messages."""
         while self.should_reconnect:
             try:
@@ -454,7 +454,7 @@ class StreamlitWebSocketClient:
         except queue.Empty:
             return None
 
-    def start(self):
+    def start(self) -> None:
         """Start the client connection."""
         if self.client_thread and self.client_thread.is_alive():
             return
@@ -468,7 +468,7 @@ class StreamlitWebSocketClient:
         self.client_thread = threading.Thread(target=run_client, daemon=True)
         self.client_thread.start()
 
-    def stop(self):
+    def stop(self) -> None:
         """Stop the client connection."""
         self.should_reconnect = False
         self.is_connected = False

@@ -43,7 +43,7 @@ class AgentInvokerTool(BaseTool):
     """
     args_schema = AgentInvokerInput
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.registry = get_registry()
         self.learning_system = AgentLearningSystem()
@@ -142,7 +142,7 @@ class ListAgentsTool(BaseTool):
     name = "list_agents"
     description = "List all available agents in the system with their descriptions and capabilities"
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.registry = get_registry()
 

@@ -1,0 +1,93 @@
+# QA Dashboard API Contract
+
+endpoints:
+  - path: /api/qa-dashboard/status
+    method: GET
+    description: Get overall QA status
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          overall_health:
+            type: string
+            enum: [healthy, degraded, critical]
+          features:
+            type: array
+            items:
+              type: object
+              properties:
+                name:
+                  type: string
+                status:
+                  type: string
+                last_check:
+                  type: string
+                issues_count:
+                  type: integer
+          last_run:
+            type: string
+
+  - path: /api/qa-dashboard/issues
+    method: GET
+    description: Get current issues
+    parameters:
+      severity:
+        type: string
+        enum: [critical, high, medium, low]
+      feature:
+        type: string
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          issues:
+            type: array
+            items:
+              type: object
+              properties:
+                id:
+                  type: string
+                feature:
+                  type: string
+                title:
+                  type: string
+                severity:
+                  type: string
+                created_at:
+                  type: string
+                status:
+                  type: string
+
+  - path: /api/qa-dashboard/metrics
+    method: GET
+    description: Get QA metrics
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          pass_rate:
+            type: number
+          avg_response_time:
+            type: number
+          issues_by_severity:
+            type: object
+          trend:
+            type: array
+
+  - path: /api/qa-dashboard/history
+    method: GET
+    description: Get QA run history
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          history:
+            type: array
+
+error_responses:
+  503:
+    description: QA service unavailable

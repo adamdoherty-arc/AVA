@@ -56,7 +56,7 @@ load_dotenv(override=True)
 class TaskDBManager:
     """Manages Task Management System data in PostgreSQL database"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize database connection configuration"""
         self.db_config = {
             'host': os.getenv('DB_HOST', 'localhost'),
@@ -66,7 +66,7 @@ class TaskDBManager:
             'password': os.getenv('DB_PASSWORD')
         }
 
-    def get_connection(self):
+    def get_connection(self) -> None:
         """Create and return a database connection"""
         try:
             conn = psycopg2.connect(**self.db_config)

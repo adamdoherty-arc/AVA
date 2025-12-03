@@ -1,0 +1,36 @@
+# Research Feature Manifest
+# SpecAgent: ResearchSpecAgent
+
+name: research
+version: 1.0.0
+description: RAG-powered research and knowledge base queries
+
+tier: 3  # Additional
+priority: 6
+
+dependencies:
+  - positions  # Access position context
+  - rag-system
+  - database
+
+endpoints:
+  - /api/research/query
+  - /api/research/documents
+  - /api/research/context
+
+frontend_routes:
+  - /research
+
+key_components:
+  - SearchInterface
+  - ResultsList
+  - DocumentViewer
+  - ContextPanel
+
+validation_focus:
+  - Query relevance
+  - Document retrieval accuracy
+  - Response quality
+  - Context integration
+
+last_updated: 2025-11-26

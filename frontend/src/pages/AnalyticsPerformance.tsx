@@ -85,12 +85,12 @@ export default function AnalyticsPerformance() {
                     <div className={`text-2xl font-bold ${
                         (performance?.total_pnl ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
                     }`}>
-                        ${performance?.total_pnl.toLocaleString(undefined, { minimumFractionDigits: 2 }) ?? '0.00'}
+                        ${(performance?.total_pnl ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </div>
                     <div className={`text-sm ${
                         (performance?.total_pnl_pct ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
                     }`}>
-                        {performance?.total_pnl_pct >= 0 ? '+' : ''}{performance?.total_pnl_pct.toFixed(2) ?? 0}%
+                        {(performance?.total_pnl_pct ?? 0) >= 0 ? '+' : ''}{(performance?.total_pnl_pct ?? 0).toFixed(2)}%
                     </div>
                 </div>
 
@@ -102,7 +102,7 @@ export default function AnalyticsPerformance() {
                     <div className={`text-2xl font-bold ${
                         (performance?.win_rate ?? 0) >= 50 ? 'text-emerald-400' : 'text-amber-400'
                     }`}>
-                        {performance?.win_rate.toFixed(1) ?? 0}%
+                        {(performance?.win_rate ?? 0).toFixed(1)}%
                     </div>
                     <div className="text-sm text-slate-400">
                         {performance?.winning_trades ?? 0}W / {performance?.losing_trades ?? 0}L
@@ -129,7 +129,7 @@ export default function AnalyticsPerformance() {
                         (performance?.profit_factor ?? 0) >= 1.5 ? 'text-emerald-400' :
                         (performance?.profit_factor ?? 0) >= 1 ? 'text-amber-400' : 'text-red-400'
                     }`}>
-                        {performance?.profit_factor.toFixed(2) ?? '0.00'}
+                        {(performance?.profit_factor ?? 0).toFixed(2)}
                     </div>
                     <div className="text-sm text-slate-400">Gross Win/Loss</div>
                 </div>
@@ -140,7 +140,7 @@ export default function AnalyticsPerformance() {
                         <span className="text-sm text-slate-400">Max Drawdown</span>
                     </div>
                     <div className="text-2xl font-bold text-red-400">
-                        {performance?.max_drawdown.toFixed(2) ?? 0}%
+                        {(performance?.max_drawdown ?? 0).toFixed(2)}%
                     </div>
                     <div className="text-sm text-slate-400">Peak to trough</div>
                 </div>
@@ -153,7 +153,7 @@ export default function AnalyticsPerformance() {
                     <div className={`text-2xl font-bold ${
                         (performance?.sharpe_ratio ?? 0) >= 1 ? 'text-emerald-400' : 'text-amber-400'
                     }`}>
-                        {performance?.sharpe_ratio.toFixed(2) ?? '0.00'}
+                        {(performance?.sharpe_ratio ?? 0).toFixed(2)}
                     </div>
                     <div className="text-sm text-slate-400">Risk-adjusted</div>
                 </div>
@@ -254,11 +254,11 @@ export default function AnalyticsPerformance() {
                                             </div>
                                         </td>
                                         <td className={strategy.pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}>
-                                            ${strategy.pnl.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                            ${(strategy.pnl ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                         </td>
                                         <td className="text-slate-300">{strategy.trades}</td>
                                         <td className={strategy.win_rate >= 50 ? 'text-emerald-400' : 'text-amber-400'}>
-                                            {strategy.win_rate.toFixed(1)}%
+                                            {(strategy.win_rate ?? 0).toFixed(1)}%
                                         </td>
                                     </tr>
                                 ))}
@@ -312,7 +312,7 @@ export default function AnalyticsPerformance() {
                                     <div className="text-sm text-slate-400">{performance.best_trade.date}</div>
                                 </div>
                                 <div className="text-2xl font-bold text-emerald-400">
-                                    +${performance.best_trade.pnl.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                    +${(performance.best_trade.pnl ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                 </div>
                             </div>
                         </div>
@@ -334,7 +334,7 @@ export default function AnalyticsPerformance() {
                                     <div className="text-sm text-slate-400">{performance.worst_trade.date}</div>
                                 </div>
                                 <div className="text-2xl font-bold text-red-400">
-                                    ${performance.worst_trade.pnl.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                    ${(performance.worst_trade.pnl ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                 </div>
                             </div>
                         </div>
@@ -351,13 +351,13 @@ export default function AnalyticsPerformance() {
                     <div className="bg-slate-800/40 rounded-xl p-4">
                         <div className="text-slate-400 text-sm mb-1">Avg Win</div>
                         <div className="text-xl font-bold text-emerald-400">
-                            ${performance?.avg_win.toFixed(2) ?? '0.00'}
+                            ${(performance?.avg_win ?? 0).toFixed(2)}
                         </div>
                     </div>
                     <div className="bg-slate-800/40 rounded-xl p-4">
                         <div className="text-slate-400 text-sm mb-1">Avg Loss</div>
                         <div className="text-xl font-bold text-red-400">
-                            ${performance?.avg_loss.toFixed(2) ?? '0.00'}
+                            ${(performance?.avg_loss ?? 0).toFixed(2)}
                         </div>
                     </div>
                     <div className="bg-slate-800/40 rounded-xl p-4">
@@ -365,7 +365,7 @@ export default function AnalyticsPerformance() {
                         <div className={`text-xl font-bold ${
                             (performance?.sortino_ratio ?? 0) >= 1 ? 'text-emerald-400' : 'text-amber-400'
                         }`}>
-                            {performance?.sortino_ratio.toFixed(2) ?? '0.00'}
+                            {(performance?.sortino_ratio ?? 0).toFixed(2)}
                         </div>
                     </div>
                     <div className="bg-slate-800/40 rounded-xl p-4">

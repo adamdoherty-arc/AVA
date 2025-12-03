@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class TradeHistoryManager:
     """Manages trade history for cash-secured puts and other options strategies"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.db = TradingViewDBManager()
 
     def add_trade(

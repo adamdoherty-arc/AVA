@@ -22,7 +22,7 @@ class SectorMetricsCalculator:
     - Sector rotation signals
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the sector metrics calculator"""
         self.risk_free_rate = 0.045  # 4.5% (3-month T-Bill approximate)
 

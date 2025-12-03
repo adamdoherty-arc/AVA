@@ -55,7 +55,7 @@ class ResearchAgent:
 
         self._initialize_clients()
 
-    def _initialize_clients(self):
+    def _initialize_clients(self) -> None:
         """Initialize external API clients"""
         # Reddit API
         try:
@@ -86,7 +86,7 @@ class ResearchAgent:
             except Exception as e:
                 logger.warning(f"Failed to initialize OpenAI client: {e}")
 
-    def get_db_connection(self):
+    def get_db_connection(self) -> None:
         """Get database connection"""
         return psycopg2.connect(**self.db_config)
 

@@ -1,0 +1,112 @@
+# Premium Scanner API Contract
+# Defines expected API endpoints and responses
+
+endpoints:
+  - path: /api/scanner/scan
+    method: POST
+    description: Scan for premium opportunities
+    request:
+      schema:
+        type: object
+        properties:
+          symbols:
+            type: array
+            items:
+              type: string
+            description: Optional list of symbols to scan
+          limit:
+            type: integer
+            default: 20
+          min_premium:
+            type: number
+            description: Minimum premium percentage
+          max_dte:
+            type: integer
+            description: Maximum days to expiration
+          avoid_earnings:
+            type: boolean
+            default: true
+    response:
+      status: 200
+      content_type: application/json
+      schema:
+        type: array
+        items:
+          type: object
+          required:
+            - symbol
+            - strike
+            - expiration
+            - premium
+          properties:
+            symbol:
+              type: string
+            stock_price:
+              type: number
+            strike:
+              type: number
+            expiration:
+              type: string
+              format: date
+            premium:
+              type: number
+              description: Premium in dollars
+            premium_pct:
+              type: number
+              description: Premium as percentage of stock price
+            dte:
+              type: integer
+              description: Days to expiration
+            monthly_return:
+              type: number
+              description: Annualized monthly return
+            annual_return:
+              type: number
+              description: Annualized return
+            option_type:
+              type: string
+              enum: [put, call]
+            bid:
+              type: number
+            ask:
+              type: number
+            volume:
+              type: integer
+            open_interest:
+              type: integer
+            iv:
+              type: number
+              description: Implied volatility
+            delta:
+              type: number
+            theta:
+              type: number
+            earnings_date:
+              type: string
+              format: date
+              nullable: true
+
+  - path: /api/scanner/symbols
+    method: GET
+    description: Get available symbols for scanning
+    response:
+      status: 200
+      schema:
+        type: array
+        items:
+          type: object
+          properties:
+            symbol:
+              type: string
+            name:
+              type: string
+            sector:
+              type: string
+
+error_responses:
+  400:
+    description: Invalid scan parameters
+  429:
+    description: Rate limited
+  503:
+    description: Options data unavailable

@@ -92,7 +92,7 @@ class TradeEmbeddingPipeline:
         # Market data cache
         self.market_data_cache = {}
 
-    def get_db_connection(self):
+    def get_db_connection(self) -> None:
         """Get PostgreSQL connection"""
         return psycopg2.connect(**self.db_config)
 

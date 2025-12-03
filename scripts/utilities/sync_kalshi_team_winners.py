@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 class TeamWinnerMarketSync:
     """Sync only team vs team winner markets from Kalshi"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.client = KalshiIntegration()
         self.db = KalshiDBManager()
         self.synced_count = 0

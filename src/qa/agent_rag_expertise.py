@@ -445,11 +445,11 @@ class QAAgentExpertiseRegistry:
     Provides centralized access to all agent knowledge bases.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.agents: Dict[str, AgentRAGExpertise] = {}
         self._initialize_default_agents()
 
-    def _initialize_default_agents(self):
+    def _initialize_default_agents(self) -> None:
         """Initialize expertise systems for default QA agents"""
         default_agents = [
             'code-reviewer',
@@ -487,7 +487,7 @@ class QAAgentExpertiseRegistry:
             for agent_name, expertise in self.agents.items()
         }
 
-    def seed_default_expertise(self):
+    def seed_default_expertise(self) -> None:
         """Seed default expertise for all agents"""
         # Code Reviewer expertise
         code_reviewer = self.get_agent_expertise('code-reviewer')

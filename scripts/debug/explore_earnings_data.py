@@ -137,9 +137,4 @@ print("""
    - Add filters by date range, sector, surprise %
    - Show earnings whispers/estimates
    - Track historical beat/miss patterns
-""".format(
-    earnings_count=earnings_count,
-    enhanced_count=enhanced_count,
-    history_count=history_count,
-    alerts_count=alerts_count
-))
+"""f-string)

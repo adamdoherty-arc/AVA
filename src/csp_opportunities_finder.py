@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 class CSPOpportunitiesFinder:
     """Finds next CSP opportunities for symbols in current positions"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.tv_manager = TradingViewDBManager()
         self.target_dte = 30
         self.dte_range = (20, 40)  # 20-40 days (wider range)

@@ -39,7 +39,7 @@ class RecommendationTracker:
     Tracks RAG recommendations and learns from outcomes
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize recommendation tracker"""
         self.db_config = {
             'host': os.getenv('DB_HOST', 'localhost'),
@@ -49,7 +49,7 @@ class RecommendationTracker:
             'database': os.getenv('DB_NAME', 'magnus')
         }
 
-    def get_connection(self):
+    def get_connection(self) -> None:
         """Get PostgreSQL connection"""
         return psycopg2.connect(**self.db_config)
 

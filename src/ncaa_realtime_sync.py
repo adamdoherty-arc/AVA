@@ -186,7 +186,7 @@ class NCAARealtimeSync:
     # ========================================================================
 
     @rate_limited
-    def _update_live_games(self):
+    def _update_live_games(self) -> None:
         """Update all live NCAA games with adaptive polling"""
         sync_id = self.nfl_db.start_sync_log('scores', 'ncaa_live_games')
 
@@ -253,7 +253,7 @@ class NCAARealtimeSync:
     # MAIN SYNC LOOP
     # ========================================================================
 
-    def run_once(self):
+    def run_once(self) -> None:
         """Run one sync cycle"""
         try:
             logger.info("="*80)
@@ -272,7 +272,7 @@ class NCAARealtimeSync:
         except Exception as e:
             logger.error(f"Error in NCAA sync cycle: {e}", exc_info=True)
 
-    def run(self):
+    def run(self) -> None:
         """Run continuous sync loop"""
         logger.info("Starting NCAA Realtime Sync Service")
         logger.info(f"Main loop interval: {self.update_interval_seconds}s")

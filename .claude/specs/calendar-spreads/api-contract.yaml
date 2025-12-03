@@ -1,0 +1,72 @@
+# Calendar Spreads API Contract
+
+endpoints:
+  - path: /api/spreads/calendar
+    method: GET
+    description: Get calendar spread opportunities
+    parameters:
+      symbol:
+        type: string
+      min_credit:
+        type: number
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          spreads:
+            type: array
+            items:
+              type: object
+              properties:
+                symbol:
+                  type: string
+                front_exp:
+                  type: string
+                back_exp:
+                  type: string
+                strike:
+                  type: number
+                credit:
+                  type: number
+                max_profit:
+                  type: number
+                max_loss:
+                  type: number
+                net_theta:
+                  type: number
+                risk_reward:
+                  type: number
+
+  - path: /api/spreads/analyze
+    method: POST
+    description: Analyze specific calendar spread
+    request:
+      schema:
+        type: object
+        properties:
+          symbol:
+            type: string
+          front_exp:
+            type: string
+          back_exp:
+            type: string
+          strike:
+            type: number
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          analysis:
+            type: object
+          pl_scenarios:
+            type: array
+          greeks:
+            type: object
+
+error_responses:
+  400:
+    description: Invalid spread parameters
+  404:
+    description: Options data not found

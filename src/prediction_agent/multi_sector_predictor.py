@@ -56,7 +56,7 @@ class MultiSectorPredictor:
         # Load existing models if available
         self._load_models()
 
-    def _load_models(self):
+    def _load_models(self) -> None:
         """Load trained models from disk"""
         for sector in MarketSector:
             model_path = self.models_dir / f"{sector.value}_model.pkl"

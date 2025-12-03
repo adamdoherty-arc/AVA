@@ -6,7 +6,7 @@ from src.watchlist_strategy_analyzer import WatchlistStrategyAnalyzer, StrategyA
 logger = logging.getLogger(__name__)
 
 class StrategyService:
-    def __init__(self):
+    def __init__(self) -> None:
         self.settings = get_settings()
         self.analyzer = WatchlistStrategyAnalyzer()
 

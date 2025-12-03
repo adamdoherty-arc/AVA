@@ -489,7 +489,7 @@ class QueryAnalyzer:
         with self.lock:
             return dict(self.stats)
 
-    def reset_stats(self):
+    def reset_stats(self) -> None:
         """Reset all statistics."""
         with self.lock:
             self.stats = {

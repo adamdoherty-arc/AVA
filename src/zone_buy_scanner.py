@@ -34,7 +34,7 @@ class BuyZoneScanner:
     - Visual ranking
     """
     
-    def __init__(self):
+    def __init__(self) -> None:
         self.zone_db = ZoneDatabaseManager()
         self.zone_analyzer = ZoneAnalyzer()
         self.tv_manager = TradingViewDBManager()
@@ -61,7 +61,7 @@ class BuyZoneScanner:
         # Get from watchlists
         if watchlist_names is None:
             # Get all watchlists
-            watchlists = self.tv_manager.get_all_symbols_dict()
+            watchlists = self.tv_manager.get_all_symbols()
             for watchlist_name, watchlist_symbols in watchlists.items():
                 symbols.update(watchlist_symbols)
         else:

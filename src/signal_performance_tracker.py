@@ -12,10 +12,10 @@ import os
 class SignalPerformanceTracker:
     """Track and analyze trading signal performance"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.db_password = os.getenv('DB_PASSWORD')
 
-    def get_connection(self):
+    def get_connection(self) -> None:
         """Get database connection"""
         return psycopg2.connect(
             host='localhost',
@@ -25,7 +25,7 @@ class SignalPerformanceTracker:
             password=self.db_password
         )
 
-    def create_performance_tables(self):
+    def create_performance_tables(self) -> None:
         """Create tables for tracking signal performance"""
         conn = self.get_connection()
         cur = conn.cursor()
@@ -181,7 +181,7 @@ class SignalPerformanceTracker:
         self.update_setup_performance()
         self.calculate_quality_scores()
 
-    def update_author_performance(self):
+    def update_author_performance(self) -> None:
         """Recalculate author performance stats"""
         conn = self.get_connection()
         cur = conn.cursor()
@@ -244,7 +244,7 @@ class SignalPerformanceTracker:
         cur.close()
         conn.close()
 
-    def update_setup_performance(self):
+    def update_setup_performance(self) -> None:
         """Recalculate setup type performance by ticker"""
         conn = self.get_connection()
         cur = conn.cursor()
@@ -298,7 +298,7 @@ class SignalPerformanceTracker:
         cur.close()
         conn.close()
 
-    def calculate_quality_scores(self):
+    def calculate_quality_scores(self) -> None:
         """Calculate composite quality scores for all signals"""
         conn = self.get_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)

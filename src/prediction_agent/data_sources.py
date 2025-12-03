@@ -37,7 +37,7 @@ class DataSourceResult:
 class DataSourceManager:
     """Manages all external data source integrations"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize data source manager"""
         self.reddit_client = self._init_reddit()
         self.fred_api_key = os.getenv('FRED_API_KEY')
@@ -493,7 +493,7 @@ class DataSourceManager:
 
         return results
 
-    def clear_cache(self):
+    def clear_cache(self) -> None:
         """Clear all cached data"""
         self.cache.clear()
         logger.info("Data source cache cleared")

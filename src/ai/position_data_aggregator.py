@@ -92,7 +92,7 @@ class PositionDataAggregator:
     5. Include news sentiment
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.cache = {}  # Simple in-memory cache
         self.cache_ttl = 300  # 5 minutes
 

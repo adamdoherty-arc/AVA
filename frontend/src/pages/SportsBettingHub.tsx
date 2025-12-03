@@ -201,12 +201,12 @@ export default function SportsBettingHub() {
                                         <div className="text-xs text-emerald-400 font-medium mb-3">{bet.pick} {bet.line}</div>
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-2">
-                                                <span className="text-xs font-medium text-amber-400">{bet.confidence.toFixed(0)}%</span>
+                                                <span className="text-xs font-medium text-amber-400">{(bet.confidence ?? 0).toFixed(0)}%</span>
                                                 <span className="text-[10px] text-slate-500">conf</span>
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <span className={`text-xs font-mono font-medium px-2 py-0.5 rounded ${bet.ev >= 10 ? 'text-emerald-400 bg-emerald-500/15' : 'text-amber-400 bg-amber-500/15'}`}>
-                                                    +{bet.ev.toFixed(1)}% EV
+                                                    +{(bet.ev ?? 0).toFixed(1)}% EV
                                                 </span>
                                             </div>
                                         </div>

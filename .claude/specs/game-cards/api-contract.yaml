@@ -1,0 +1,173 @@
+# Game Cards API Contract
+
+endpoints:
+  - path: /api/sports/games
+    method: GET
+    description: Get upcoming games with odds and predictions
+    parameters:
+      sport:
+        type: string
+        enum: [nfl, nba, mlb, ncaaf, ncaab]
+      date:
+        type: string
+        format: date
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          games:
+            type: array
+            items:
+              type: object
+              required:
+                - game_id
+                - home_team
+                - away_team
+                - start_time
+              properties:
+                game_id:
+                  type: string
+                sport:
+                  type: string
+                home_team:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    abbreviation:
+                      type: string
+                    logo:
+                      type: string
+                    record:
+                      type: string
+                away_team:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    abbreviation:
+                      type: string
+                    logo:
+                      type: string
+                    record:
+                      type: string
+                start_time:
+                  type: string
+                  format: datetime
+                status:
+                  type: string
+                  enum: [scheduled, in_progress, final, postponed]
+                spread:
+                  type: object
+                  properties:
+                    line:
+                      type: number
+                    favorite:
+                      type: string
+                    home_odds:
+                      type: number
+                    away_odds:
+                      type: number
+                moneyline:
+                  type: object
+                  properties:
+                    home:
+                      type: number
+                    away:
+                      type: number
+                total:
+                  type: object
+                  properties:
+                    line:
+                      type: number
+                    over_odds:
+                      type: number
+                    under_odds:
+                      type: number
+                prediction:
+                  type: object
+                  properties:
+                    pick:
+                      type: string
+                    confidence:
+                      type: number
+                    reasoning:
+                      type: string
+          updated_at:
+            type: string
+            format: datetime
+
+  - path: /api/sports/predictions
+    method: GET
+    description: Get AI predictions for a specific game
+    parameters:
+      game_id:
+        type: string
+        required: true
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          game_id:
+            type: string
+          predictions:
+            type: object
+            properties:
+              spread:
+                type: object
+                properties:
+                  pick:
+                    type: string
+                  confidence:
+                    type: number
+                  analysis:
+                    type: string
+              moneyline:
+                type: object
+              total:
+                type: object
+          factors:
+            type: array
+            items:
+              type: object
+              properties:
+                name:
+                  type: string
+                impact:
+                  type: string
+                weight:
+                  type: number
+
+  - path: /api/sports/analysis
+    method: POST
+    description: Request deep analysis for a game
+    request:
+      schema:
+        type: object
+        properties:
+          game_id:
+            type: string
+          analysis_type:
+            type: string
+            enum: [quick, detailed, expert]
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          analysis:
+            type: string
+          key_factors:
+            type: array
+          recommendation:
+            type: object
+
+error_responses:
+  400:
+    description: Invalid sport or date
+  404:
+    description: Game not found
+  503:
+    description: Sports data unavailable

@@ -1,0 +1,43 @@
+# Earnings Calendar Feature Manifest
+# SpecAgent: EarningsCalendarSpecAgent
+
+name: earnings-calendar
+version: 1.0.0
+description: Earnings dates tracking for position management and premium scanner avoidance
+
+tier: 2  # Important
+priority: 3
+
+dependencies:
+  - database
+  - earnings-api
+
+endpoints:
+  - /api/earnings/calendar
+  - /api/earnings/upcoming
+  - /api/earnings/symbol
+
+frontend_routes:
+  - /earnings
+
+key_components:
+  - CalendarView
+  - EarningsTable
+  - UpcomingEarnings
+  - SymbolSearch
+
+data_sources:
+  - earnings_api
+  - calculated_positions
+
+validation_focus:
+  - Date accuracy
+  - Before/after market timing
+  - Position impact
+  - Historical data
+
+owners:
+  - team: trading
+  - critical: false
+
+last_updated: 2025-11-26

@@ -1,0 +1,13 @@
+{
+  "service_status": "running",
+  "is_currently_running": true,
+  "current_run_id": "RUN-20251126-124643",
+  "run_started_at": "2025-11-26T12:46:43.617778",
+  "last_updated": "2025-11-26T12:46:43.618077",
+  "last_run": "2025-11-26T12:26:42.634575",
+  "last_run_id": "RUN-20251126-122116",
+  "next_run": "2025-11-26T12:46:42.635421",
+  "current_cycle": 23,
+  "last_accomplishments_count": 0,
+  "health_score": 90.0
+}

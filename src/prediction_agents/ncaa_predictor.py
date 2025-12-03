@@ -175,7 +175,7 @@ class NCAAPredictor(BaseSportsPredictor):
         self.logger.warning(f"No fuzzy match found for '{team_name}' (threshold: {threshold})")
         return None
 
-    def _load_team_data(self):
+    def _load_team_data(self) -> None:
         """Load NCAA team data (conferences, divisions)."""
         # This is a sample - would need complete database
         self.conference_map = {
@@ -243,7 +243,7 @@ class NCAAPredictor(BaseSportsPredictor):
             'Notre Dame': 'Independent',
         }
 
-    def _load_elo_ratings(self):
+    def _load_elo_ratings(self) -> None:
         """Load or initialize Elo ratings for all teams."""
         ratings_file = 'src/data/ncaa_elo_ratings.json'
 
@@ -262,7 +262,7 @@ class NCAAPredictor(BaseSportsPredictor):
 
         self.logger.info("Initialized Elo ratings to base value")
 
-    def _save_elo_ratings(self):
+    def _save_elo_ratings(self) -> None:
         """Save current Elo ratings to file."""
         ratings_file = 'src/data/ncaa_elo_ratings.json'
 
@@ -274,7 +274,7 @@ class NCAAPredictor(BaseSportsPredictor):
         except Exception as e:
             self.logger.error(f"Could not save Elo ratings: {e}")
 
-    def _load_recruiting_data(self):
+    def _load_recruiting_data(self) -> None:
         """Load recruiting rankings (247Sports composite)."""
         # Sample data - would need real recruiting API
         # Higher score = better recruiting

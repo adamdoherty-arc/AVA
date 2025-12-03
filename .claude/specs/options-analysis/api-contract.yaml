@@ -1,0 +1,164 @@
+# Options Analysis API Contract
+
+endpoints:
+  - path: /api/options/analysis
+    method: GET
+    description: Get options analysis for a symbol
+    parameters:
+      symbol:
+        type: string
+        required: true
+    response:
+      status: 200
+      schema:
+        type: object
+        required:
+          - symbol
+          - current_price
+          - options
+        properties:
+          symbol:
+            type: string
+          current_price:
+            type: number
+          iv_rank:
+            type: number
+            description: IV rank (0-100)
+          iv_percentile:
+            type: number
+          historical_volatility:
+            type: number
+          options:
+            type: array
+            items:
+              type: object
+              properties:
+                expiration:
+                  type: string
+                  format: date
+                calls:
+                  type: array
+                puts:
+                  type: array
+
+  - path: /api/options/chain
+    method: GET
+    description: Get full options chain
+    parameters:
+      symbol:
+        type: string
+        required: true
+      expiration:
+        type: string
+        format: date
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          symbol:
+            type: string
+          expiration:
+            type: string
+          calls:
+            type: array
+            items:
+              type: object
+              properties:
+                strike:
+                  type: number
+                bid:
+                  type: number
+                ask:
+                  type: number
+                last:
+                  type: number
+                volume:
+                  type: integer
+                open_interest:
+                  type: integer
+                delta:
+                  type: number
+                gamma:
+                  type: number
+                theta:
+                  type: number
+                vega:
+                  type: number
+                iv:
+                  type: number
+          puts:
+            type: array
+
+  - path: /api/options/greeks
+    method: POST
+    description: Calculate Greeks for option position
+    request:
+      schema:
+        type: object
+        required:
+          - symbol
+          - strike
+          - expiration
+          - option_type
+        properties:
+          symbol:
+            type: string
+          strike:
+            type: number
+          expiration:
+            type: string
+          option_type:
+            type: string
+            enum: [call, put]
+          quantity:
+            type: integer
+            default: 1
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          delta:
+            type: number
+          gamma:
+            type: number
+          theta:
+            type: number
+          vega:
+            type: number
+          rho:
+            type: number
+
+  - path: /api/options/scenarios
+    method: POST
+    description: Calculate P&L scenarios
+    request:
+      schema:
+        type: object
+        properties:
+          position:
+            type: object
+          price_range:
+            type: array
+          time_decay:
+            type: boolean
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          scenarios:
+            type: array
+          break_even:
+            type: number
+          max_profit:
+            type: number
+          max_loss:
+            type: number
+
+error_responses:
+  400:
+    description: Invalid symbol or parameters
+  404:
+    description: No options data found

@@ -26,7 +26,7 @@ class EnhancedSportsPredictor:
     - AI-powered analysis with Claude
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.research_aggregator = SportsResearchAggregator()
         self.anthropic_key = os.getenv('ANTHROPIC_API_KEY')
 

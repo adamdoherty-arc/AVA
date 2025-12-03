@@ -47,7 +47,7 @@ class SportsSentimentAnalyzer:
         # Lazy loading - only load when needed
         self._initialize_model()
 
-    def _initialize_model(self):
+    def _initialize_model(self) -> None:
         """Load model and create sentiment anchors"""
         try:
             from sentence_transformers import SentenceTransformer

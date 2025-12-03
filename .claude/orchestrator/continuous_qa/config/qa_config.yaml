@@ -1,0 +1,211 @@
+# Magnus QA System Configuration
+# This file controls the behavior of the continuous QA and enhancement system.
+
+qa_system:
+  enabled: true
+  schedule_interval_minutes: 20
+  visible_console: false  # Set to true for debugging
+
+  # Auto-fix settings
+  auto_fix:
+    enabled: true
+    safety_mode: true  # Only apply safe fixes
+
+    # Safe auto-fixes (always apply)
+    safe_fixes:
+      - horizontal_lines
+      - trailing_whitespace
+      - unused_imports
+      - missing_init_py
+      - deprecated_st_cache
+
+    # Fixes requiring commit message
+    commit_fixes:
+      - duplicate_code_consolidation
+      - api_batching_optimization
+      - data_sync_intervals
+
+    # Never auto-fix (log + alert only)
+    never_fix:
+      - security_vulnerabilities
+      - auth_changes
+      - schema_changes
+      - file_deletions
+
+# Check module configuration
+checks:
+  # API Endpoints Check
+  api_endpoints:
+    enabled: true
+    priority: critical
+    timeout_seconds: 30
+    base_url: "http://localhost:8002"
+
+    # Endpoints to test
+    endpoints:
+      - path: "/api/sports/games"
+        method: GET
+        name: "Sports games"
+      - path: "/api/predictions/nfl"
+        method: GET
+        name: "NFL predictions"
+      - path: "/api/dashboard/portfolio"
+        method: GET
+        name: "Portfolio dashboard"
+      - path: "/api/chat/history"
+        method: GET
+        name: "Chat history"
+      - path: "/api/options/analysis"
+        method: GET
+        name: "Options analysis"
+      - path: "/api/earnings/calendar"
+        method: GET
+        name: "Earnings calendar"
+
+  # UI Components Check (React)
+  ui_components:
+    enabled: true
+    priority: critical
+    frontend_dir: "frontend"
+
+    # Routes to test
+    routes:
+      - "/"
+      - "/positions"
+      - "/opportunities"
+      - "/scanner"
+      - "/sports"
+      - "/kalshi"
+      - "/chat"
+
+  # Dummy Data Detector
+  dummy_data_detector:
+    enabled: true
+    priority: critical
+    auto_remove: true
+
+    # Patterns to detect
+    patterns:
+      - 'random\.(uniform|randint|choice)'
+      - 'mock_data|dummy_data|fake_data'
+      - 'lorem ipsum'
+      - "'TODO'|'PLACEHOLDER'"
+      - 'sample_data|test_data'
+
+    # Paths to exclude
+    exclude_paths:
+      - "**/tests/**"
+      - "**/test_*.py"
+      - "**/*_test.py"
+      - "**/fixtures/**"
+
+  # API Connectivity Check
+  api_connectivity:
+    enabled: true
+    priority: critical
+    timeout_seconds: 30
+
+    apis:
+      robinhood:
+        enabled: true
+        check_auth: true
+        check_rate_limit: true
+      kalshi:
+        enabled: true
+        check_markets: true
+      tradingview:
+        enabled: true
+        check_session: true
+      espn:
+        enabled: true
+        check_games: true
+
+  # Database Health Check
+  database_health:
+    enabled: true
+    priority: critical
+
+    thresholds:
+      slow_query_ms: 1000
+      max_connections: 20
+      min_connections: 2
+
+    checks:
+      - connection_pool
+      - slow_queries
+      - schema_integrity
+
+  # Code Quality Check
+  code_quality:
+    enabled: true
+    priority: high
+
+    rules:
+      no_horizontal_lines: true
+      no_mock_data: true
+      no_emojis_unless_requested: true
+      filters_on_main_page: true
+
+    thresholds:
+      max_function_length: 150
+      max_file_length: 1000
+      max_complexity: 15
+
+  # Data Sync Check
+  data_sync:
+    enabled: true
+    priority: high
+
+    sync_requirements:
+      earnings_calendar:
+        max_stale_hours: 24
+      robinhood_positions:
+        max_stale_minutes: 5
+      kalshi_markets:
+        max_stale_minutes: 1
+      espn_games:
+        max_stale_minutes: 5
+      discord_messages:
+        max_stale_hours: 1
+
+  # AVA Chatbot Check
+  ava_chatbot:
+    enabled: true
+    priority: high
+    expected_agent_count: 105
+
+  # Performance Check
+  performance:
+    enabled: true
+    priority: medium
+
+    thresholds:
+      api_response_ms: 500
+      page_load_ms: 3000
+      cache_hit_rate: 0.7
+
+# Parallelism settings
+parallelism:
+  critical: 1  # Run sequentially
+  high: 5      # Max 5 parallel
+  medium: 10   # Max 10 parallel
+  low: 3       # Max 3 parallel
+
+# Notification settings
+notifications:
+  telegram:
+    enabled: true
+    critical_alerts: true
+    daily_summary: true
+    health_warnings: true
+    health_threshold: 70
+
+# Health score weights
+health:
+  dimensions:
+    code_quality: 0.25
+    api_health: 0.20
+    performance: 0.15
+    security: 0.15
+    ava_agents: 0.15
+    modernization: 0.10

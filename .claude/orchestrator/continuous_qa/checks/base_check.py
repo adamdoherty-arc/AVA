@@ -110,7 +110,7 @@ class BaseCheck(ABC):
     - get_checks_list(): List of individual check names
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the check module."""
         self._results: List[CheckResult] = []
         self._start_time: Optional[datetime] = None
@@ -179,7 +179,7 @@ class BaseCheck(ABC):
 
     # Helper methods for subclasses
 
-    def _start_module(self):
+    def _start_module(self) -> None:
         """Call at start of run() to initialize timing."""
         self._results = []
         self._start_time = datetime.now()

@@ -86,7 +86,7 @@ class CostTracker:
         'monthly': 2500.00
     }
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize cost tracker with database connection"""
         self.db_config = {
             'host': 'localhost',
@@ -98,11 +98,11 @@ class CostTracker:
 
         self._ensure_schema()
 
-    def _get_connection(self):
+    def _get_connection(self) -> None:
         """Get database connection"""
         return psycopg2.connect(**self.db_config)
 
-    def _ensure_schema(self):
+    def _ensure_schema(self) -> None:
         """Create cost tracking tables if they don't exist"""
         conn = self._get_connection()
         cur = conn.cursor()

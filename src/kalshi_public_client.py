@@ -29,7 +29,7 @@ class KalshiPublicClient:
     # Public API base URL
     BASE_URL = "https://api.elections.kalshi.com/trade-api/v2"
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize public client - no credentials needed!"""
         logger.info("Initialized Kalshi Public Client (no auth required)")
 

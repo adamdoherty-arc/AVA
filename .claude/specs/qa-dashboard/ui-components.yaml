@@ -1,0 +1,53 @@
+# QA Dashboard UI Components Specification
+
+route: /qa-dashboard
+page_title: "QA Dashboard"
+
+components:
+  - name: QADashboardPage
+    type: page
+    children:
+      - HealthOverview
+      - FeatureStatusGrid
+      - IssuesList
+      - MetricsSection
+
+  - name: HealthOverview
+    type: panel
+    selector: "[data-testid='health-overview']"
+    shows:
+      - overall_health (color-coded)
+      - pass_rate
+      - last_run timestamp
+
+  - name: FeatureStatusGrid
+    type: grid
+    selector: "[data-testid='feature-status']"
+    shows: feature cards with status indicators
+
+  - name: IssuesList
+    type: table
+    selector: "[data-testid='issues-list']"
+    columns:
+      - header: Feature
+      - header: Issue
+      - header: Severity
+        color_coded: true
+      - header: Created
+      - header: Status
+
+  - name: MetricsSection
+    type: charts
+    selector: "[data-testid='metrics']"
+    charts:
+      - pass_rate_trend
+      - response_time_trend
+      - issues_by_severity_pie
+
+interactions:
+  - name: Filter Issues
+    trigger: Select severity/feature
+    expected_result: "Issues filtered"
+  - name: Run QA
+    trigger: Click "Run QA" button
+    expected_result: "Trigger new QA run"

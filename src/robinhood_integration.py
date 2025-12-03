@@ -59,7 +59,7 @@ class RobinhoodClient:
             self.logged_in = False
             return False
 
-    def logout(self):
+    def logout(self) -> None:
         """Logout from Robinhood"""
         rh.logout()
         self.logged_in = False

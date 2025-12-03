@@ -86,7 +86,7 @@ class AsyncConnectionPool:
             logger.error(f"Failed to initialize async connection pool: {e}")
             raise
 
-    async def close(self):
+    async def close(self) -> None:
         """Close connection pool"""
         if self._pool:
             await self._pool.close()
@@ -94,7 +94,7 @@ class AsyncConnectionPool:
             logger.info("Async connection pool closed")
 
     @asynccontextmanager
-    async def acquire(self):
+    async def acquire(self) -> None:
         """
         Acquire connection from pool
 
@@ -167,7 +167,7 @@ class AsyncConnectionPool:
             return await conn.fetchval(query, *args)
 
     @asynccontextmanager
-    async def transaction(self):
+    async def transaction(self) -> None:
         """
         Transaction context manager
 
@@ -246,10 +246,10 @@ class SyncAsyncWrapper:
     Provides sync-compatible methods that internally use async pool.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._pool: Optional[AsyncConnectionPool] = None
 
-    def _ensure_pool(self):
+    def _ensure_pool(self) -> None:
         """Ensure pool is initialized"""
         if self._pool is None:
             self._pool = AsyncConnectionPool()

@@ -41,6 +41,34 @@ def get_xtrades_manager():
     return _xtrades_manager
 
 
+
+
+@router.get("/watchlist")
+async def get_xtrades_watchlist():
+    """
+    Get XTrades watchlist - symbols being tracked from followed profiles.
+    """
+    try:
+        manager = get_xtrades_manager()
+        profiles = manager.get_active_profiles()
+        
+        # Aggregate unique symbols from all profiles' trades
+        symbols = set()
+        for profile in profiles:
+            trades = manager.get_trades_by_profile(profile['id'], status='open', limit=50)
+            for trade in trades:
+                if trade.get('symbol'):
+                    symbols.add(trade['symbol'])
+        
+        return {
+            "symbols": sorted(list(symbols)),
+            "count": len(symbols),
+            "profiles_count": len(profiles)
+        }
+    except Exception as e:
+        logger.error(f"Error getting watchlist: {e}")
+        return {"symbols": [], "count": 0, "error": str(e)}
+
 @router.get("/trades")
 async def get_trades(
     status: str = Query("open", description="Trade status: open, closed, expired"),

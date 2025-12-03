@@ -7,6 +7,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, ReferenceLine } from 'recharts'
+import { API_HOST } from '@/config/api'
 
 interface VolumeProfileData {
   symbol: string
@@ -53,7 +54,7 @@ interface CVDData {
   chart_data: Array<{ date: string; price: number; cvd: number; volume: number }>
 }
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8002'
+const API_BASE = API_HOST
 
 export default function VolumeAnalysis() {
   const [symbol, setSymbol] = useState('AAPL')
@@ -158,7 +159,7 @@ export default function VolumeAnalysis() {
               <CardContent className="p-4">
                 <div className="flex flex-col">
                   <span className="text-slate-400 text-sm">Current Price</span>
-                  <span className="text-2xl font-bold text-white">${vpData.current_price.toFixed(2)}</span>
+                  <span className="text-2xl font-bold text-white">${(vpData.current_price ?? 0).toFixed(2)}</span>
                 </div>
               </CardContent>
             </Card>
@@ -167,8 +168,8 @@ export default function VolumeAnalysis() {
               <CardContent className="p-4">
                 <div className="flex flex-col">
                   <span className="text-slate-400 text-sm">POC (Point of Control)</span>
-                  <span className="text-2xl font-bold text-amber-500">${vpData.volume_profile.poc.price.toFixed(2)}</span>
-                  <span className="text-xs text-slate-500">{vpData.volume_profile.poc.pct_of_total.toFixed(1)}% of volume</span>
+                  <span className="text-2xl font-bold text-amber-500">${(vpData.volume_profile?.poc?.price ?? 0).toFixed(2)}</span>
+                  <span className="text-xs text-slate-500">{(vpData.volume_profile?.poc?.pct_of_total ?? 0).toFixed(1)}% of volume</span>
                 </div>
               </CardContent>
             </Card>
@@ -177,7 +178,7 @@ export default function VolumeAnalysis() {
               <CardContent className="p-4">
                 <div className="flex flex-col">
                   <span className="text-slate-400 text-sm">Value Area High</span>
-                  <span className="text-2xl font-bold text-green-500">${vpData.volume_profile.vah.toFixed(2)}</span>
+                  <span className="text-2xl font-bold text-green-500">${(vpData.volume_profile?.vah ?? 0).toFixed(2)}</span>
                 </div>
               </CardContent>
             </Card>
@@ -186,7 +187,7 @@ export default function VolumeAnalysis() {
               <CardContent className="p-4">
                 <div className="flex flex-col">
                   <span className="text-slate-400 text-sm">Value Area Low</span>
-                  <span className="text-2xl font-bold text-red-500">${vpData.volume_profile.val.toFixed(2)}</span>
+                  <span className="text-2xl font-bold text-red-500">${(vpData.volume_profile?.val ?? 0).toFixed(2)}</span>
                 </div>
               </CardContent>
             </Card>
@@ -243,7 +244,7 @@ export default function VolumeAnalysis() {
                 <div className="space-y-4">
                   <div className="flex justify-between items-center p-3 bg-slate-800/50 rounded-lg">
                     <span className="text-slate-400">Distance from POC</span>
-                    <span className="text-white">{vpData.signals.distance_from_poc_pct.toFixed(2)}%</span>
+                    <span className="text-white">{(vpData.signals?.distance_from_poc_pct ?? 0).toFixed(2)}%</span>
                   </div>
                   <div className="flex justify-between items-center p-3 bg-slate-800/50 rounded-lg">
                     <span className="text-slate-400">Near HVN</span>
@@ -285,7 +286,7 @@ export default function VolumeAnalysis() {
                       fill="#3b82f6"
                       radius={[0, 4, 4, 0]}
                     />
-                    <ReferenceLine y={vpData.volume_profile.poc.price.toFixed(2)} stroke="#f59e0b" strokeWidth={2} />
+                    <ReferenceLine y={(vpData.volume_profile?.poc?.price ?? 0).toFixed(2)} stroke="#f59e0b" strokeWidth={2} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -309,12 +310,12 @@ export default function VolumeAnalysis() {
                   {vpData.high_volume_nodes.map((hvn, idx) => (
                     <div key={idx} className="flex justify-between items-center p-3 bg-slate-800/50 rounded-lg">
                       <div>
-                        <span className="text-white font-medium">${hvn.price.toFixed(2)}</span>
+                        <span className="text-white font-medium">${(hvn.price ?? 0).toFixed(2)}</span>
                         <span className={`ml-2 text-sm ${hvn.type === 'support' ? 'text-green-500' : 'text-red-500'}`}>
                           ({hvn.type})
                         </span>
                       </div>
-                      <span className="text-slate-400">{hvn.distance_pct > 0 ? '+' : ''}{hvn.distance_pct.toFixed(1)}%</span>
+                      <span className="text-slate-400">{(hvn.distance_pct ?? 0) > 0 ? '+' : ''}{(hvn.distance_pct ?? 0).toFixed(1)}%</span>
                     </div>
                   ))}
                 </div>
@@ -336,9 +337,9 @@ export default function VolumeAnalysis() {
                   {vpData.low_volume_nodes.map((lvn, idx) => (
                     <div key={idx} className="flex justify-between items-center p-3 bg-slate-800/50 rounded-lg">
                       <div>
-                        <span className="text-white font-medium">${lvn.price.toFixed(2)}</span>
+                        <span className="text-white font-medium">${(lvn.price ?? 0).toFixed(2)}</span>
                       </div>
-                      <span className="text-slate-400">{lvn.distance_pct > 0 ? '+' : ''}{lvn.distance_pct.toFixed(1)}%</span>
+                      <span className="text-slate-400">{(lvn.distance_pct ?? 0) > 0 ? '+' : ''}{(lvn.distance_pct ?? 0).toFixed(1)}%</span>
                     </div>
                   ))}
                 </div>
@@ -358,12 +359,12 @@ export default function VolumeAnalysis() {
               <div className="grid md:grid-cols-3 gap-4 mb-6">
                 <div className="p-4 bg-slate-800/50 rounded-lg">
                   <span className="text-slate-400 text-sm">Current CVD</span>
-                  <p className="text-2xl font-bold text-white">{cvdData.cvd.current.toLocaleString()}</p>
+                  <p className="text-2xl font-bold text-white">{(cvdData.cvd?.current ?? 0).toLocaleString()}</p>
                 </div>
                 <div className="p-4 bg-slate-800/50 rounded-lg">
                   <span className="text-slate-400 text-sm">5-Day Change</span>
-                  <p className={`text-2xl font-bold ${cvdData.cvd.change_5d >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                    {cvdData.cvd.change_5d >= 0 ? '+' : ''}{cvdData.cvd.change_5d.toLocaleString()}
+                  <p className={`text-2xl font-bold ${(cvdData.cvd?.change_5d ?? 0) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                    {(cvdData.cvd?.change_5d ?? 0) >= 0 ? '+' : ''}{(cvdData.cvd?.change_5d ?? 0).toLocaleString()}
                   </p>
                 </div>
                 <div className="p-4 bg-slate-800/50 rounded-lg">
@@ -391,7 +392,7 @@ export default function VolumeAnalysis() {
                       <div key={idx} className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
                         <div className="flex justify-between">
                           <span className="text-amber-500 font-medium">{div.type}</span>
-                          <span className="text-white">${div.price.toFixed(2)}</span>
+                          <span className="text-white">${(div.price ?? 0).toFixed(2)}</span>
                         </div>
                         <p className="text-sm text-slate-400 mt-1">{div.signal} (Strength: {div.strength}%)</p>
                       </div>

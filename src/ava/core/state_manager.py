@@ -119,7 +119,7 @@ class AVAStateManager:
         state = self.get_state(user_id, platform)
         return state.messages[-limit:]
 
-    def cleanup_expired(self):
+    def cleanup_expired(self) -> None:
         """Remove expired conversation states"""
         with self._lock:
             now = datetime.now()

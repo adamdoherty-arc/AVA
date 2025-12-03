@@ -333,7 +333,7 @@ class AlertManager:
         else:
             return 'LOW'
 
-    async def send_test_alert(self):
+    async def send_test_alert(self) -> None:
         """Send test alert to verify Telegram connection"""
 
         test_message = """
@@ -345,7 +345,7 @@ If you're seeing this, Telegram alerts are working correctly!
 
 ✅ System Status: Operational
 🕐 {timestamp}
-""".format(timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+"""f-string.strftime('%Y-%m-%d %H:%M:%S'))
 
         if self.telegram_enabled:
             await self._send_telegram_message(test_message, priority='LOW')
@@ -354,7 +354,7 @@ If you're seeing this, Telegram alerts are working correctly!
             print(f"\n{test_message}\n")
             logger.info("Test alert displayed (Telegram disabled)")
 
-    def send_test_alert_sync(self):
+    def send_test_alert_sync(self) -> None:
         """Synchronous version of send_test_alert"""
         asyncio.run(self.send_test_alert())
 

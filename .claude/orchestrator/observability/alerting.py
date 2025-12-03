@@ -72,7 +72,7 @@ class AlertingSystem:
             ]
         }
 
-    def _setup_handlers(self):
+    def _setup_handlers(self) -> None:
         """Setup alert handlers based on config"""
         channels = self.config.get('channels', ['log', 'file'])
 
@@ -175,7 +175,7 @@ class AlertingSystem:
             if alert.timestamp.timestamp() > cutoff
         ]
 
-    def clear_history(self):
+    def clear_history(self) -> None:
         """Clear alert history"""
         self.alert_history.clear()
         logger.info("Alert history cleared")

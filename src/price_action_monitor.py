@@ -43,7 +43,7 @@ class PriceActionMonitor:
         # Create price history table if not exists
         self._create_price_history_table()
 
-    def _create_price_history_table(self):
+    def _create_price_history_table(self) -> None:
         """Create table to track price history"""
         try:
             conn = self.db.get_connection()

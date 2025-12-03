@@ -78,7 +78,7 @@ class BackgroundSyncAgent:
         self.stop()
         sys.exit(0)
 
-    def _initialize_services(self):
+    def _initialize_services(self) -> None:
         """Lazy initialization of services."""
         try:
             # Import here to avoid circular dependencies
@@ -267,7 +267,7 @@ class BackgroundSyncAgent:
 
         return results
 
-    def _run_sync_cycle(self):
+    def _run_sync_cycle(self) -> None:
         """Execute one complete sync cycle."""
         cycle_start = datetime.now()
         logger.info(f"\n{'='*60}")
@@ -312,7 +312,7 @@ class BackgroundSyncAgent:
             self.error_count += 1
             logger.error(f"Error in sync cycle: {e}", exc_info=True)
 
-    def start(self):
+    def start(self) -> None:
         """Start the background sync agent."""
         if self.is_running:
             logger.warning("Agent is already running")
@@ -348,7 +348,7 @@ class BackgroundSyncAgent:
             logger.error(f"Fatal error in main loop: {e}", exc_info=True)
             self.stop()
 
-    def stop(self):
+    def stop(self) -> None:
         """Stop the background sync agent."""
         if not self.is_running:
             logger.warning("Agent is not running")

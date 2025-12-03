@@ -58,26 +58,84 @@ except ImportError:
     logger.warning("Discord knowledge not available")
     DISCORD_AVAILABLE = False
 
+try:
+    from src.ava.ava_personality import AVAPersonality, PersonalityMode, EmotionalState
+    PERSONALITY_AVAILABLE = True
+except ImportError:
+    logger.warning("AVA personality system not available")
+    PERSONALITY_AVAILABLE = False
+    AVAPersonality = PersonalityMode = EmotionalState = None
+
+# Autonomous Task System
+try:
+    from src.ava.autonomous_task_system import get_task_system
+    TASK_SYSTEM_AVAILABLE = True
+except ImportError:
+    logger.warning("Autonomous task system not available")
+    TASK_SYSTEM_AVAILABLE = False
+    get_task_system = None
+
 
 class AVATelegramBot:
-    """AVA Telegram Bot with voice support"""
+    """AVA Telegram Bot with voice support and personality system"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize bot"""
         self.token = os.getenv("TELEGRAM_BOT_TOKEN")
         if not self.token or self.token == "YOUR_BOT_TOKEN_HERE":
             raise ValueError("TELEGRAM_BOT_TOKEN not configured in .env")
 
         self.voice_handler = AVAVoiceHandler() if AVAVoiceHandler else None
-        logger.info("✅ AVA Telegram Bot initialized")
+
+        # Personality system - stores per-user personality preferences
+        self.user_personalities: dict[int, AVAPersonality] = {}
+        self.default_personality_mode = PersonalityMode.FRIENDLY if PERSONALITY_AVAILABLE else None
+
+        # Autonomous Task System
+        if TASK_SYSTEM_AVAILABLE and get_task_system:
+            try:
+                self.task_system = get_task_system(auto_execute=False)
+                logger.info("✅ Autonomous Task System initialized")
+            except Exception as e:
+                logger.warning(f"Task system init failed: {e}")
+                self.task_system = None
+        else:
+            self.task_system = None
+
+        logger.info("✅ AVA Telegram Bot initialized with personality and task system support")
+
+    def get_user_personality(self, user_id: int) -> 'AVAPersonality':
+        """Get or create personality for a user"""
+        if not PERSONALITY_AVAILABLE:
+            return None
+
+        if user_id not in self.user_personalities:
+            self.user_personalities[user_id] = AVAPersonality(mode=self.default_personality_mode)
+        return self.user_personalities[user_id]
+
+    def apply_personality_to_response(self, user_id: int, response: str, context: dict = None) -> str:
+        """Apply personality styling to a response"""
+        personality = self.get_user_personality(user_id)
+        if personality:
+            # Detect emotional context if data available
+            if context:
+                emotional_state = personality.detect_emotional_context(context)
+                personality.set_emotional_state(emotional_state)
+            return personality.style_response(response, context or {})
+        return response
 
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /start command"""
         chat_id = update.effective_chat.id
         user = update.effective_user
+        user_id = update.effective_user.id
+
+        # Get personalized greeting
+        personality = self.get_user_personality(user_id)
+        greeting = personality.get_greeting() if personality else f"Hi {user.first_name}!"
 
         welcome_message = f"""
-👋 Hi {user.first_name}!
+{greeting}
 
 I'm **AVA** (Automated Vector Agent) - your AI trading assistant!
 
@@ -94,6 +152,7 @@ I'm **AVA** (Automated Vector Agent) - your AI trading assistant!
 **Commands:**
 /portfolio - Your portfolio status
 /tasks - What I'm working on
+/personality - Change my personality style
 /help - Show all commands
 
 **Your Chat ID:** `{chat_id}`
@@ -113,6 +172,7 @@ Try asking me: "How's my portfolio?" or "What are you working on?"
 /portfolio - Portfolio status
 /tasks - What AVA is working on
 /status - AVA system status
+/personality - Change my personality (see options)
 /signals - Recent Discord trading signals
 /ticker SYMBOL - Discord signals for specific ticker
 /help - This help message
@@ -128,6 +188,75 @@ Try asking me: "How's my portfolio?" or "What are you working on?"
 Send voice messages and I'll transcribe them!
 """
         await update.message.reply_text(help_text, parse_mode='Markdown')
+
+    async def personality_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /personality command - list or change AVA's personality"""
+        if not PERSONALITY_AVAILABLE:
+            await update.message.reply_text("Personality system not available")
+            return
+
+        user_id = update.effective_user.id
+        personality = self.get_user_personality(user_id)
+
+        # If no argument, show current personality and options
+        if not context.args:
+            current_mode = personality.mode.value if personality else "friendly"
+            current_desc = personality.get_personality_description() if personality else ""
+
+            options_text = "\n".join([
+                f"• `{mode.value}` - {AVAPersonality(mode).get_personality_description()}"
+                for mode in PersonalityMode
+            ])
+
+            response = f"""
+**🎭 AVA Personality Settings**
+
+**Current:** {current_desc}
+
+**Available Personalities:**
+{options_text}
+
+**Usage:** `/personality <name>`
+Example: `/personality witty`
+"""
+            await update.message.reply_text(response, parse_mode='Markdown')
+            return
+
+        # Parse the requested personality
+        requested = context.args[0].lower().strip()
+
+        # Find matching personality mode
+        mode_match = None
+        for mode in PersonalityMode:
+            if mode.value.lower() == requested:
+                mode_match = mode
+                break
+
+        if not mode_match:
+            await update.message.reply_text(
+                f"Unknown personality: `{requested}`\n\n"
+                f"Available: {', '.join([m.value for m in PersonalityMode])}\n\n"
+                f"Use `/personality` to see descriptions.",
+                parse_mode='Markdown'
+            )
+            return
+
+        # Update user's personality
+        if user_id in self.user_personalities:
+            self.user_personalities[user_id].set_mode(mode_match)
+        else:
+            self.user_personalities[user_id] = AVAPersonality(mode=mode_match)
+
+        # Get new greeting as confirmation
+        new_personality = self.user_personalities[user_id]
+        greeting = new_personality.get_greeting()
+        description = new_personality.get_personality_description()
+
+        await update.message.reply_text(
+            f"✅ Personality changed!\n\n**{description}**\n\n{greeting}",
+            parse_mode='Markdown'
+        )
+        logger.info(f"User {user_id} changed personality to {mode_match.value}")
 
     async def portfolio_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /portfolio command"""
@@ -272,11 +401,12 @@ AVA is working 24/7 to improve your trading platform!
             await update.message.reply_text(f"Error getting status: {str(e)}")
 
     async def handle_voice(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle voice messages"""
+        """Handle voice messages with personality styling"""
         if not self.voice_handler:
             await update.message.reply_text("Voice processing not available yet")
             return
 
+        user_id = update.effective_user.id
         await update.message.reply_text("🎤 Transcribing your voice message...")
 
         try:
@@ -298,8 +428,15 @@ AVA is working 24/7 to improve your trading platform!
             # Process query
             response = self.voice_handler.process_query(transcribed_text)
 
+            # Apply personality styling
+            response_text = self.apply_personality_to_response(
+                user_id,
+                response['response_text'],
+                context=response.get('data_context', {})
+            )
+
             # Send response
-            await update.message.reply_text(response['response_text'])
+            await update.message.reply_text(response_text)
 
             # Cleanup
             if os.path.exists(voice_path):
@@ -310,16 +447,58 @@ AVA is working 24/7 to improve your trading platform!
             await update.message.reply_text(f"Error processing voice: {str(e)}")
 
     async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle text messages"""
+        """Handle text messages with personality styling and task system"""
         user_text = update.message.text
+        user_id = update.effective_user.id
+        message_lower = user_text.lower().strip()
+
+        # AUTONOMOUS TASK SYSTEM - Check for task commands first
+        if self.task_system and (message_lower.startswith('task:') or message_lower.startswith('task ')):
+            try:
+                task_result = self.task_system.process_message(user_text, str(user_id))
+
+                if task_result.get('is_task'):
+                    if task_result.get('success'):
+                        response_text = f"""**Autonomous Task Created**
+
+**Task #{task_result.get('task_id')}** - {task_result.get('task_type', 'general').replace('_', ' ').title()}
+
+{task_result.get('message', '')}"""
+
+                        if task_result.get('files_modified'):
+                            response_text += f"\n\nFiles Modified: {', '.join(task_result['files_modified'])}"
+
+                        if task_result.get('execution_time'):
+                            response_text += f"\nExecution Time: {task_result['execution_time']:.1f}s"
+                    else:
+                        response_text = f"Task creation failed: {task_result.get('message', 'Unknown error')}"
+                else:
+                    response_text = "Could not parse task. Try: 'task: add a new feature to...'"
+
+                # Apply personality
+                response_text = self.apply_personality_to_response(user_id, response_text)
+                await update.message.reply_text(response_text, parse_mode='Markdown')
+                return
+
+            except Exception as e:
+                logger.error(f"Error processing task command: {e}")
+                await update.message.reply_text(f"Error processing task: {str(e)}")
+                return
 
         if not self.voice_handler:
             await update.message.reply_text("AVA is initializing... Try again in a moment")
             return
 
-        # Process query
+        # Process query through voice handler
         response = self.voice_handler.process_query(user_text)
         response_text = response['response_text']
+
+        # Apply personality styling to the response
+        response_text = self.apply_personality_to_response(
+            user_id,
+            response_text,
+            context=response.get('data_context', {})
+        )
 
         # Try to generate voice response
         try:
@@ -348,7 +527,7 @@ AVA is working 24/7 to improve your trading platform!
             # Fallback to text
             await update.message.reply_text(response_text)
 
-    def run(self):
+    def run(self) -> None:
         """Start the bot"""
         logger.info("🚀 Starting AVA Telegram Bot...")
 
@@ -361,6 +540,7 @@ AVA is working 24/7 to improve your trading platform!
         app.add_handler(CommandHandler("portfolio", self.portfolio_command))
         app.add_handler(CommandHandler("tasks", self.tasks_command))
         app.add_handler(CommandHandler("status", self.status_command))
+        app.add_handler(CommandHandler("personality", self.personality_command))
         app.add_handler(CommandHandler("signals", self.signals_command))
         app.add_handler(CommandHandler("ticker", self.ticker_command))
         app.add_handler(MessageHandler(filters.VOICE, self.handle_voice))

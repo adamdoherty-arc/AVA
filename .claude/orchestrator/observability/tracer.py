@@ -29,7 +29,7 @@ class SQLiteSpanExporter:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_database()
 
-    def _init_database(self):
+    def _init_database(self) -> None:
         """Initialize SQLite schema"""
         conn = sqlite3.connect(str(self.db_path))
         cursor = conn.cursor()

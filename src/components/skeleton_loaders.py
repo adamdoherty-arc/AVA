@@ -376,7 +376,7 @@ class SkeletonContext:
         self.placeholder = None
         self.start_time = None
 
-    def __enter__(self):
+    def __enter__(self) -> None:
         self.placeholder = st.empty()
         self.start_time = time.time()
 

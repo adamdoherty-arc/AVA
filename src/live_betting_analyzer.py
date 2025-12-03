@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class LiveBettingAnalyzer:
     """Analyzes live games vs betting odds to find opportunities"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.logger = logging.getLogger(__name__)
 
     def analyze_game_opportunity(self, game_data: Dict, market_data: Dict, ai_prediction: Optional[Dict] = None) -> Dict:

@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 class OptionRollEvaluator:
     """Evaluates roll strategies for option positions"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.risk_free_rate = 0.045
         self.trading_days = 252
         self.commission_per_contract = 0.65  # Typical broker commission

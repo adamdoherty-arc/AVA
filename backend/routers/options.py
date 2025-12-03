@@ -3,22 +3,78 @@ Options Router - API endpoints for options analysis
 NO MOCK DATA - All endpoints use real data from yfinance or database
 """
 from fastapi import APIRouter, Query, HTTPException
-from typing import Optional, List
+from typing import Optional, List, Any
 from datetime import datetime, timedelta
 import logging
+import math
+import numpy as np
 import yfinance as yf
 from src.database.connection_pool import get_db_connection
 from src.premium_scanner import PremiumScanner
 
 logger = logging.getLogger(__name__)
 
+
+def to_native(value: Any, default: float = 0.0) -> Any:
+    """
+    Convert numpy types to Python native types for JSON serialization.
+    Also handles NaN and Inf values which are not JSON compliant.
+    """
+    if value is None:
+        return None
+    if isinstance(value, (np.integer, np.int64, np.int32)):
+        return int(value)
+    if isinstance(value, (np.floating, np.float64, np.float32)):
+        f = float(value)
+        if math.isnan(f) or math.isinf(f):
+            return default
+        return f
+    if isinstance(value, float):
+        if math.isnan(value) or math.isinf(value):
+            return default
+        return value
+    if isinstance(value, np.ndarray):
+        return [to_native(v, default) for v in value]
+    if isinstance(value, np.bool_):
+        return bool(value)
+    if isinstance(value, (np.complexfloating, np.complex128, np.complex64)):
+        # Complex numbers - return real part as float
+        f = float(value.real)
+        if math.isnan(f) or math.isinf(f):
+            return default
+        return f
+    return value
+
 router = APIRouter(prefix="/api/options", tags=["options"])
+
+
+
+
+@router.get("/analysis")
+async def get_options_analysis_default(symbol: str = Query("SPY", description="Symbol to analyze")):
+    """Get options analysis with default or query parameter symbol."""
+    try:
+        return await get_options_analysis(symbol)
+    except Exception as e:
+        logger.error(f"Options analysis error: {e}", exc_info=True)
+        # Always return valid JSON, never raise HTTPException
+        return {
+            "symbol": symbol.upper() if isinstance(symbol, str) else "SPY",
+            "error": str(e),
+            "underlying_price": 0,
+            "iv_rank": 0,
+            "sentiment": "unknown",
+            "generated_at": datetime.now().isoformat()
+        }
 
 
 @router.get("/analysis/{symbol}")
 async def get_options_analysis(symbol: str):
     """Get comprehensive options analysis for a symbol using real data"""
+    import sys
+    print(f"[OPTIONS DEBUG] Starting analysis for symbol: {symbol}", file=sys.stderr, flush=True)
     try:
+        print(f"[OPTIONS DEBUG] Creating yfinance ticker for {symbol.upper()}", file=sys.stderr, flush=True)
         ticker = yf.Ticker(symbol.upper())
         info = ticker.info
 
@@ -90,23 +146,23 @@ async def get_options_analysis(symbol: str):
         if not calls.empty:
             calls_sorted = calls.nlargest(2, 'volume')
             for _, row in calls_sorted.iterrows():
-                if row['volume'] > 100:
+                if to_native(row['volume']) > 100:
                     unusual.append({
-                        "strike": row['strike'],
+                        "strike": to_native(row['strike']),
                         "type": "call",
-                        "volume": int(row['volume']),
-                        "oi": int(row['openInterest'] or 0)
+                        "volume": int(to_native(row['volume'])),
+                        "oi": int(to_native(row['openInterest']) or 0)
                     })
 
         if not puts.empty:
             puts_sorted = puts.nlargest(2, 'volume')
             for _, row in puts_sorted.iterrows():
-                if row['volume'] > 100:
+                if to_native(row['volume']) > 100:
                     unusual.append({
-                        "strike": row['strike'],
+                        "strike": to_native(row['strike']),
                         "type": "put",
-                        "volume": int(row['volume']),
-                        "oi": int(row['openInterest'] or 0)
+                        "volume": int(to_native(row['volume'])),
+                        "oi": int(to_native(row['openInterest']) or 0)
                     })
 
         # Determine sentiment
@@ -119,21 +175,21 @@ async def get_options_analysis(symbol: str):
 
         return {
             "symbol": symbol.upper(),
-            "underlying_price": round(current_price, 2),
-            "iv_rank": round(avg_iv, 1),  # Simplified - would need historical IV for true rank
-            "iv_percentile": round(avg_iv, 1),
-            "hv_20": round(hv_20, 1),
-            "hv_50": round(hv_20 * 0.9, 1),  # Approximate
-            "iv_hv_spread": round(avg_iv - hv_20, 1),
-            "put_call_ratio": put_call_ratio,
-            "max_pain": round(max_pain_strike, 2),
+            "underlying_price": round(float(to_native(current_price)), 2),
+            "iv_rank": round(float(to_native(avg_iv)), 1),  # Simplified - would need historical IV for true rank
+            "iv_percentile": round(float(to_native(avg_iv)), 1),
+            "hv_20": round(float(to_native(hv_20)), 1),
+            "hv_50": round(float(to_native(hv_20)) * 0.9, 1),  # Approximate
+            "iv_hv_spread": round(float(to_native(avg_iv)) - float(to_native(hv_20)), 1),
+            "put_call_ratio": float(to_native(put_call_ratio)),
+            "max_pain": round(float(to_native(max_pain_strike)), 2),
             "expected_move": {
-                "weekly": round(expected_move * 0.5, 2),
-                "monthly": round(expected_move, 2)
+                "weekly": round(float(to_native(expected_move)) * 0.5, 2),
+                "monthly": round(float(to_native(expected_move)), 2)
             },
             "unusual_activity": unusual[:4],
             "sentiment": sentiment,
-            "available_expirations": expirations[:8],
+            "available_expirations": list(expirations[:8]),
             "generated_at": datetime.now().isoformat()
         }
 

@@ -105,6 +105,7 @@ const navSections = [
         title: 'System',
         items: [
             { to: '/health', icon: HeartPulse, label: 'Health Dashboard' },
+            { to: '/qa', icon: Shield, label: 'QA Health Monitor', highlight: true },
             { to: '/monitoring', icon: Monitor, label: 'System Monitoring' },
             { to: '/system', icon: Settings, label: 'System Management' },
             { to: '/cache', icon: Database, label: 'Cache Metrics' },

@@ -80,7 +80,7 @@ except ImportError as e:
 class AVATelegramBot:
     """Enhanced AVA Telegram Bot with full feature set"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize bot"""
         self.token = os.getenv("TELEGRAM_BOT_TOKEN")
         if not self.token or self.token == "YOUR_BOT_TOKEN_HERE":
@@ -110,7 +110,7 @@ class AVATelegramBot:
 
     # ==================== Authentication Decorator ====================
 
-    def require_auth(self):
+    def require_auth(self) -> None:
         """Decorator to require authentication for commands"""
         def decorator(func):
             @wraps(func)
@@ -147,7 +147,7 @@ class AVATelegramBot:
             return wrapper
         return decorator
 
-    def with_rate_limit(self):
+    def with_rate_limit(self) -> None:
         """Decorator to apply rate limiting"""
         def decorator(func):
             @wraps(func)
@@ -828,7 +828,7 @@ Use the inline buttons on messages for quick actions.
 
     # ==================== Run ====================
 
-    def run(self):
+    def run(self) -> None:
         """Start the bot"""
         logger.info("🚀 Starting AVA Telegram Bot...")
 

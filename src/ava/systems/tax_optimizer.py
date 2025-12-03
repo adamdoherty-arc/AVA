@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 class TaxOptimizer:
     """Intelligent tax optimization"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize tax optimizer"""
         self.wash_sale_days = 30  # 30 days before and after
         self.long_term_threshold = 365  # Days to qualify for long-term gains

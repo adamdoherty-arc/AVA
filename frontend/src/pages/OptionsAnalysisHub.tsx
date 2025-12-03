@@ -133,12 +133,12 @@ export default function OptionsAnalysisHub() {
                                     <div className="text-sm text-slate-400">Underlying</div>
                                 </div>
                                 <div>
-                                    <div className="text-2xl font-mono text-white">${analysis.underlying_price.toFixed(2)}</div>
+                                    <div className="text-2xl font-mono text-white">${(analysis.underlying_price ?? 0).toFixed(2)}</div>
                                     <div className={`flex items-center gap-1 text-sm ${
-                                        analysis.change_pct >= 0 ? 'text-emerald-400' : 'text-red-400'
+                                        (analysis.change_pct ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
                                     }`}>
-                                        {analysis.change_pct >= 0 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
-                                        {Math.abs(analysis.change_pct).toFixed(2)}%
+                                        {(analysis.change_pct ?? 0) >= 0 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
+                                        {Math.abs(analysis.change_pct ?? 0).toFixed(2)}%
                                     </div>
                                 </div>
                             </div>
@@ -150,39 +150,39 @@ export default function OptionsAnalysisHub() {
                         <div className="glass-card p-4">
                             <div className="text-sm text-slate-400 mb-1">IV Rank</div>
                             <div className={`text-2xl font-bold ${
-                                analysis.iv_rank >= 50 ? 'text-amber-400' : 'text-slate-300'
+                                (analysis.iv_rank ?? 0) >= 50 ? 'text-amber-400' : 'text-slate-300'
                             }`}>
-                                {analysis.iv_rank.toFixed(0)}%
+                                {(analysis.iv_rank ?? 0).toFixed(0)}%
                             </div>
                         </div>
                         <div className="glass-card p-4">
                             <div className="text-sm text-slate-400 mb-1">IV Percentile</div>
-                            <div className="text-2xl font-bold text-white">{analysis.iv_percentile.toFixed(0)}%</div>
+                            <div className="text-2xl font-bold text-white">{(analysis.iv_percentile ?? 0).toFixed(0)}%</div>
                         </div>
                         <div className="glass-card p-4">
                             <div className="text-sm text-slate-400 mb-1">Expected Move</div>
                             <div className="text-2xl font-bold text-purple-400">
-                                ±${analysis.expected_move.toFixed(2)}
+                                ±${(analysis.expected_move ?? 0).toFixed(2)}
                             </div>
                         </div>
                         <div className="glass-card p-4">
                             <div className="text-sm text-slate-400 mb-1">Put/Call Ratio</div>
                             <div className={`text-2xl font-bold ${
-                                analysis.put_call_ratio > 1 ? 'text-red-400' : 'text-emerald-400'
+                                (analysis.put_call_ratio ?? 0) > 1 ? 'text-red-400' : 'text-emerald-400'
                             }`}>
-                                {analysis.put_call_ratio.toFixed(2)}
+                                {(analysis.put_call_ratio ?? 0).toFixed(2)}
                             </div>
                         </div>
                         <div className="glass-card p-4">
                             <div className="text-sm text-slate-400 mb-1">Max Pain</div>
-                            <div className="text-2xl font-bold text-white">${analysis.max_pain.toFixed(0)}</div>
+                            <div className="text-2xl font-bold text-white">${(analysis.max_pain ?? 0).toFixed(0)}</div>
                         </div>
                         <div className="glass-card p-4">
                             <div className="text-sm text-slate-400 mb-1">Total Theta</div>
                             <div className={`text-2xl font-bold ${
-                                analysis.greeks_summary.total_theta < 0 ? 'text-red-400' : 'text-emerald-400'
+                                (analysis.greeks_summary?.total_theta ?? 0) < 0 ? 'text-red-400' : 'text-emerald-400'
                             }`}>
-                                ${analysis.greeks_summary.total_theta.toFixed(0)}
+                                ${(analysis.greeks_summary?.total_theta ?? 0).toFixed(0)}
                             </div>
                         </div>
                     </div>
@@ -196,26 +196,26 @@ export default function OptionsAnalysisHub() {
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <div className="bg-slate-800/40 rounded-xl p-4">
                                 <div className="text-slate-400 text-sm mb-1">Delta</div>
-                                <div className="text-xl font-bold text-white">{analysis.greeks_summary.total_delta.toFixed(2)}</div>
+                                <div className="text-xl font-bold text-white">{(analysis.greeks_summary?.total_delta ?? 0).toFixed(2)}</div>
                                 <div className="text-xs text-slate-500">Directional exposure</div>
                             </div>
                             <div className="bg-slate-800/40 rounded-xl p-4">
                                 <div className="text-slate-400 text-sm mb-1">Gamma</div>
-                                <div className="text-xl font-bold text-white">{analysis.greeks_summary.total_gamma.toFixed(4)}</div>
+                                <div className="text-xl font-bold text-white">{(analysis.greeks_summary?.total_gamma ?? 0).toFixed(4)}</div>
                                 <div className="text-xs text-slate-500">Rate of delta change</div>
                             </div>
                             <div className="bg-slate-800/40 rounded-xl p-4">
                                 <div className="text-slate-400 text-sm mb-1">Theta</div>
                                 <div className={`text-xl font-bold ${
-                                    analysis.greeks_summary.total_theta < 0 ? 'text-red-400' : 'text-emerald-400'
+                                    (analysis.greeks_summary?.total_theta ?? 0) < 0 ? 'text-red-400' : 'text-emerald-400'
                                 }`}>
-                                    ${analysis.greeks_summary.total_theta.toFixed(2)}
+                                    ${(analysis.greeks_summary?.total_theta ?? 0).toFixed(2)}
                                 </div>
                                 <div className="text-xs text-slate-500">Daily time decay</div>
                             </div>
                             <div className="bg-slate-800/40 rounded-xl p-4">
                                 <div className="text-slate-400 text-sm mb-1">Vega</div>
-                                <div className="text-xl font-bold text-white">${analysis.greeks_summary.total_vega.toFixed(2)}</div>
+                                <div className="text-xl font-bold text-white">${(analysis.greeks_summary?.total_vega ?? 0).toFixed(2)}</div>
                                 <div className="text-xs text-slate-500">IV sensitivity</div>
                             </div>
                         </div>
@@ -305,19 +305,19 @@ export default function OptionsAnalysisHub() {
                                             const isATM = Math.abs(call.strike - analysis.underlying_price) < analysis.underlying_price * 0.02
                                             return (
                                                 <tr key={idx} className={isATM ? 'bg-primary/10' : ''}>
-                                                    <td className="text-emerald-400 font-mono">{call.bid.toFixed(2)}</td>
-                                                    <td className="text-emerald-400 font-mono">{call.ask.toFixed(2)}</td>
-                                                    <td className="text-slate-400">{(call.iv * 100).toFixed(0)}%</td>
-                                                    <td className="text-slate-400">{call.delta.toFixed(2)}</td>
-                                                    <td className="text-slate-400">{call.volume.toLocaleString()}</td>
-                                                    <td className="text-slate-400">{call.open_interest.toLocaleString()}</td>
-                                                    <td className="text-white font-bold bg-slate-800">${call.strike}</td>
-                                                    <td className="text-red-400 font-mono">{put?.bid.toFixed(2) || '-'}</td>
-                                                    <td className="text-red-400 font-mono">{put?.ask.toFixed(2) || '-'}</td>
-                                                    <td className="text-slate-400">{put ? (put.iv * 100).toFixed(0) + '%' : '-'}</td>
-                                                    <td className="text-slate-400">{put?.delta.toFixed(2) || '-'}</td>
-                                                    <td className="text-slate-400">{put?.volume.toLocaleString() || '-'}</td>
-                                                    <td className="text-slate-400">{put?.open_interest.toLocaleString() || '-'}</td>
+                                                    <td className="text-emerald-400 font-mono">{(call.bid ?? 0).toFixed(2)}</td>
+                                                    <td className="text-emerald-400 font-mono">{(call.ask ?? 0).toFixed(2)}</td>
+                                                    <td className="text-slate-400">{((call.iv ?? 0) * 100).toFixed(0)}%</td>
+                                                    <td className="text-slate-400">{(call.delta ?? 0).toFixed(2)}</td>
+                                                    <td className="text-slate-400">{(call.volume ?? 0).toLocaleString()}</td>
+                                                    <td className="text-slate-400">{(call.open_interest ?? 0).toLocaleString()}</td>
+                                                    <td className="text-white font-bold bg-slate-800">${call.strike ?? 0}</td>
+                                                    <td className="text-red-400 font-mono">{put ? (put.bid ?? 0).toFixed(2) : '-'}</td>
+                                                    <td className="text-red-400 font-mono">{put ? (put.ask ?? 0).toFixed(2) : '-'}</td>
+                                                    <td className="text-slate-400">{put ? ((put.iv ?? 0) * 100).toFixed(0) + '%' : '-'}</td>
+                                                    <td className="text-slate-400">{put ? (put.delta ?? 0).toFixed(2) : '-'}</td>
+                                                    <td className="text-slate-400">{put ? (put.volume ?? 0).toLocaleString() : '-'}</td>
+                                                    <td className="text-slate-400">{put ? (put.open_interest ?? 0).toLocaleString() : '-'}</td>
                                                 </tr>
                                             )
                                         })}

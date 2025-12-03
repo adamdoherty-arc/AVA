@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class DashboardService:
     """Service for dashboard data aggregation"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._portfolio = get_portfolio_service()
 
     def get_portfolio_summary(self) -> Dict:

@@ -199,7 +199,7 @@ class PortfolioAgent(BaseAgent):
                 self.robinhood_client.login()
         return self.robinhood_client
 
-    def _get_llm(self):
+    def _get_llm(self) -> None:
         """Get or initialize Local LLM"""
         if self.llm is None:
             self.llm = get_magnus_llm()

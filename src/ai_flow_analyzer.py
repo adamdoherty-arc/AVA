@@ -71,7 +71,7 @@ class AIFlowAnalyzer:
             'database': os.getenv('DB_NAME', 'magnus')
         }
 
-    def get_connection(self):
+    def get_connection(self) -> None:
         """Get database connection"""
         return psycopg2.connect(**self.db_config)
 

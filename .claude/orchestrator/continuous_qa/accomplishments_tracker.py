@@ -9,8 +9,22 @@ Each line is a complete, independent JSON record.
 
 import json
 import os
-import fcntl  # For file locking (cross-platform alternative below)
+import sys
 from pathlib import Path
+
+# Cross-platform file locking
+if sys.platform == 'win32':
+    import msvcrt
+    def lock_file(f):
+        msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+    def unlock_file(f):
+        msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+else:
+    import fcntl
+    def lock_file(f):
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    def unlock_file(f):
+        fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 from dataclasses import dataclass, asdict, field
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional

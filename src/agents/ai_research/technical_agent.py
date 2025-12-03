@@ -34,7 +34,7 @@ class TechnicalAgent:
     - Chart pattern recognition
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the Technical Agent."""
         self.lookback_days = 200  # Fetch 200 days for MA200
         logger.info("TechnicalAgent initialized")

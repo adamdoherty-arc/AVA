@@ -34,7 +34,7 @@ class NFLAnalytics:
     - Expected Points Added (EPA)
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize NFL analytics with current season"""
         if not NFL_DATA_PY_AVAILABLE:
             logger.error("nfl_data_py is not available. Install it: pip install nfl-data-py")

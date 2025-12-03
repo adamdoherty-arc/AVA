@@ -7,7 +7,7 @@ from src.agents.ai_research.models import ResearchRequest, ResearchReport
 logger = logging.getLogger(__name__)
 
 class ResearchService:
-    def __init__(self):
+    def __init__(self) -> None:
         self.settings = get_settings()
         self.orchestrator = ResearchOrchestrator(
             llm_provider=self.settings.LLM_PROVIDER,

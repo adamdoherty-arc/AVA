@@ -491,7 +491,7 @@ export default function XTradesWatchlists() {
                                 "text-2xl font-bold",
                                 closedStats.totalPL >= 0 ? "text-emerald-400" : "text-rose-400"
                             )}>
-                                ${closedStats.totalPL.toFixed(2)}
+                                ${(closedStats.totalPL ?? 0).toFixed(2)}
                             </p>
                         </div>
                         <div className="card p-4">
@@ -499,7 +499,7 @@ export default function XTradesWatchlists() {
                                 <Percent className="w-4 h-4" />
                                 <span className="text-sm">Win Rate</span>
                             </div>
-                            <p className="text-2xl font-bold text-amber-400">{closedStats.winRate.toFixed(1)}%</p>
+                            <p className="text-2xl font-bold text-amber-400">{(closedStats.winRate ?? 0).toFixed(1)}%</p>
                         </div>
                         <div className="card p-4">
                             <div className="flex items-center gap-2 text-slate-400 mb-1">
@@ -510,7 +510,7 @@ export default function XTradesWatchlists() {
                                 "text-2xl font-bold",
                                 closedStats.avgPL >= 0 ? "text-emerald-400" : "text-rose-400"
                             )}>
-                                ${closedStats.avgPL.toFixed(2)}
+                                ${(closedStats.avgPL ?? 0).toFixed(2)}
                             </p>
                         </div>
                         <div className="card p-4">
@@ -668,7 +668,7 @@ export default function XTradesWatchlists() {
                                                     "p-3 text-right font-mono",
                                                     profile.total_pnl >= 0 ? "text-emerald-400" : "text-rose-400"
                                                 )}>
-                                                    ${profile.total_pnl.toFixed(2)}
+                                                    ${(profile.total_pnl ?? 0).toFixed(2)}
                                                 </td>
                                                 <td className="p-3 text-right">{profile.win_rate?.toFixed(1) || 0}%</td>
                                             </tr>
@@ -740,13 +740,13 @@ export default function XTradesWatchlists() {
                                                     "p-3 text-right font-mono",
                                                     strategy.total_pnl >= 0 ? "text-emerald-400" : "text-rose-400"
                                                 )}>
-                                                    ${strategy.total_pnl.toFixed(2)}
+                                                    ${(strategy.total_pnl ?? 0).toFixed(2)}
                                                 </td>
                                                 <td className={clsx(
                                                     "p-3 text-right font-mono",
                                                     strategy.avg_pnl >= 0 ? "text-emerald-400" : "text-rose-400"
                                                 )}>
-                                                    ${strategy.avg_pnl.toFixed(2)}
+                                                    ${(strategy.avg_pnl ?? 0).toFixed(2)}
                                                 </td>
                                                 <td className="p-3 text-right">{strategy.win_rate?.toFixed(1) || 0}%</td>
                                                 <td className="p-3 text-right font-mono">

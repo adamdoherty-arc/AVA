@@ -115,7 +115,7 @@ class AutonomousAgent:
         logger.info(f"   Auto-commit: {auto_commit}")
         logger.info(f"   Budget limit: ${budget_limit_usd}")
 
-    def run_forever(self):
+    def run_forever(self) -> None:
         """
         Main loop - runs indefinitely implementing tasks.
 
@@ -435,7 +435,7 @@ Begin implementation. Work autonomously and make reasonable decisions.
         except Exception as e:
             logger.error(f"Error updating task status: {e}")
 
-    def _print_stats(self):
+    def _print_stats(self) -> None:
         """Print current statistics"""
         uptime = (datetime.now() - self.stats['started_at']).total_seconds() / 3600
 
@@ -450,7 +450,7 @@ Begin implementation. Work autonomously and make reasonable decisions.
             avg_cost = self.stats['total_cost_usd'] / self.stats['tasks_completed']
             logger.info(f"   Avg cost/task: ${avg_cost:.3f}")
 
-    def _print_final_stats(self):
+    def _print_final_stats(self) -> None:
         """Print final statistics on shutdown"""
         logger.info(f"\n{'='*80}")
         logger.info(f"📊 FINAL STATISTICS")

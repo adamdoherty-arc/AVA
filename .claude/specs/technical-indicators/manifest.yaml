@@ -1,0 +1,36 @@
+# Technical Indicators Feature Manifest
+# SpecAgent: TechnicalIndicatorsSpecAgent
+
+name: technical-indicators
+version: 1.0.0
+description: Technical analysis indicators and chart patterns for trading signals
+
+tier: 3  # Additional
+priority: 2
+
+dependencies:
+  - xtrades-watchlists  # Technical analysis on watchlist symbols
+  - database
+
+endpoints:
+  - /api/technical/indicators
+  - /api/technical/analysis
+  - /api/technical/signals
+
+frontend_routes:
+  - /technical
+  - /indicators
+
+key_components:
+  - IndicatorChart
+  - SignalsList
+  - SymbolSelector
+  - IndicatorConfig
+
+validation_focus:
+  - Indicator calculations
+  - Signal accuracy
+  - Historical data quality
+  - Real-time updates
+
+last_updated: 2025-11-26

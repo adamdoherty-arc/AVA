@@ -35,3 +35,11 @@ async def get_performance_history(period: str = "1M"):
     Get performance history.
     """
     return dashboard_service.get_performance_history(period)
+
+@router.get("/portfolio")
+async def get_portfolio():
+    """
+    Alias for portfolio summary - used by QA health checks.
+    """
+    return dashboard_service.get_portfolio_summary()
+

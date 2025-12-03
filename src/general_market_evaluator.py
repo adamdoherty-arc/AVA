@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class GeneralMarketEvaluator:
     """AI-powered evaluation system for all Kalshi prediction markets"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize General Market Evaluator"""
 
         # Scoring weights (total = 1.0)

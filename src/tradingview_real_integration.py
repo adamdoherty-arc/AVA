@@ -15,7 +15,7 @@ from pathlib import Path
 class TradingViewRealIntegration:
     """Properly integrate TradingView watchlists with real option data"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.watchlist_file = Path("tradingview_watchlist.json")
         self.load_saved_watchlist()
         # Don't auto-sync on init - only when button pressed
@@ -30,7 +30,7 @@ class TradingViewRealIntegration:
             self.watchlists = {}
         return self.watchlists
 
-    def auto_sync_watchlists(self):
+    def auto_sync_watchlists(self) -> None:
         """Automatically sync watchlists from TradingView"""
         try:
             from src.tradingview_scraper import TradingViewScraper

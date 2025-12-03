@@ -1,0 +1,45 @@
+# Positions Feature Manifest
+# SpecAgent: PositionsSpecAgent
+
+name: positions
+version: 1.0.0
+description: Portfolio positions management - stocks and options
+
+tier: 1  # Critical - Real money
+priority: 1
+
+dependencies:
+  - robinhood-api
+  - database
+  - dashboard  # Totals must match
+
+endpoints:
+  - /api/portfolio/positions
+  - /api/portfolio/summary
+  - /api/portfolio/sync
+
+frontend_routes:
+  - /positions
+
+key_components:
+  - PositionsList
+  - PositionsTable
+  - SyncButton
+  - TotalEquity
+
+data_sources:
+  - robinhood_positions
+  - calculated_greeks
+
+validation_focus:
+  - P&L calculations
+  - Greeks accuracy
+  - DTE calculations
+  - Data freshness
+  - Portfolio totals consistency
+
+owners:
+  - team: trading
+  - critical: true
+
+last_updated: 2025-11-26

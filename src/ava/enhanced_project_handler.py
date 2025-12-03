@@ -34,7 +34,7 @@ class EnhancedProjectHandler:
     architecture, and usage patterns.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize handler with RAG and LLM services"""
         self.llm_service = LLMService()
 

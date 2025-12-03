@@ -1,0 +1,102 @@
+# DTE Scanner Validation Rules
+
+dte_validation:
+  - name: "DTE in range"
+    rule: "0 <= dte <= 7"
+    note: "Scanner focuses on short-term options"
+
+  - name: "DTE calculation"
+    formula: "expiration_date - today"
+    tolerance: 0
+
+  - name: "Weekend handling"
+    rule: "Friday exp = 0 DTE on Friday, account for holidays"
+
+theta_validation:
+  - name: "Theta negative"
+    rule: "theta < 0 for all options"
+    note: "Time decay is negative"
+
+  - name: "Theta magnitude increases"
+    rule: "Theta increases as DTE decreases"
+
+  - name: "Daily theta calculation"
+    formula: "abs(theta) * 100"
+    note: "Per contract daily decay"
+
+  - name: "Theta capture estimate"
+    formula: "daily_theta * dte"
+    tolerance: 0.01
+
+premium_validation:
+  premium_pct:
+    formula: "(premium / stock_price) * 100"
+    tolerance: 0.5
+
+  risk_adjusted_return:
+    formula: "premium_pct / risk_score"
+    note: "Higher is better"
+
+risk_validation:
+  risk_score:
+    range: [1, 10]
+    factors:
+      - dte
+      - delta
+      - earnings_proximity
+      - liquidity
+
+  gamma_warning:
+    rule: "High gamma (> 0.1) increases assignment risk"
+
+earnings_validation:
+  - name: "Earnings conflict detection"
+    rule: "earnings_date between today and expiration"
+
+  - name: "Earnings within DTE"
+    rule: "If earnings_conflict, flag prominently"
+    severity: high
+
+consistency_checks:
+  - name: "Strike below stock for puts"
+    rule: "OTM puts have strike <= stock_price"
+
+  - name: "Positive premium"
+    rule: "premium > 0"
+
+  - name: "Bid-ask sanity"
+    rule: "ask >= bid, premium within spread"
+
+data_freshness:
+  options_data:
+    max_stale_minutes: 5
+    during_market_hours: 1
+  theta:
+    max_stale_minutes: 5
+
+null_checks:
+  never_null:
+    - symbol
+    - strike
+    - dte
+    - premium
+  warn_if_null:
+    - theta
+    - delta
+    - gamma
+
+edge_cases:
+  - name: "0 DTE"
+    rule: "Handle expiration day options"
+    note: "High risk, high theta"
+
+  - name: "Low liquidity"
+    rule: "Flag options with OI < 50 or volume < 10"
+
+  - name: "Wide spreads"
+    rule: "Flag if (ask-bid)/bid > 10%"
+
+known_issues:
+  - id: "GAMMA_RISK"
+    description: "0-3 DTE has extreme gamma risk"
+    workaround: "Show prominent warning"

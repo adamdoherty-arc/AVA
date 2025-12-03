@@ -1,0 +1,96 @@
+# Premium Scanner Validation Rules
+# Business logic validation requirements
+
+calculations:
+  premium_pct:
+    formula: "(premium / stock_price) * 100"
+    tolerance: 0.5  # 0.5% tolerance
+
+  monthly_return:
+    formula: "(premium_pct / dte) * 30"
+    tolerance: 0.5
+
+  annual_return:
+    formula: "monthly_return * 12"
+    tolerance: 1
+
+  break_even:
+    formula: "strike - premium"
+    note: "For cash-secured puts"
+
+greeks_validation:
+  delta:
+    put_range: [-1, 0]
+    call_range: [0, 1]
+    tolerance: 0.05
+
+  theta:
+    expected_sign: negative
+    note: "Should be negative for long options"
+
+  iv:
+    range: [0, 500]  # 0% to 500%
+    typical_range: [10, 150]
+
+dte_validation:
+  range: [0, 365]
+  warning_threshold: 7  # Highlight options with DTE < 7
+
+consistency_checks:
+  - name: "Bid-ask spread"
+    rule: "ask >= bid"
+    severity: high
+
+  - name: "Premium within bid-ask"
+    rule: "bid <= premium <= ask"
+    tolerance: 0.01
+
+  - name: "Strike below stock price for puts"
+    rule: "For puts: strike <= stock_price (typically)"
+    note: "OTM puts are typical wheel candidates"
+
+  - name: "Positive DTE"
+    rule: "dte >= 0"
+    severity: high
+
+earnings_avoidance:
+  - name: "Earnings within DTE"
+    rule: "If avoid_earnings: expiration < earnings_date OR earnings_date < today"
+    severity: medium
+
+data_freshness:
+  prices:
+    max_stale_minutes: 1
+    during_market_hours: true
+  options_chain:
+    max_stale_minutes: 5
+  greeks:
+    max_stale_minutes: 5
+
+null_checks:
+  never_null:
+    - symbol
+    - strike
+    - expiration
+    - premium
+  warn_if_null:
+    - delta
+    - theta
+    - iv
+    - volume
+
+edge_cases:
+  - name: "Zero premium"
+    rule: "Exclude options with premium <= 0"
+
+  - name: "Unusually high premium"
+    rule: "Flag premiums > 20% as suspicious"
+    severity: low
+
+  - name: "Low liquidity"
+    rule: "Flag options with open_interest < 10"
+
+known_issues:
+  - id: "STALE_GREEKS"
+    description: "Greeks may be stale outside market hours"
+    workaround: "Check data timestamp"

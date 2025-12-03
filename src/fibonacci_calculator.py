@@ -65,7 +65,7 @@ class FibonacciCalculator:
     # Golden Zone (highest probability reversal area)
     GOLDEN_ZONE = (0.5, 0.618)
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.logger = logging.getLogger(__name__)
 
     def calculate_retracement(

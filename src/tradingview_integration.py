@@ -10,7 +10,7 @@ import yfinance as yf
 class TradingViewClient:
     """Client for TradingView integration"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.username = os.getenv('TRADINGVIEW_USERNAME', '')
         self.password = os.getenv('TRADINGVIEW_PASSWORD', '')
         self.session = requests.Session()

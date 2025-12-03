@@ -1,0 +1,53 @@
+# Best Bets UI Components Specification
+
+route: /best-bets
+page_title: "Best Bets"
+
+components:
+  - name: BestBetsPage
+    type: page
+    children:
+      - SportFilter
+      - ConfidenceFilter
+      - BetsGrid
+
+  - name: SportFilter
+    type: tabs
+    selector: "[data-testid='sport-filter']"
+    options: [All, NFL, NBA, MLB, NCAAF, NCAAB]
+
+  - name: ConfidenceFilter
+    type: slider
+    selector: "[data-testid='confidence-filter']"
+    range: [50, 100]
+    default: 60
+
+  - name: BetsGrid
+    type: grid
+    selector: "[data-testid='bets-grid']"
+    children: BetCard[]
+
+  - name: BetCard
+    type: card
+    selector: ".bet-card"
+    displays:
+      - teams
+      - bet_type
+      - pick
+      - odds
+      - confidence (color-coded)
+      - value_score
+      - reasoning
+
+interactions:
+  - name: Filter by Sport
+    trigger: Click sport tab
+    expected_result: "Filter bets to selected sport"
+  - name: Adjust Confidence
+    trigger: Move slider
+    expected_result: "Filter bets above threshold"
+
+responsive:
+  - breakpoint: mobile
+    changes:
+      - "Single column cards"

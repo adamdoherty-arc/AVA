@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 class OpportunityScanner:
     """Auto-scans market for best trading opportunities"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize scanner"""
         self.watchlist = [
             'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN',

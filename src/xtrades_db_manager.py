@@ -38,7 +38,7 @@ load_dotenv(override=True)
 class XtradesDBManager:
     """Manages Xtrades data in Magnus PostgreSQL database with connection pooling"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.db_config = {
             'host': os.getenv('DB_HOST', 'localhost'),
             'port': os.getenv('DB_PORT', '5432'),
@@ -60,7 +60,7 @@ class XtradesDBManager:
         else:
             self.pool = None
 
-    def get_connection(self):
+    def get_connection(self) -> None:
         """
         Get database connection from pool or create direct connection.
 
@@ -175,22 +175,21 @@ class XtradesDBManager:
         conn = None
         try:
             conn = self.get_connection()
-            cur = conn.cursor(cursor_factory=RealDictCursor)
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                query = """
+                    SELECT id, username, display_name, active, added_date,
+                           last_sync, last_sync_status, total_trades_scraped, notes
+                    FROM xtrades_profiles
+                """
 
-            query = """
-                SELECT id, username, display_name, active, added_date,
-                       last_sync, last_sync_status, total_trades_scraped, notes
-                FROM xtrades_profiles
-            """
+                if not include_inactive:
+                    query += " WHERE active = TRUE"
 
-            if not include_inactive:
-                query += " WHERE active = TRUE"
+                query += " ORDER BY username"
 
-            query += " ORDER BY username"
-
-            cur.execute(query)
-            profiles = cur.fetchall()
-            return [dict(profile) for profile in profiles]
+                cur.execute(query)
+                profiles = cur.fetchall()
+                return [dict(profile) for profile in profiles]
 
         except Exception as e:
             logger.error(f"Error fetching profiles: {e}")
@@ -244,17 +243,16 @@ class XtradesDBManager:
         conn = None
         try:
             conn = self.get_connection()
-            cur = conn.cursor(cursor_factory=RealDictCursor)
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT id, username, display_name, active, added_date,
+                           last_sync, last_sync_status, total_trades_scraped, notes
+                    FROM xtrades_profiles
+                    WHERE username = %s
+                """, (username.lower().strip(),))
 
-            cur.execute("""
-                SELECT id, username, display_name, active, added_date,
-                       last_sync, last_sync_status, total_trades_scraped, notes
-                FROM xtrades_profiles
-                WHERE username = %s
-            """, (username.lower().strip(),))
-
-            profile = cur.fetchone()
-            return dict(profile) if profile else None
+                profile = cur.fetchone()
+                return dict(profile) if profile else None
 
         except Exception as e:
             logger.error(f"Error fetching profile {username}: {e}")
@@ -303,7 +301,8 @@ class XtradesDBManager:
 
         except Exception as e:
             logger.error(f"Error updating profile sync status: {e}")
-            conn.rollback()
+            if conn:
+                conn.rollback()
             return False
         finally:
             if conn:
@@ -336,7 +335,8 @@ class XtradesDBManager:
 
         except Exception as e:
             logger.error(f"Error deactivating profile {profile_id}: {e}")
-            conn.rollback()
+            if conn:
+                conn.rollback()
             return False
         finally:
             if conn:
@@ -369,7 +369,8 @@ class XtradesDBManager:
 
         except Exception as e:
             logger.error(f"Error reactivating profile {profile_id}: {e}")
-            conn.rollback()
+            if conn:
+                conn.rollback()
             return False
         finally:
             if conn:
@@ -434,7 +435,8 @@ class XtradesDBManager:
 
         except Exception as e:
             logger.error(f"Error adding trade: {e}")
-            conn.rollback()
+            if conn:
+                conn.rollback()
             raise
         finally:
             if conn:
@@ -498,7 +500,8 @@ class XtradesDBManager:
 
         except Exception as e:
             logger.error(f"Error updating trade {trade_id}: {e}")
-            conn.rollback()
+            if conn:
+                conn.rollback()
             return False
         finally:
             if conn:
@@ -767,7 +770,8 @@ class XtradesDBManager:
 
         except Exception as e:
             logger.error(f"Error creating sync log: {e}")
-            conn.rollback()
+            if conn:
+                conn.rollback()
             raise
         finally:
             if conn:
@@ -823,7 +827,8 @@ class XtradesDBManager:
 
         except Exception as e:
             logger.error(f"Error updating sync log {sync_log_id}: {e}")
-            conn.rollback()
+            if conn:
+                conn.rollback()
             return False
         finally:
             if conn:
@@ -915,7 +920,8 @@ class XtradesDBManager:
 
         except Exception as e:
             logger.error(f"Error logging notification: {e}")
-            conn.rollback()
+            if conn:
+                conn.rollback()
             raise
         finally:
             if conn:
@@ -1177,28 +1183,33 @@ class XtradesDBManager:
         Get recent trading activity across all profiles
 
         Args:
-            days: Number of days to look back
+            days: Number of days to look back (must be positive integer, max 365)
             limit: Maximum trades to return
 
         Returns:
             List of trade dictionaries with profile info
         """
+        # Validate days parameter to prevent SQL injection
+        if not isinstance(days, int) or days < 0 or days > 365:
+            logger.warning(f"Invalid days parameter: {days}, defaulting to 7")
+            days = 7
+
         conn = None
         try:
             conn = self.get_connection()
-            cur = conn.cursor(cursor_factory=RealDictCursor)
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Use CAST for safe interval parameterization
+                cur.execute("""
+                    SELECT t.*, p.username, p.display_name
+                    FROM xtrades_trades t
+                    JOIN xtrades_profiles p ON t.profile_id = p.id
+                    WHERE t.alert_timestamp >= NOW() - CAST(%s || ' days' AS INTERVAL)
+                    ORDER BY t.alert_timestamp DESC
+                    LIMIT %s
+                """, (str(days), limit))
 
-            cur.execute("""
-                SELECT t.*, p.username, p.display_name
-                FROM xtrades_trades t
-                JOIN xtrades_profiles p ON t.profile_id = p.id
-                WHERE t.alert_timestamp >= NOW() - INTERVAL '%s days'
-                ORDER BY t.alert_timestamp DESC
-                LIMIT %s
-            """, (days, limit))
-
-            trades = cur.fetchall()
-            return [dict(trade) for trade in trades]
+                trades = cur.fetchall()
+                return [dict(trade) for trade in trades]
 
         except Exception as e:
             logger.error(f"Error fetching recent activity: {e}")

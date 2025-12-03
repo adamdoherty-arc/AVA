@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 class KalshiDBManager:
     """Manages database operations for Kalshi markets"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.db_config = {
             'host': 'localhost',
             'port': '5432',
@@ -31,7 +31,7 @@ class KalshiDBManager:
         DatabaseConnectionPool()
         self.initialize_database()
 
-    def get_connection(self):
+    def get_connection(self) -> None:
         """Get database connection from shared pool"""
         try:
             pool = DatabaseConnectionPool()
@@ -60,7 +60,7 @@ class KalshiDBManager:
             except:
                 pass
 
-    def initialize_database(self):
+    def initialize_database(self) -> None:
         """Initialize database tables from schema file"""
         conn = None
         cur = None

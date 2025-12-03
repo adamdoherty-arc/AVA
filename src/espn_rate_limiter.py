@@ -88,7 +88,7 @@ class ESPNRateLimiter:
         self.calls = [c for c in self.calls if now - c < self.window_seconds]
         return len(self.calls)
 
-    def reset(self):
+    def reset(self) -> None:
         """Reset the rate limiter (clear all tracked calls)"""
         self.calls = []
         logger.info("Rate limiter reset")

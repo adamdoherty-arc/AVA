@@ -20,7 +20,13 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_groq import ChatGroq
 from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
-from langchain_google_genai import ChatGoogleGenerativeAI
+
+# Optional Google Generative AI - may have version compatibility issues
+try:
+    from langchain_google_genai import ChatGoogleGenerativeAI
+except (ImportError, AttributeError) as e:
+    logging.warning(f"Google Generative AI import failed: {e}. Google LLM will be unavailable.")
+    ChatGoogleGenerativeAI = None
 
 # Local imports
 from .models import IntentResult, MessageResponse, ConversationState, AVAConfig
@@ -83,7 +89,7 @@ class AVACore:
 
         logger.info("AVACore initialized successfully")
 
-    def _init_llm(self):
+    def _init_llm(self) -> None:
         """Initialize LLM for structured outputs and function calling"""
         try:
             # Try Groq first (free tier)
@@ -129,7 +135,7 @@ class AVACore:
         self.llm_with_tools = None
         logger.warning("Using LLMService fallback (no structured outputs or function calling)")
 
-    def _register_default_tools(self):
+    def _register_default_tools(self) -> None:
         """Register default tools"""
         from src.ava.core.tools import (
             query_database_tool,

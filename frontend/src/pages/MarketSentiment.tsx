@@ -166,12 +166,12 @@ export default function MarketSentiment() {
                             </div>
                             <p className={clsx(
                                 "text-2xl font-bold",
-                                data.put_call_ratio < 1 ? "text-emerald-400" : "text-rose-400"
+                                (data.put_call_ratio ?? 0) < 1 ? "text-emerald-400" : "text-rose-400"
                             )}>
-                                {data.put_call_ratio.toFixed(2)}
+                                {(data.put_call_ratio ?? 0).toFixed(2)}
                             </p>
                             <p className="text-xs text-slate-500 mt-1">
-                                VIX: {data.vix.toFixed(1)}
+                                VIX: {(data.vix ?? 0).toFixed(1)}
                             </p>
                         </div>
                     </div>

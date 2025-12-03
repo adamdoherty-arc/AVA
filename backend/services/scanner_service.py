@@ -11,14 +11,14 @@ logger = logging.getLogger(__name__)
 class ScannerService:
     """Service for scanning option premiums"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.scanner = PremiumScanner()
 
     def scan_premiums(
         self,
         symbols: List[str],
-        max_price: float = 50,
-        min_premium_pct: float = 1.0,
+        max_price: float = 250,
+        min_premium_pct: float = 0.5,
         dte: int = 30
     ) -> List[Dict[str, Any]]:
         """
@@ -61,8 +61,8 @@ class ScannerService:
     def scan_multiple_dte(
         self,
         symbols: List[str],
-        max_price: float = 50,
-        min_premium_pct: float = 1.0,
+        max_price: float = 250,
+        min_premium_pct: float = 0.5,
         dte_targets: List[int] = None
     ) -> Dict[str, List[Dict[str, Any]]]:
         """
@@ -117,7 +117,7 @@ class ScannerService:
         try:
             results = self.scan_premiums(
                 symbols=default_symbols,
-                max_price=200,
+                max_price=250,
                 min_premium_pct=0.5,
                 dte=dte
             )

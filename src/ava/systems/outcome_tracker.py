@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 class OutcomeTracker:
     """Track and learn from every recommendation"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize outcome tracker"""
         self.db_file = Path.home() / '.ava_outcomes.json'
         self.recommendations = self._load_database()
@@ -42,7 +42,7 @@ class OutcomeTracker:
                 return {'recommendations': [], 'stats': {}}
         return {'recommendations': [], 'stats': {}}
 
-    def _save_database(self):
+    def _save_database(self) -> None:
         """Save outcomes database"""
         try:
             with open(self.db_file, 'w') as f:
@@ -117,7 +117,7 @@ class OutcomeTracker:
 
         logger.warning(f"Recommendation #{rec_id} not found")
 
-    def _update_statistics(self):
+    def _update_statistics(self) -> None:
         """Update overall statistics"""
         tracked = [r for r in self.recommendations['recommendations'] if r['outcome_tracked']]
 

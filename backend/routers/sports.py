@@ -75,6 +75,21 @@ async def get_upcoming_games(limit: int = 10):
     return sports_service.get_upcoming_games(limit)
 
 
+
+
+@router.get("/games")
+async def get_games():
+    """
+    Get all games (live and upcoming) - combined endpoint.
+    """
+    live = sports_service.get_live_games()
+    upcoming = sports_service.get_upcoming_games(10)
+    return {
+        "live": live.get("games", []) if isinstance(live, dict) else [],
+        "upcoming": upcoming.get("games", []) if isinstance(upcoming, dict) else [],
+        "total": len(live.get("games", [])) + len(upcoming.get("games", [])) if isinstance(live, dict) and isinstance(upcoming, dict) else 0
+    }
+
 from backend.services.llm_sports_analyzer import LLMSportsAnalyzer
 
 class MatchupRequest(BaseModel):

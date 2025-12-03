@@ -38,7 +38,7 @@ class TaskCompletionWithQA:
         # → Status: 'qa_approved', can deploy
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.task_mgr = TaskDBManager()
         self.qa_service = MultiAgentQAService()
 

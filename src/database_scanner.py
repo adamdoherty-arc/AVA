@@ -25,7 +25,7 @@ load_dotenv(override=True)
 class DatabaseScanner:
     """Scan PostgreSQL database for stocks and analyze option premiums"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.db_config = {
             'host': os.getenv('DB_HOST', 'localhost'),
             'port': os.getenv('DB_PORT', '5432'),
@@ -36,7 +36,7 @@ class DatabaseScanner:
         self.conn = None
         self.cursor = None
 
-    def connect(self):
+    def connect(self) -> None:
         """Connect to PostgreSQL database"""
         try:
             self.conn = psycopg2.connect(**self.db_config)
@@ -46,14 +46,14 @@ class DatabaseScanner:
             print(f"Database connection error: {e}")
             return False
 
-    def disconnect(self):
+    def disconnect(self) -> None:
         """Disconnect from database"""
         if self.cursor:
             self.cursor.close()
         if self.conn:
             self.conn.close()
 
-    def create_tables(self):
+    def create_tables(self) -> None:
         """Create necessary tables if they don't exist"""
         try:
             # Create stocks table
@@ -395,7 +395,7 @@ class DatabaseScanner:
         results.sort(key=lambda x: x['return_pct'], reverse=True)
         return results[:20]  # Return top 20
 
-    def initialize_default_stocks(self):
+    def initialize_default_stocks(self) -> None:
         """Initialize database - no default stocks"""
         # No default stocks - user must add their own
         return 0

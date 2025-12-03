@@ -16,7 +16,7 @@ class LLMEarningsAnalyzer:
     Analyzes earnings reports, guidance, and transcripts
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.llm = get_magnus_llm()
 
     def analyze_earnings_report(self, 

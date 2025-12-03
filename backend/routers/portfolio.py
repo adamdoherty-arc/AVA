@@ -658,3 +658,22 @@ async def delete_alert(alert_id: str):
     except Exception as e:
         logger.error(f"Error deleting alert: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# Create alias router for /api/positions (legacy endpoint)
+positions_router = APIRouter(
+    prefix="/api",
+    tags=["positions-alias"]
+)
+
+@positions_router.get("/positions")
+async def get_positions_alias(
+    service: PortfolioService = Depends(get_portfolio_service)
+) -> Dict[str, Any]:
+    """
+    Alias endpoint for /api/positions -> /api/portfolio/positions.
+    """
+    try:
+        return await service.get_positions()
+    except Exception as e:
+        logger.error(f"Error getting positions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

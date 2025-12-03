@@ -55,7 +55,7 @@ class TelegramNotificationService:
     - Rich markdown formatting
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize Telegram notification service with connection pooling"""
         self.db_url = os.getenv("DATABASE_URL")
         if not self.db_url:

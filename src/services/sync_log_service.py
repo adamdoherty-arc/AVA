@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 class SyncLogService:
     """Service for logging sync operations"""
     
-    def __init__(self):
+    def __init__(self) -> None:
         self.db_config = {
             'host': os.getenv('DB_HOST', 'localhost'),
             'port': os.getenv('DB_PORT', '5432'),
@@ -27,7 +27,7 @@ class SyncLogService:
         }
         self._ensure_table_exists()
     
-    def _ensure_table_exists(self):
+    def _ensure_table_exists(self) -> None:
         """Ensure sync_log table exists"""
         try:
             conn = psycopg2.connect(**self.db_config)

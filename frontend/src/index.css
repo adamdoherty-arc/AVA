@@ -664,3 +664,14 @@ body::before {
 .prose p {
     margin: 0.5rem 0;
 }
+
+/* Recharts container fix for initial render warnings */
+.recharts-wrapper {
+    min-width: 0 !important;
+    min-height: 0 !important;
+}
+
+.recharts-responsive-container {
+    min-width: 0 !important;
+    min-height: 0 !important;
+}

@@ -1,6 +1,5 @@
 import axios from 'axios';
-
-const API_BASE_URL = 'http://localhost:8002/api'; // FastAPI backend port
+import { API_BASE_URL } from '@/config/api';
 
 export const axiosInstance = axios.create({
     baseURL: API_BASE_URL,

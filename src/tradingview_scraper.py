@@ -20,14 +20,14 @@ from pathlib import Path
 class TradingViewScraper:
     """Automatically scrape watchlists from TradingView"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.username = os.getenv('TRADINGVIEW_USERNAME')
         self.password = os.getenv('TRADINGVIEW_PASSWORD')
         self.driver = None
         self.watchlists = {}
         self.cache_file = Path("tradingview_cache.json")
 
-    def setup_driver(self):
+    def setup_driver(self) -> None:
         """Setup Chrome driver with undetected-chromedriver to avoid detection"""
         options = uc.ChromeOptions()
         options.add_argument('--no-sandbox')
@@ -229,7 +229,7 @@ class TradingViewScraper:
 
         return self.load_cache()
 
-    def save_cache(self):
+    def save_cache(self) -> None:
         """Save watchlists to cache file"""
         try:
             with open(self.cache_file, 'w') as f:

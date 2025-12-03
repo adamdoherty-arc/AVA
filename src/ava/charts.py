@@ -59,7 +59,7 @@ class ChartGenerator:
     PRIMARY_COLOR = '#00bfff'   # Sky blue
     SECONDARY_COLOR = '#ffa500'  # Orange
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize chart generator"""
         # Set default matplotlib style
         plt.style.use('dark_background')

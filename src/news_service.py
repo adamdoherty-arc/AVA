@@ -61,7 +61,7 @@ def cache_decorator(ttl=1800):
 class NewsService:
     """Service for fetching and managing news from multiple sources"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.finnhub_key = os.getenv('FINNHUB_API_KEY')
         self.polygon_key = os.getenv('POLYGON_API_KEY')
         self.cache_ttl = 1800  # 30 minutes

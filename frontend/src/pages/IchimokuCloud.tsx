@@ -7,6 +7,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, Tooltip, Legend } from 'recharts'
+import { API_HOST } from '@/config/api'
 
 interface IchimokuData {
   symbol: string
@@ -45,7 +46,7 @@ interface IchimokuData {
   }>
 }
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8002'
+const API_BASE = API_HOST
 
 export default function IchimokuCloud() {
   const [symbol, setSymbol] = useState('AAPL')
@@ -142,35 +143,35 @@ export default function IchimokuCloud() {
             <Card className="bg-slate-900/50 border-slate-800">
               <CardContent className="p-4">
                 <span className="text-slate-400 text-sm">Current Price</span>
-                <p className="text-xl font-bold text-white">${data.current_price.toFixed(2)}</p>
+                <p className="text-xl font-bold text-white">${(data.current_price ?? 0).toFixed(2)}</p>
               </CardContent>
             </Card>
 
             <Card className="bg-slate-900/50 border-slate-800">
               <CardContent className="p-4">
                 <span className="text-slate-400 text-sm">Tenkan-sen</span>
-                <p className="text-xl font-bold text-blue-400">${data.ichimoku.tenkan.toFixed(2)}</p>
+                <p className="text-xl font-bold text-blue-400">${(data.ichimoku?.tenkan ?? 0).toFixed(2)}</p>
               </CardContent>
             </Card>
 
             <Card className="bg-slate-900/50 border-slate-800">
               <CardContent className="p-4">
                 <span className="text-slate-400 text-sm">Kijun-sen</span>
-                <p className="text-xl font-bold text-red-400">${data.ichimoku.kijun.toFixed(2)}</p>
+                <p className="text-xl font-bold text-red-400">${(data.ichimoku?.kijun ?? 0).toFixed(2)}</p>
               </CardContent>
             </Card>
 
             <Card className="bg-slate-900/50 border-slate-800">
               <CardContent className="p-4">
                 <span className="text-slate-400 text-sm">Senkou A</span>
-                <p className="text-xl font-bold text-green-400">${data.ichimoku.senkou_a.toFixed(2)}</p>
+                <p className="text-xl font-bold text-green-400">${(data.ichimoku?.senkou_a ?? 0).toFixed(2)}</p>
               </CardContent>
             </Card>
 
             <Card className="bg-slate-900/50 border-slate-800">
               <CardContent className="p-4">
                 <span className="text-slate-400 text-sm">Senkou B</span>
-                <p className="text-xl font-bold text-purple-400">${data.ichimoku.senkou_b.toFixed(2)}</p>
+                <p className="text-xl font-bold text-purple-400">${(data.ichimoku?.senkou_b ?? 0).toFixed(2)}</p>
               </CardContent>
             </Card>
 
@@ -348,11 +349,11 @@ export default function IchimokuCloud() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <span className="text-slate-400 text-sm">Cloud Top</span>
-                      <p className="text-lg font-bold text-green-400">${data.ichimoku.cloud_top.toFixed(2)}</p>
+                      <p className="text-lg font-bold text-green-400">${(data.ichimoku?.cloud_top ?? 0).toFixed(2)}</p>
                     </div>
                     <div>
                       <span className="text-slate-400 text-sm">Cloud Bottom</span>
-                      <p className="text-lg font-bold text-red-400">${data.ichimoku.cloud_bottom.toFixed(2)}</p>
+                      <p className="text-lg font-bold text-red-400">${(data.ichimoku?.cloud_bottom ?? 0).toFixed(2)}</p>
                     </div>
                   </div>
                 </div>

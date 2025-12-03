@@ -1,0 +1,115 @@
+# AVA Chatbot UI Components Specification
+
+route: /ava
+page_title: "AVA - AI Trading Assistant"
+
+components:
+  - name: ChatbotPage
+    type: page
+    children:
+      - ChatContainer
+      - ContextSidebar
+
+  - name: ChatContainer
+    type: section
+    selector: "[data-testid='chat-container'], .chat-container"
+    children:
+      - MessageList
+      - InputSection
+
+  - name: MessageList
+    type: list
+    selector: "[data-testid='message-list'], .messages"
+    elements:
+      - name: Message
+        selector: ".message"
+        variants:
+          - user: ".message-user"
+          - assistant: ".message-assistant"
+        displays:
+          - content
+          - timestamp
+          - sources
+        validation:
+          - "User messages right-aligned"
+          - "Assistant messages left-aligned"
+          - "Timestamps visible on hover"
+
+      - name: TypingIndicator
+        selector: "[data-testid='typing'], .typing-indicator"
+        shows_when: "awaiting_response"
+
+  - name: InputSection
+    type: section
+    selector: "[data-testid='input-section'], .chat-input"
+    elements:
+      - name: MessageInput
+        selector: "[data-testid='message-input'], textarea"
+        type: textarea
+        placeholder: "Ask AVA anything about your portfolio..."
+        validation:
+          - "Auto-resize on multiline"
+          - "Max height with scroll"
+          - "Submit on Enter (Shift+Enter for newline)"
+
+      - name: SendButton
+        selector: "[data-testid='send-button'], button[type='submit']"
+        text: "Send"
+        states:
+          - idle: enabled
+          - loading: disabled with spinner
+          - empty_input: disabled
+
+  - name: ContextSidebar
+    type: sidebar
+    selector: "[data-testid='context-sidebar'], .context-panel"
+    collapsible: true
+    elements:
+      - name: PortfolioSummary
+        displays:
+          - total_value
+          - day_change
+
+      - name: RecentAlerts
+        displays:
+          - recent alerts list
+
+      - name: SuggestedQueries
+        selector: ".suggested-queries"
+        items:
+          - "What's my portfolio value?"
+          - "Show me premium opportunities"
+          - "Any earnings this week?"
+
+interactions:
+  - name: Send Message
+    trigger: Click Send or press Enter
+    steps:
+      - "Disable input"
+      - "Show typing indicator"
+      - "POST /api/ava/chat"
+      - "Display response"
+      - "Enable input"
+    expected_result: "Response appears in message list"
+
+  - name: Use Suggested Query
+    trigger: Click suggestion
+    expected_result: "Query populated in input and sent"
+
+  - name: View Sources
+    trigger: Click sources in response
+    expected_result: "Expand to show source details"
+
+accessibility:
+  - "Chat must be navigable by keyboard"
+  - "Messages must be in semantic list"
+  - "Typing indicator announced to screen readers"
+
+responsive:
+  - breakpoint: mobile
+    changes:
+      - "Hide context sidebar"
+      - "Full-width chat"
+  - breakpoint: tablet
+    changes:
+      - "Collapsible sidebar"

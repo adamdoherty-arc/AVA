@@ -1,0 +1,133 @@
+# XTrades Watchlists API Contract
+
+endpoints:
+  - path: /api/watchlist/database
+    method: GET
+    description: Get all synced watchlists
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          watchlists:
+            type: array
+            items:
+              type: object
+              required:
+                - name
+                - symbols
+              properties:
+                id:
+                  type: string
+                name:
+                  type: string
+                symbols:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      symbol:
+                        type: string
+                      alert_price:
+                        type: number
+                      current_price:
+                        type: number
+                      change_pct:
+                        type: number
+                symbol_count:
+                  type: integer
+                created_at:
+                  type: string
+                updated_at:
+                  type: string
+
+  - path: /api/watchlist/alerts
+    method: GET
+    description: Get recent alerts
+    parameters:
+      limit:
+        type: integer
+        default: 50
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          alerts:
+            type: array
+            items:
+              type: object
+              properties:
+                id:
+                  type: string
+                symbol:
+                  type: string
+                alert_type:
+                  type: string
+                  enum: [price, volume, breakout]
+                message:
+                  type: string
+                timestamp:
+                  type: string
+                watchlist:
+                  type: string
+
+  - path: /api/watchlist/symbols
+    method: GET
+    description: Get all unique symbols across watchlists
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          symbols:
+            type: array
+            items:
+              type: string
+          count:
+            type: integer
+
+  - path: /api/watchlist/sync-status
+    method: GET
+    description: Get sync status
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          status:
+            type: string
+            enum: [synced, syncing, error, never]
+          last_sync:
+            type: string
+            format: datetime
+          error:
+            type: string
+            nullable: true
+          watchlists_synced:
+            type: integer
+          symbols_synced:
+            type: integer
+
+  - path: /api/watchlist/sync
+    method: POST
+    description: Trigger manual sync
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          success:
+            type: boolean
+          message:
+            type: string
+          synced_count:
+            type: integer
+
+error_responses:
+  401:
+    description: Not authenticated with XTrades
+  429:
+    description: Rate limited
+  503:
+    description: XTrades unavailable

@@ -54,7 +54,7 @@ class AlertProcessor:
     - Prepare for AI evaluation
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize alert processor with database connection pool"""
         self.db_url = os.getenv("DATABASE_URL")
         if not self.db_url:

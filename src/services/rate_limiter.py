@@ -36,7 +36,7 @@ class TokenBucket:
         self.last_refill = time.time()
         self.lock = threading.Lock()
 
-    def _refill(self):
+    def _refill(self) -> None:
         """Refill tokens based on elapsed time"""
         now = time.time()
         elapsed = now - self.last_refill
@@ -138,7 +138,7 @@ class RateLimiter:
                     cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self):
+    def __init__(self) -> None:
         if not hasattr(self, '_initialized'):
             self._buckets: Dict[str, TokenBucket] = {}
             self._bucket_lock = threading.Lock()
@@ -245,7 +245,7 @@ class RateLimiter:
                 del self._buckets[service_name]
                 logger.info(f"Reset rate limiter for {service_name}")
 
-    def reset_all(self):
+    def reset_all(self) -> None:
         """Reset all rate limiters"""
         with self._bucket_lock:
             self._buckets.clear()

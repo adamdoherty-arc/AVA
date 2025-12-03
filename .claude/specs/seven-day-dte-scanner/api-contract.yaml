@@ -1,0 +1,117 @@
+# DTE Scanner API Contract
+
+endpoints:
+  - path: /api/dte-scanner/scan
+    method: POST
+    description: Scan for short-term option opportunities
+    request:
+      schema:
+        type: object
+        properties:
+          max_dte:
+            type: integer
+            default: 7
+            maximum: 14
+          min_premium:
+            type: number
+            description: Minimum premium percentage
+          avoid_earnings:
+            type: boolean
+            default: true
+          symbols:
+            type: array
+            items:
+              type: string
+    response:
+      status: 200
+      schema:
+        type: array
+        items:
+          type: object
+          required:
+            - symbol
+            - strike
+            - expiration
+            - dte
+            - premium
+          properties:
+            symbol:
+              type: string
+            stock_price:
+              type: number
+            strike:
+              type: number
+            expiration:
+              type: string
+              format: date
+            dte:
+              type: integer
+              maximum: 7
+            premium:
+              type: number
+            premium_pct:
+              type: number
+            daily_theta:
+              type: number
+              description: Daily theta decay in dollars
+            theta_capture:
+              type: number
+              description: Expected theta capture
+            delta:
+              type: number
+            gamma:
+              type: number
+            risk_score:
+              type: number
+              description: Risk score 1-10
+            earnings_conflict:
+              type: boolean
+            bid:
+              type: number
+            ask:
+              type: number
+            volume:
+              type: integer
+            open_interest:
+              type: integer
+
+  - path: /api/dte-scanner/opportunities
+    method: GET
+    description: Get pre-filtered high-quality opportunities
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          opportunities:
+            type: array
+            description: Top opportunities sorted by theta capture
+          last_scan:
+            type: string
+            format: datetime
+
+  - path: /api/dte-scanner/settings
+    method: GET
+    description: Get scanner settings
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          default_max_dte:
+            type: integer
+          default_min_premium:
+            type: number
+          risk_tolerance:
+            type: string
+            enum: [conservative, moderate, aggressive]
+          watchlist_only:
+            type: boolean
+
+error_responses:
+  400:
+    description: Invalid scan parameters
+  429:
+    description: Rate limited
+  503:
+    description: Options data unavailable

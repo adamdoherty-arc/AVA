@@ -67,54 +67,64 @@ async def get_smart_money_analysis(
 
         # Process Order Blocks
         order_blocks = []
-        for ob in indicators['order_blocks'][-10:]:  # Last 10
+        for ob in indicators.get('order_blocks', [])[-10:]:  # Last 10
+            # Calculate midpoint if not present
+            top = float(ob.get('top', 0))
+            bottom = float(ob.get('bottom', 0))
+            midpoint = float(ob.get('midpoint', (top + bottom) / 2 if top and bottom else 0))
+
             # Calculate distance from current price
-            distance_pct = ((ob['midpoint'] - current_price) / current_price) * 100
+            distance_pct = ((midpoint - current_price) / current_price) * 100 if midpoint else 0
 
             order_blocks.append({
-                'type': ob['type'],
-                'top': ob['top'],
-                'bottom': ob['bottom'],
-                'midpoint': ob['midpoint'],
-                'strength': ob['strength'],
-                'mitigated': ob['mitigated'],
+                'type': ob.get('type', 'UNKNOWN'),
+                'top': top,
+                'bottom': bottom,
+                'midpoint': midpoint,
+                'strength': int(ob.get('strength', 50)),
+                'mitigated': bool(ob.get('mitigated', False)),
                 'distance_pct': round(distance_pct, 2),
-                'zone': 'support' if ob['type'] == 'BULLISH_OB' else 'resistance'
+                'zone': 'support' if ob.get('type') == 'BULLISH_OB' else 'resistance'
             })
 
         # Process Fair Value Gaps
         fair_value_gaps = []
-        for fvg in indicators['fair_value_gaps'][-10:]:
-            distance_pct = ((fvg['midpoint'] - current_price) / current_price) * 100
+        for fvg in indicators.get('fair_value_gaps', [])[-10:]:
+            top = float(fvg.get('top', 0))
+            bottom = float(fvg.get('bottom', 0))
+            midpoint = float(fvg.get('midpoint', (top + bottom) / 2 if top and bottom else 0))
+            distance_pct = ((midpoint - current_price) / current_price) * 100 if midpoint else 0
 
             fair_value_gaps.append({
-                'type': fvg['type'],
-                'top': fvg['top'],
-                'bottom': fvg['bottom'],
-                'gap_pct': round(fvg['gap_pct'], 2),
-                'filled': fvg['filled'],
-                'fill_percentage': round(fvg['fill_percentage'], 1),
+                'type': fvg.get('type', 'UNKNOWN'),
+                'top': top,
+                'bottom': bottom,
+                'midpoint': midpoint,
+                'gap_pct': round(float(fvg.get('gap_pct', 0)), 2),
+                'filled': bool(fvg.get('filled', False)),
+                'fill_percentage': round(float(fvg.get('fill_percentage', 0)), 1),
                 'distance_pct': round(distance_pct, 2)
             })
 
         # Process Market Structure
-        market_structure = indicators['market_structure']
+        market_structure = indicators.get('market_structure', {'bos': [], 'choch': [], 'current_trend': 'NEUTRAL'})
 
         # Get recent structure breaks
-        recent_bos = market_structure['bos'][-5:] if market_structure['bos'] else []
-        recent_choch = market_structure['choch'][-3:] if market_structure['choch'] else []
+        recent_bos = market_structure.get('bos', [])[-5:] if market_structure.get('bos') else []
+        recent_choch = market_structure.get('choch', [])[-3:] if market_structure.get('choch') else []
 
         # Process Liquidity Pools
         liquidity_pools = []
-        for pool in indicators['liquidity_pools'][:10]:
-            distance_pct = ((pool['price'] - current_price) / current_price) * 100
+        for pool in indicators.get('liquidity_pools', [])[:10]:
+            price = float(pool.get('price', 0))
+            distance_pct = ((price - current_price) / current_price) * 100 if price else 0
 
             liquidity_pools.append({
-                'type': pool['type'],
-                'price': pool['price'],
-                'touches': pool['touches'],
-                'strength': pool['strength'],
-                'swept': pool['swept'],
+                'type': pool.get('type', 'UNKNOWN'),
+                'price': price,
+                'touches': int(pool.get('touches', 0)),
+                'strength': int(pool.get('strength', 0)),
+                'swept': bool(pool.get('swept', False)),
                 'distance_pct': round(distance_pct, 2)
             })
 
@@ -266,11 +276,11 @@ async def get_order_blocks(symbol: str, timeframe: str = "1D"):
             distance_pct = ((ob['midpoint'] - current_price) / current_price) * 100
             result.append({
                 'type': ob['type'],
-                'top': ob['top'],
-                'bottom': ob['bottom'],
-                'midpoint': ob['midpoint'],
-                'strength': ob['strength'],
-                'mitigated': ob['mitigated'],
+                'top': float(ob['top']),
+                'bottom': float(ob['bottom']),
+                'midpoint': float(ob['midpoint']),
+                'strength': int(ob['strength']),
+                'mitigated': bool(ob['mitigated']),
                 'distance_pct': round(distance_pct, 2)
             })
 
@@ -311,11 +321,11 @@ async def get_fair_value_gaps(symbol: str, timeframe: str = "1D"):
             distance_pct = ((fvg['midpoint'] - current_price) / current_price) * 100
             result.append({
                 'type': fvg['type'],
-                'top': fvg['top'],
-                'bottom': fvg['bottom'],
-                'gap_pct': round(fvg['gap_pct'], 2),
-                'filled': fvg['filled'],
-                'fill_percentage': round(fvg['fill_percentage'], 1),
+                'top': float(fvg['top']),
+                'bottom': float(fvg['bottom']),
+                'gap_pct': round(float(fvg['gap_pct']), 2),
+                'filled': bool(fvg['filled']),
+                'fill_percentage': round(float(fvg['fill_percentage']), 1),
                 'distance_pct': round(distance_pct, 2)
             })
 
@@ -357,10 +367,10 @@ async def get_liquidity_pools(symbol: str, timeframe: str = "1D"):
             distance_pct = ((pool['price'] - current_price) / current_price) * 100
             result.append({
                 'type': pool['type'],
-                'price': pool['price'],
-                'touches': pool['touches'],
-                'strength': pool['strength'],
-                'swept': pool['swept'],
+                'price': float(pool['price']),
+                'touches': int(pool['touches']),
+                'strength': int(pool['strength']),
+                'swept': bool(pool['swept']),
                 'distance_pct': round(distance_pct, 2)
             })
 

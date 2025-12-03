@@ -67,6 +67,15 @@ try:
 except ImportError:
     TaskDBManager = None
 
+# Autonomous Task System Integration
+try:
+    from src.ava.autonomous_task_system import AutonomousTaskSystem, get_task_system
+    TASK_SYSTEM_AVAILABLE = True
+except ImportError:
+    TASK_SYSTEM_AVAILABLE = False
+    AutonomousTaskSystem = None
+    get_task_system = None
+
 # PHASE 1 CRITICAL IMPORTS - RAG + LLM Integration (Optional)
 try:
     from src.rag.rag_service import RAGService
@@ -110,7 +119,7 @@ class ConversationState(Enum):
 class EnhancedAVA:
     """Enhanced AVA with intelligent question-asking"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize enhanced AVA with RAG and LLM"""
         self.memory_manager = ConversationMemoryManager()
 
@@ -165,6 +174,18 @@ class EnhancedAVA:
         else:
             self.local_llm = None
             logger.info("ℹ️ Local LLM not available (optional)")
+
+        # Initialize Autonomous Task System
+        if TASK_SYSTEM_AVAILABLE and get_task_system is not None:
+            try:
+                self.task_system = get_task_system(auto_execute=False)  # Queue tasks for review by default
+                logger.info("✅ Autonomous Task System initialized")
+            except Exception as e:
+                logger.warning(f"⚠️ Task system init failed: {e}")
+                self.task_system = None
+        else:
+            self.task_system = None
+            logger.info("ℹ️ Autonomous Task System not available")
 
     def _log_feedback(self, message_index: int, feedback_type: str):
         """PHASE 2: Log user feedback for continuous improvement"""
@@ -719,9 +740,11 @@ Response:"""
                     'used_history': False
                 }
             else:
+                # More helpful fallback with specific suggestions
+                suggestions = self._get_helpful_suggestions(user_query)
                 return {
-                    'text': f"I'm not sure about '{user_query}'. Could you rephrase or ask about:\n- Portfolio status\n- Watchlist analysis\n- Stock prices\n- Creating tasks\n\nType 'help' to see all commands!",
-                    'confidence': 0.3,
+                    'text': suggestions,
+                    'confidence': 0.4,
                     'used_rag': False,
                     'used_history': False
                 }
@@ -734,6 +757,107 @@ Response:"""
                 'used_rag': False,
                 'used_history': False
             }
+
+    def _get_helpful_suggestions(self, user_query: str) -> str:
+        """Generate helpful suggestions based on the user's query"""
+        query_lower = user_query.lower()
+
+        # Categorize the query and provide relevant suggestions
+        if any(word in query_lower for word in ['option', 'put', 'call', 'strike', 'premium', 'wheel', 'covered', 'spread']):
+            return f"""I'd be happy to help with options! Here's what I can do:
+
+**Options Analysis:**
+• "What is the wheel strategy?" - Learn about this income strategy
+• "Explain covered calls" - Understand covered call mechanics
+• "What are the Greeks?" - Learn about delta, theta, gamma
+• "Find CSP opportunities" - Scan for cash-secured put opportunities
+
+**For specific analysis:**
+• "Analyze AAPL options" - Get options analysis for a stock
+• "Show my positions" - See your current option positions
+
+*What would you like to explore?*"""
+
+        elif any(word in query_lower for word in ['portfolio', 'position', 'holding', 'balance', 'account']):
+            return f"""I can help with your portfolio! Try asking:
+
+• "Show my portfolio" - See your current holdings
+• "How is my portfolio doing?" - Get a performance summary
+• "What positions do I have?" - List all open positions
+• "Show my balance" - See account balance
+• "Analyze my positions" - Get AI recommendations
+
+*Which would you like to see?*"""
+
+        elif any(word in query_lower for word in ['stock', 'price', 'ticker', 'symbol', 'quote']):
+            return f"""I can help with stock information! Try:
+
+• "What's AAPL at?" - Get current price
+• "Show NVDA chart" - View price chart
+• "Analyze TSLA" - Get technical analysis
+• "Add MSFT to watchlist" - Track a stock
+
+*What stock would you like to know about?*"""
+
+        elif any(word in query_lower for word in ['risk', 'safe', 'dangerous', 'protect', 'hedge']):
+            return f"""I can help with risk management! Here's what I know:
+
+• "What is position sizing?" - Learn how to size trades
+• "Explain max loss rules" - Understand risk limits
+• "How to manage drawdowns" - Recovery strategies
+• "Portfolio diversification" - Spread your risk
+
+*What aspect of risk management interests you?*"""
+
+        elif any(word in query_lower for word in ['technical', 'chart', 'indicator', 'support', 'resistance', 'trend']):
+            return f"""I can help with technical analysis! Try asking:
+
+• "What is RSI?" - Learn about indicators
+• "Explain support and resistance" - Key price levels
+• "How to read Fibonacci levels" - Retracement analysis
+• "What are chart patterns?" - Visual trading signals
+
+*What technical concept would you like to learn?*"""
+
+        elif any(word in query_lower for word in ['personality', 'style', 'mode', 'change ava']):
+            return f"""I can change my communication style! Available personalities:
+
+• **Friendly** (default) - Warm and approachable
+• **Professional** - Formal and data-focused
+• **Witty** - Humorous market commentary
+• **Mentor** - Educational and patient
+• **Coach** - Motivational and energizing
+• **Analyst** - Bloomberg terminal style
+• **Guru** - Zen master wisdom
+
+Use /personality <name> or ask "Change to coach mode"!"""
+
+        else:
+            # Generic helpful response
+            return f"""I'm here to help with your trading! Here are some things I can do:
+
+**Market Analysis:**
+• Get stock prices and charts
+• Technical analysis and indicators
+• Options opportunities and Greeks
+
+**Portfolio:**
+• View positions and balances
+• AI-powered recommendations
+• Performance tracking
+
+**Learning:**
+• Options strategies (wheel, spreads, etc.)
+• Risk management principles
+• Technical analysis concepts
+
+**Try asking:**
+• "What's my portfolio worth?"
+• "Find wheel opportunities"
+• "Explain the wheel strategy"
+• "Show AAPL price"
+
+*What would you like help with?*"""
 
     def process_message(self, user_message: str, user_id: str = "web_user", platform: str = "web") -> Dict:
         """Process user message with intelligent question-asking"""
@@ -836,8 +960,35 @@ Response:"""
             else:
                 # New conversation - detect intent
 
+                # AUTONOMOUS TASK SYSTEM - Handle "task:" commands first
+                if self.task_system and (message_lower.startswith('task:') or message_lower.startswith('task ')):
+                    intent = "autonomous_task"
+                    task_result = self.task_system.process_message(user_message, user_id)
+
+                    if task_result.get('is_task'):
+                        if task_result.get('success'):
+                            response = f"""**Autonomous Task Created**
+
+**Task #{task_result.get('task_id')}** - {task_result.get('task_type', 'general').replace('_', ' ').title()}
+
+{task_result.get('message', '')}"""
+
+                            if task_result.get('files_modified'):
+                                response += f"\n\n**Files Modified:** {', '.join(task_result['files_modified'])}"
+
+                            if task_result.get('execution_time'):
+                                response += f"\n**Execution Time:** {task_result['execution_time']:.1f}s"
+
+                            action = "autonomous_task_executed"
+                        else:
+                            response = f"Task creation failed: {task_result.get('message', 'Unknown error')}"
+                            success = False
+                    else:
+                        response = "Could not parse task. Try: 'task: add a new feature to...'"
+                        success = False
+
                 # Database queries
-                if any(word in message_lower for word in ['query', 'database', 'select', 'show me', 'how many']):
+                elif any(word in message_lower for word in ['query', 'database', 'select', 'show me', 'how many']):
                     intent = "database_query"
                     if 'select' in message_lower:
                         query_start = message_lower.find('select')
@@ -1727,7 +1878,11 @@ def show_enhanced_ava(key_prefix=""):
                             'witty': '😏 Witty - Clever & Humorous',
                             'mentor': '🎓 Mentor - Teaching & Guiding',
                             'concise': '⚡ Concise - Brief & Direct',
-                            'charming': '💕 Charming - Flirty & Romantic'
+                            'charming': '💕 Charming - Flirty & Romantic',
+                            'analyst': '📈 Analyst - Bloomberg Style & Quantitative',
+                            'coach': '💪 Coach - Motivational & Energizing',
+                            'rebel': '🔥 Rebel - Contrarian & Independent',
+                            'guru': '🙏 Guru - Zen Master & Philosophical'
                         }.get(x, x.title())
                     )
 

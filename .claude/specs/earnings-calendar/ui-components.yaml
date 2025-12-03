@@ -1,0 +1,87 @@
+# Earnings Calendar UI Components Specification
+
+route: /earnings
+page_title: "Earnings Calendar"
+
+components:
+  - name: EarningsPage
+    type: page
+    children:
+      - UpcomingAlerts
+      - CalendarView
+      - EarningsTable
+
+  - name: UpcomingAlerts
+    type: alert-section
+    selector: "[data-testid='upcoming-alerts'], .alerts-section"
+    shows_when: "positions with earnings within 7 days"
+    elements:
+      - name: AlertCard
+        displays:
+          - symbol
+          - date
+          - days_until
+        styling:
+          urgent: "days_until <= 3"
+          warning: "days_until <= 7"
+
+  - name: CalendarView
+    type: calendar
+    selector: "[data-testid='calendar'], .earnings-calendar"
+    view_modes:
+      - month
+      - week
+    elements:
+      - name: CalendarDay
+        shows:
+          - earnings count
+          - held positions highlight
+
+  - name: EarningsTable
+    type: table
+    selector: "[data-testid='earnings-table'], .earnings-list"
+    columns:
+      - header: Symbol
+        sortable: true
+      - header: Company
+      - header: Date
+        sortable: true
+      - header: Time
+        format: "BMO/AMC"
+      - header: Est EPS
+        format: currency
+      - header: Days
+        sortable: true
+        highlight_if: "<= 7"
+      - header: Held
+        type: badge
+        true_style: "warning"
+    filters:
+      - name: DateRange
+        type: date-range
+      - name: HeldOnly
+        type: checkbox
+        label: "Held positions only"
+
+interactions:
+  - name: View Symbol
+    trigger: Click row
+    expected_result: "Show earnings history for symbol"
+
+  - name: Change View
+    trigger: Toggle month/week
+    expected_result: "Calendar view updates"
+
+  - name: Filter Held
+    trigger: Toggle checkbox
+    expected_result: "Show only held positions"
+
+accessibility:
+  - "Calendar navigable by keyboard"
+  - "Alert urgency conveyed via text, not just color"
+
+responsive:
+  - breakpoint: mobile
+    changes:
+      - "List view instead of calendar"
+      - "Condensed table columns"

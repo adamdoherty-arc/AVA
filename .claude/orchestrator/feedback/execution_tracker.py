@@ -27,7 +27,7 @@ class ExecutionTracker:
         self._init_database()
         logger.info("Execution tracker initialized")
 
-    def _init_database(self):
+    def _init_database(self) -> None:
         """Initialize SQLite schema"""
         conn = sqlite3.connect(str(self.db_path))
         cursor = conn.cursor()

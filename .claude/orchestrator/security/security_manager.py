@@ -20,7 +20,7 @@ class SecurityManager:
     - Rate limiting
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.pii_patterns = self._load_pii_patterns()
         self.injection_patterns = self._load_injection_patterns()
         self.rate_limits = {}  # In-memory rate limiting

@@ -25,7 +25,7 @@ class OptionsIndicators:
     - Volatility Skew analysis
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         try:
             import mibian
             self.mibian = mibian

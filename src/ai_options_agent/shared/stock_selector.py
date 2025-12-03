@@ -11,7 +11,7 @@ from src.tradingview_db_manager import TradingViewDBManager
 class StockSelector:
     """Reusable stock selection component"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.tv_manager = TradingViewDBManager()
 
     def render_single_stock_selector(
@@ -84,7 +84,7 @@ class StockSelector:
         Returns:
             (watchlist_name, symbols_list) or (None, None)
         """
-        watchlists = self.tv_manager.get_all_symbols_dict()
+        watchlists = self.tv_manager.get_all_symbols()
 
         if not watchlists:
             st.warning("No watchlists found. Please sync watchlists first.")
@@ -104,7 +104,7 @@ class StockSelector:
     def _render_tradingview_mode(self) -> Optional[str]:
         """Render TradingView watchlist mode"""
         with st.spinner("Loading watchlists..."):
-            watchlists = self.tv_manager.get_all_symbols_dict()
+            watchlists = self.tv_manager.get_all_symbols()
 
         if not watchlists:
             st.warning("⚠️ No watchlists found. Please sync watchlists from the TradingView Watchlists page.")

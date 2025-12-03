@@ -1,0 +1,64 @@
+# Earnings Calendar Validation Rules
+
+date_validation:
+  - name: "Future dates valid"
+    rule: "Upcoming earnings date >= today"
+
+  - name: "Date format"
+    rule: "All dates in ISO format (YYYY-MM-DD)"
+
+  - name: "Time accuracy"
+    rule: "BMO/AMC matches market hours"
+
+calculation_validation:
+  surprise_pct:
+    formula: "((actual - estimated) / abs(estimated)) * 100"
+    tolerance: 0.1
+    null_if: "estimated is null or actual is null"
+
+  days_until:
+    formula: "earnings_date - today"
+    tolerance: 0  # Must be exact
+
+consistency_checks:
+  - name: "Historical completeness"
+    rule: "Past earnings should have actual_eps"
+
+  - name: "Future uncertainty"
+    rule: "Future earnings should not have actual_eps"
+
+  - name: "Position alignment"
+    rule: "is_held matches current positions"
+
+data_freshness:
+  calendar:
+    max_stale_hours: 6
+  earnings_dates:
+    max_stale_days: 1
+    note: "Dates rarely change but should be verified"
+
+null_checks:
+  never_null:
+    - symbol
+    - date
+  warn_if_null:
+    - time
+    - estimated_eps
+
+edge_cases:
+  - name: "Date changes"
+    rule: "Handle postponed earnings gracefully"
+
+  - name: "Special events"
+    rule: "Handle splits, special dividends"
+
+  - name: "Missing estimates"
+    rule: "Display 'N/A' when no estimate available"
+
+  - name: "Weekend dates"
+    rule: "Flag and warn if earnings on weekend"
+
+known_issues:
+  - id: "TIME_UNCERTAINTY"
+    description: "BMO/AMC may not be available until close to date"
+    workaround: "Show 'TBD' when unknown"

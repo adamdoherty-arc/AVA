@@ -35,7 +35,7 @@ class DashboardConnector(DataConnector):
     - Summary: 60 second TTL
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Dashboard data changes frequently but not in real-time
         # 60-second cache is appropriate
         cache_policy = CachePolicy(enabled=True, ttl_seconds=60, max_size=100)
@@ -45,7 +45,7 @@ class DashboardConnector(DataConnector):
         self._rh_client = None
         self._db_config = None
 
-    def _get_robinhood_client(self):
+    def _get_robinhood_client(self) -> None:
         """Lazy load Robinhood client"""
         if self._rh_client is None:
             try:

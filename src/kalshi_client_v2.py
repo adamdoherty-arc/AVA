@@ -62,7 +62,7 @@ class KalshiClientV2:
         if self.private_key_path and os.path.exists(self.private_key_path):
             self._load_private_key()
 
-    def _load_private_key(self):
+    def _load_private_key(self) -> None:
         """Load RSA private key from file"""
         try:
             with open(self.private_key_path, 'rb') as key_file:

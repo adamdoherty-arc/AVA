@@ -586,7 +586,7 @@ class UnifiedMarketData:
             'total_cost': '$0.00'
         }
 
-    def reset_stats(self):
+    def reset_stats(self) -> None:
         """Reset usage statistics"""
         for key in self.usage_stats:
             self.usage_stats[key] = 0

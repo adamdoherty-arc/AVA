@@ -1,0 +1,105 @@
+# XTrades Watchlists UI Components Specification
+
+route: /watchlists
+page_title: "XTrades Watchlists"
+
+components:
+  - name: WatchlistsPage
+    type: page
+    children:
+      - SyncStatus
+      - WatchlistSelector
+      - SymbolsTable
+      - AlertsPanel
+
+  - name: SyncStatus
+    type: status-bar
+    selector: "[data-testid='sync-status'], .sync-status"
+    displays:
+      - status
+      - last_sync
+    elements:
+      - name: SyncButton
+        selector: "[data-testid='sync-button'], button:has-text('Sync')"
+        states:
+          - idle: "Sync"
+          - syncing: "Syncing..."
+          - error: "Retry"
+
+  - name: WatchlistSelector
+    type: tabs
+    selector: "[data-testid='watchlist-selector'], .watchlist-tabs, select"
+    shows:
+      - watchlist names
+      - symbol counts
+    validation:
+      - "Active watchlist highlighted"
+      - "Can switch between watchlists"
+
+  - name: SymbolsTable
+    type: table
+    selector: "[data-testid='symbols-table'], table, .symbols-list"
+    columns:
+      - header: Symbol
+        sortable: true
+      - header: Price
+        format: currency
+      - header: Change
+        format: percentage_signed
+        color_coded: true
+      - header: Alert Price
+        format: currency
+        nullable: true
+      - header: Status
+        type: badge
+    row_actions:
+      - name: View Chart
+        selector: ".action-chart"
+      - name: Remove
+        selector: ".action-remove"
+
+  - name: AlertsPanel
+    type: sidebar
+    selector: "[data-testid='alerts-panel'], .alerts-sidebar"
+    collapsible: true
+    elements:
+      - name: AlertsList
+        type: list
+        shows:
+          - recent alerts
+          - alert count badge
+        items:
+          - symbol
+          - message
+          - timestamp
+
+interactions:
+  - name: Sync Watchlists
+    trigger: Click Sync button
+    steps:
+      - "Show syncing state"
+      - "POST /api/watchlist/sync"
+      - "Refresh watchlist data"
+      - "Show success/error"
+    expected_result: "Watchlists updated"
+
+  - name: Switch Watchlist
+    trigger: Click watchlist tab
+    expected_result: "Display symbols for selected watchlist"
+
+  - name: Sort Symbols
+    trigger: Click column header
+    expected_result: "Table sorted by column"
+
+accessibility:
+  - "Sync status announced to screen readers"
+  - "Table sortable via keyboard"
+
+responsive:
+  - breakpoint: mobile
+    changes:
+      - "Dropdown instead of tabs"
+      - "Hide alerts panel"
+  - breakpoint: tablet
+    changes:
+      - "Collapsible alerts panel"

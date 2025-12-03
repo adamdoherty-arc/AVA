@@ -42,7 +42,7 @@ class AgentAwareNLPHandler:
     Falls back to generic LLM if no specialized agent matches.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize with agent registry and specialized services"""
         # Base NLP handler for fallback
         self.base_nlp = NaturalLanguageHandler()

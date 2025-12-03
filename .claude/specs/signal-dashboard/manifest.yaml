@@ -1,0 +1,36 @@
+# Signal Dashboard Feature Manifest
+# SpecAgent: SignalDashboardSpecAgent
+
+name: signal-dashboard
+version: 1.0.0
+description: Trading signals dashboard aggregating alerts from multiple sources
+
+tier: 3  # Additional
+priority: 4
+
+dependencies:
+  - technical-indicators  # Signals based on technical indicators
+  - database
+
+endpoints:
+  - /api/signals
+  - /api/signals/history
+  - /api/signals/active
+
+frontend_routes:
+  - /signals
+  - /alerts
+
+key_components:
+  - SignalsList
+  - FilterControls
+  - SignalHistory
+  - AlertBadge
+
+validation_focus:
+  - Signal accuracy
+  - Alert freshness
+  - Duplicate detection
+  - Historical tracking
+
+last_updated: 2025-11-26

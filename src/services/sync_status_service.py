@@ -41,7 +41,7 @@ class SyncStatusResult:
 class SyncStatusService:
     """Unified service for querying sync status from all tables"""
     
-    def __init__(self):
+    def __init__(self) -> None:
         self.db_config = {
             'host': os.getenv('DB_HOST', 'localhost'),
             'port': os.getenv('DB_PORT', '5432'),
@@ -50,7 +50,7 @@ class SyncStatusService:
             'password': os.getenv('DB_PASSWORD', '')
         }
     
-    def _get_connection(self):
+    def _get_connection(self) -> None:
         """Get database connection"""
         return psycopg2.connect(**self.db_config)
     

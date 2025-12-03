@@ -68,7 +68,7 @@ class QAVerificationAgent:
     5. Database schema validation
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize QA agent with database manager"""
         self.task_mgr = TaskDBManager()
         self.project_root = project_root

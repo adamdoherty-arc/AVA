@@ -394,7 +394,7 @@ export default function AIOptionsAgent() {
                                     <div>
                                         <p className="text-xs text-slate-400 uppercase tracking-wide">Avg Score</p>
                                         <p className="text-2xl font-bold text-white">
-                                            {(results.reduce((a, r) => a + r.score, 0) / results.length).toFixed(0)}
+                                            {(results.reduce((a, r) => a + (r.score ?? 0), 0) / (results.length || 1)).toFixed(0)}
                                         </p>
                                         <p className="text-xs text-slate-500">MCDM weighted</p>
                                     </div>
@@ -498,13 +498,13 @@ export default function AIOptionsAgent() {
                                                     </span>
                                                 </td>
                                                 <td className="font-mono font-medium text-white">${result.premium}</td>
-                                                <td className="font-mono text-slate-400">{result.delta.toFixed(2)}</td>
+                                                <td className="font-mono text-slate-400">{(result.delta ?? 0).toFixed(2)}</td>
                                                 <td className={result.iv >= 50 ? 'text-amber-400' : 'text-slate-400'}>
                                                     {result.iv}%
                                                 </td>
                                                 <td>
                                                     <span className="font-bold text-emerald-400 bg-emerald-500/15 px-2 py-1 rounded-lg">
-                                                        {result.monthly_return.toFixed(2)}%
+                                                        {(result.monthly_return ?? 0).toFixed(2)}%
                                                     </span>
                                                 </td>
                                                 {useLLMReasoning && (
@@ -577,7 +577,7 @@ export default function AIOptionsAgent() {
                                             {pick.recommendation}
                                         </span>
                                         <div className="text-sm text-emerald-400 mt-1">
-                                            {pick.monthly_return.toFixed(2)}% monthly
+                                            {(pick.monthly_return ?? 0).toFixed(2)}% monthly
                                         </div>
                                     </div>
                                 </div>

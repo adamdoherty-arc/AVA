@@ -18,7 +18,7 @@ load_dotenv()
 class TaskManager:
     """Manages development tasks with PostgreSQL database backend"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize task manager with database connection parameters"""
         self.db_config = {
             'host': os.getenv('DB_HOST', 'localhost'),
@@ -40,7 +40,7 @@ class TaskManager:
             print(f"Database connection error: {e}")
             return False
 
-    def disconnect(self):
+    def disconnect(self) -> None:
         """Close database connection"""
         if self.cursor:
             self.cursor.close()

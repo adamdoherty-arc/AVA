@@ -36,6 +36,17 @@ def get_predictor():
     return _nfl_predictor
 
 
+
+
+@router.get("/nfl")
+async def get_nfl_predictions(
+    min_edge: float = Query(5.0, description="Minimum AI edge percentage"),
+    min_volume: int = Query(100, description="Minimum volume"),
+    sort_by: str = Query("edge", description="Sort by: edge, volume, confidence")
+):
+    """Alias route for NFL predictions - used by frontend."""
+    return await get_kalshi_nfl_markets(min_edge, min_volume, sort_by)
+
 @router.get("/markets", response_model=MarketResponse)
 async def get_markets(
     sector: Optional[str] = Query(None, description="Filter by sector (e.g., 'Politics')"),

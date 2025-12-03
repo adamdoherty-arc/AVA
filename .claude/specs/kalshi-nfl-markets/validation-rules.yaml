@@ -1,0 +1,72 @@
+# Kalshi Markets Validation Rules
+
+price_validation:
+  yes_no_sum:
+    rule: "yes_price + no_price ~= 100"
+    tolerance: 2  # Allows for bid-ask spread
+    note: "Prices in cents (0-100)"
+
+  price_range:
+    range: [1, 99]
+    note: "Extreme prices (0, 100) only at settlement"
+
+  implied_probability:
+    formula: "yes_price / 100"
+    note: "Simplified, ignores vig"
+
+position_validation:
+  pl_calculation:
+    rule: "(current_price - avg_price) * quantity"
+    tolerance: 0.01
+
+  total_value:
+    rule: "sum(position.quantity * position.current_price)"
+
+consistency_checks:
+  - name: "Market status vs time"
+    rule: "If close_time < now, status should not be 'active'"
+
+  - name: "Price movement bounds"
+    rule: "Price changes within market hours reasonable"
+
+  - name: "Position count"
+    rule: "positions.length matches expected"
+
+  - name: "Portfolio balance"
+    rule: "balance = available + invested"
+
+data_freshness:
+  prices:
+    max_stale_seconds: 30
+  positions:
+    max_stale_minutes: 1
+  markets_list:
+    max_stale_minutes: 5
+
+null_checks:
+  never_null:
+    - ticker
+    - title
+    - yes_price
+    - no_price
+  warn_if_null:
+    - volume
+    - open_interest
+
+edge_cases:
+  - name: "Market at settlement"
+    rule: "yes_price = 0 or 100 after settlement"
+
+  - name: "Zero volume"
+    rule: "Display markets with zero volume"
+
+  - name: "Closed markets"
+    rule: "Show but disable trading"
+
+  - name: "No NFL games"
+    rule: "Show message when no games available"
+
+known_issues:
+  - id: "PRICE_LAG"
+    description: "Prices may lag by up to 30 seconds"
+    workaround: "Show last updated timestamp"

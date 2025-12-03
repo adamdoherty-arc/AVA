@@ -1,0 +1,50 @@
+# Premium Scanner Feature Manifest
+# SpecAgent: PremiumScannerSpecAgent
+
+name: premium-scanner
+version: 1.0.0
+description: Options premium scanner for wheel strategy opportunities
+
+tier: 1  # Critical
+priority: 3
+
+dependencies:
+  - positions  # Filters by held positions
+  - earnings-calendar  # Earnings avoidance
+  - robinhood-api
+  - database
+
+endpoints:
+  - /api/scanner/scan
+  - /api/scanner/symbols
+  - /api/health
+
+frontend_routes:
+  - /scanner
+  - /premium-scanner
+
+key_components:
+  - ScannerTable
+  - FilterControls
+  - ScanButton
+  - SymbolSearch
+  - GreeksDisplay
+
+data_sources:
+  - options_chain
+  - stock_prices
+  - calculated_premiums
+  - earnings_dates
+
+validation_focus:
+  - Premium percentage calculations
+  - Monthly/annual return calculations
+  - DTE accuracy
+  - Greeks display accuracy
+  - Earnings avoidance logic
+
+owners:
+  - team: trading
+  - critical: true
+
+last_updated: 2025-11-26

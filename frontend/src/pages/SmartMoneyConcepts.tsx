@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { API_HOST } from '@/config/api'
 
 interface OrderBlock {
   type: string
@@ -65,7 +66,7 @@ interface SmartMoneyData {
   }
 }
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8002'
+const API_BASE = API_HOST
 
 export default function SmartMoneyConcepts() {
   const [symbol, setSymbol] = useState('AAPL')
@@ -163,7 +164,7 @@ export default function SmartMoneyConcepts() {
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <span className="text-slate-400 text-sm">Current Price</span>
-                  <span className="text-2xl font-bold text-white">${data.current_price.toFixed(2)}</span>
+                  <span className="text-2xl font-bold text-white">${(data.current_price ?? 0).toFixed(2)}</span>
                 </div>
               </CardContent>
             </Card>
@@ -244,8 +245,8 @@ export default function SmartMoneyConcepts() {
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="text-white">${signal.price.toFixed(2)}</div>
-                          <div className="text-xs text-slate-500">Strength: {signal.strength}%</div>
+                          <div className="text-white">${(signal.price ?? 0).toFixed(2)}</div>
+                          <div className="text-xs text-slate-500">Strength: {signal.strength ?? 0}%</div>
                         </div>
                       </div>
                       <p className="text-sm text-slate-400 mt-2">{signal.description}</p>
@@ -270,7 +271,7 @@ export default function SmartMoneyConcepts() {
                   <div className="space-y-2">
                     <div className="flex justify-between">
                       <span className="text-slate-400">Price</span>
-                      <span className="text-green-500 font-bold">${data.key_levels.nearest_support.price.toFixed(2)}</span>
+                      <span className="text-green-500 font-bold">${(data.key_levels.nearest_support.price ?? 0).toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-400">Type</span>
@@ -299,7 +300,7 @@ export default function SmartMoneyConcepts() {
                   <div className="space-y-2">
                     <div className="flex justify-between">
                       <span className="text-slate-400">Price</span>
-                      <span className="text-red-500 font-bold">${data.key_levels.nearest_resistance.price.toFixed(2)}</span>
+                      <span className="text-red-500 font-bold">${(data.key_levels.nearest_resistance.price ?? 0).toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-400">Type</span>
@@ -352,9 +353,9 @@ export default function SmartMoneyConcepts() {
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="text-white">${ob.bottom.toFixed(2)} - ${ob.top.toFixed(2)}</div>
+                          <div className="text-white">${(ob.bottom ?? 0).toFixed(2)} - ${(ob.top ?? 0).toFixed(2)}</div>
                           <div className="text-xs text-slate-500">
-                            {ob.distance_pct > 0 ? '+' : ''}{ob.distance_pct.toFixed(1)}% from price
+                            {(ob.distance_pct ?? 0) > 0 ? '+' : ''}{(ob.distance_pct ?? 0).toFixed(1)}% from price
                           </div>
                         </div>
                       </div>
@@ -406,16 +407,16 @@ export default function SmartMoneyConcepts() {
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="text-white">${fvg.bottom.toFixed(2)} - ${fvg.top.toFixed(2)}</div>
+                          <div className="text-white">${(fvg.bottom ?? 0).toFixed(2)} - ${(fvg.top ?? 0).toFixed(2)}</div>
                           <div className="text-xs text-slate-500">
-                            Gap: {fvg.gap_pct.toFixed(1)}%
+                            Gap: {(fvg.gap_pct ?? 0).toFixed(1)}%
                           </div>
                         </div>
                       </div>
                       <div className="mt-2">
                         <div className="flex justify-between text-sm mb-1">
                           <span className="text-slate-400">Fill Progress</span>
-                          <span className="text-slate-400">{fvg.fill_percentage.toFixed(0)}%</span>
+                          <span className="text-slate-400">{(fvg.fill_percentage ?? 0).toFixed(0)}%</span>
                         </div>
                         <div className="w-full h-1.5 bg-slate-700 rounded-full">
                           <div
@@ -461,7 +462,7 @@ export default function SmartMoneyConcepts() {
                         }`}>
                           {pool.type.replace(/_/g, ' ')}
                         </span>
-                        <span className="text-white font-bold">${pool.price.toFixed(2)}</span>
+                        <span className="text-white font-bold">${(pool.price ?? 0).toFixed(2)}</span>
                       </div>
                       <div className="mt-2 flex justify-between text-sm">
                         <span className="text-slate-400">Touches: {pool.touches}</span>
@@ -498,7 +499,7 @@ export default function SmartMoneyConcepts() {
                           <span className={bos.direction === 'BULLISH' ? 'text-green-500' : 'text-red-500'}>
                             {bos.direction} BOS
                           </span>
-                          <span className="text-white">${bos.price.toFixed(2)}</span>
+                          <span className="text-white">${(bos.price ?? 0).toFixed(2)}</span>
                         </div>
                       ))}
                     </div>
@@ -515,7 +516,7 @@ export default function SmartMoneyConcepts() {
                           <span className={choch.direction === 'BULLISH' ? 'text-green-500' : 'text-red-500'}>
                             {choch.direction} CHoCH
                           </span>
-                          <span className="text-white">${choch.price.toFixed(2)}</span>
+                          <span className="text-white">${(choch.price ?? 0).toFixed(2)}</span>
                         </div>
                       ))}
                     </div>

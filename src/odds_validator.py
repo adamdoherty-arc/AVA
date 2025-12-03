@@ -85,7 +85,7 @@ class OddsValidator:
         self.db_config = db_config
         self.validation_history: List[ValidationResult] = []
 
-    def get_connection(self):
+    def get_connection(self) -> None:
         """Get database connection"""
         return psycopg2.connect(**self.db_config)
 

@@ -288,7 +288,7 @@ function GameCard({ game }: { game: any }) {
                             AI Prediction
                         </span>
                         <span className="badge-info">
-                            {(game.prediction.confidence * 100).toFixed(0)}% Conf
+                            {((game.prediction?.confidence ?? 0) * 100).toFixed(0)}% Conf
                         </span>
                     </div>
                     <p className="text-sm text-white mb-2">
@@ -308,9 +308,9 @@ function GameCard({ game }: { game: any }) {
                 </span>
                 <span className={clsx(
                     "text-xs font-mono font-bold",
-                    game.prediction.ev > 0 ? "text-emerald-400" : game.prediction.ev < 0 ? "text-red-400" : "text-slate-400"
+                    (game.prediction?.ev ?? 0) > 0 ? "text-emerald-400" : (game.prediction?.ev ?? 0) < 0 ? "text-red-400" : "text-slate-400"
                 )}>
-                    EV: {game.prediction.ev > 0 ? '+' : ''}{game.prediction.ev.toFixed(1)}%
+                    EV: {(game.prediction?.ev ?? 0) > 0 ? '+' : ''}{(game.prediction?.ev ?? 0).toFixed(1)}%
                 </span>
             </div>
         </div>

@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 class DataValidator:
     """Validates stock and options data for quality and completeness"""
     
-    def __init__(self):
+    def __init__(self) -> None:
         self.warnings = []
         self.errors = []
     

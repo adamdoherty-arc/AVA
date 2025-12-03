@@ -1,0 +1,41 @@
+# Best Bets Validation Rules
+
+confidence_validation:
+  range: [0, 100]
+  typical_range: [55, 85]
+  warning_threshold: 90  # Very high confidence is suspicious
+
+value_score_validation:
+  range: [0, 100]
+  formula: "Difference between model probability and implied odds probability"
+
+odds_validation:
+  american_odds:
+    valid_range: [-5000, 5000]
+  implied_probability:
+    formula_positive: "100 / (odds + 100)"
+    formula_negative: "abs(odds) / (abs(odds) + 100)"
+
+consistency_checks:
+  - name: "Game active"
+    rule: "game_id references active/upcoming game"
+  - name: "Odds freshness"
+    rule: "Odds updated within last 5 minutes"
+  - name: "No duplicate bets"
+    rule: "Same game/bet_type combination unique"
+
+data_freshness:
+  bets:
+    max_stale_minutes: 5
+  odds:
+    max_stale_minutes: 5
+
+null_checks:
+  never_null:
+    - game_id
+    - bet_type
+    - pick
+    - confidence
+  warn_if_null:
+    - reasoning
+    - value_score

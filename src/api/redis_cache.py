@@ -45,7 +45,7 @@ class RedisCache:
         self.decode_responses = decode_responses
         self._client: Optional[redis.Redis] = None
 
-    async def connect(self):
+    async def connect(self) -> None:
         """Establish Redis connection"""
         if self._client is None:
             try:
@@ -61,7 +61,7 @@ class RedisCache:
                 logger.error(f"Failed to connect to Redis: {str(e)}")
                 raise
 
-    async def disconnect(self):
+    async def disconnect(self) -> None:
         """Close Redis connection"""
         if self._client:
             await self._client.close()

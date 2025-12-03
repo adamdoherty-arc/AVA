@@ -1,0 +1,139 @@
+# Options Analysis UI Components Specification
+
+route: /options
+page_title: "Options Analysis"
+
+components:
+  - name: OptionsAnalysisPage
+    type: page
+    children:
+      - SymbolInput
+      - VolatilityMetrics
+      - OptionsChainSection
+      - ScenarioAnalysis
+
+  - name: SymbolInput
+    type: section
+    elements:
+      - name: SymbolSearch
+        selector: "[data-testid='symbol-search'], input[type='search']"
+        type: search
+        placeholder: "Enter symbol..."
+
+  - name: VolatilityMetrics
+    type: section
+    selector: "[data-testid='volatility-metrics'], .vol-metrics"
+    elements:
+      - name: IVRankCard
+        displays:
+          - iv_rank
+        validation:
+          - "Value 0-100"
+          - "Color coded (low: green, high: red)"
+
+      - name: IVPercentileCard
+        displays:
+          - iv_percentile
+
+      - name: HistoricalVolCard
+        displays:
+          - historical_volatility
+
+  - name: OptionsChainSection
+    type: section
+    children:
+      - ExpirationSelector
+      - OptionsChainTable
+
+  - name: ExpirationSelector
+    type: tabs
+    selector: "[data-testid='expiration-selector'], .expiration-tabs"
+    validation:
+      - "Must show multiple expirations"
+      - "Default to nearest expiration"
+
+  - name: OptionsChainTable
+    type: table
+    selector: "[data-testid='options-chain'], .options-chain-table"
+    structure: "split"  # Calls on left, Puts on right
+    columns_calls:
+      - header: Last
+        format: currency
+      - header: Bid
+        format: currency
+      - header: Ask
+        format: currency
+      - header: Vol
+        format: integer
+      - header: OI
+        format: integer
+      - header: Delta
+        format: decimal(2)
+      - header: Strike
+        format: currency
+        highlight: "ATM"
+    columns_puts:
+      - header: Strike
+        format: currency
+        highlight: "ATM"
+      - header: Delta
+        format: decimal(2)
+      - header: OI
+        format: integer
+      - header: Vol
+        format: integer
+      - header: Bid
+        format: currency
+      - header: Ask
+        format: currency
+      - header: Last
+        format: currency
+    row_highlighting:
+      - condition: "ITM"
+        style: "background-color: light-blue"
+      - condition: "ATM"
+        style: "font-weight: bold"
+
+  - name: ScenarioAnalysis
+    type: section
+    selector: "[data-testid='scenario-analysis'], .pl-scenarios"
+    elements:
+      - name: PLChart
+        type: chart
+        chart_type: line
+        displays:
+          - pl_at_price_levels
+        validation:
+          - "Must show break-even point"
+          - "Must show max profit/loss"
+
+      - name: ScenarioTable
+        type: table
+        columns:
+          - header: Price
+          - header: P/L
+          - header: Delta
+          - header: Days to Exp
+
+interactions:
+  - name: Search Symbol
+    trigger: Enter symbol
+    expected_result: "Load options chain for symbol"
+
+  - name: Change Expiration
+    trigger: Click expiration tab
+    expected_result: "Display options chain for selected expiration"
+
+  - name: Select Strike
+    trigger: Click row in chain
+    expected_result: "Show detailed Greeks and scenarios"
+
+accessibility:
+  - "Chain table must have proper headers"
+  - "ITM/OTM distinction must be accessible"
+
+responsive:
+  - breakpoint: mobile
+    changes:
+      - "Show calls and puts in separate tabs"
+      - "Reduce displayed columns"

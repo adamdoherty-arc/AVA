@@ -1,0 +1,97 @@
+# Game Cards Validation Rules
+
+calculations:
+  implied_probability_moneyline:
+    formula_positive: "100 / (moneyline + 100)"
+    formula_negative: "abs(moneyline) / (abs(moneyline) + 100)"
+    tolerance: 0.02
+
+  implied_probability_spread:
+    formula: "Based on -110 standard: ~52.4%"
+    note: "Adjusted for actual odds"
+
+odds_validation:
+  spread:
+    typical_range: [-20, 20]
+    extreme_threshold: 15
+    note: "Flag spreads > 15 as unusual"
+
+  moneyline:
+    valid_range: [-5000, 5000]
+    format: "American odds"
+
+  total:
+    typical_range:
+      nfl: [35, 60]
+      nba: [200, 250]
+      mlb: [6, 12]
+    note: "Sport-specific ranges"
+
+prediction_validation:
+  confidence:
+    range: [0, 100]
+    typical_range: [50, 85]
+    warning_threshold: 90  # Very high confidence is suspicious
+
+  required_fields:
+    - pick
+    - confidence
+    - reasoning
+
+time_validation:
+  - name: "Game time in future"
+    rule: "start_time > now for scheduled games"
+    exceptions: ["in_progress", "final"]
+
+  - name: "Timezone handling"
+    rule: "All times in UTC with local display"
+
+consistency_checks:
+  - name: "Spread favorite matches"
+    rule: "If spread is negative, favorite team is correct"
+
+  - name: "Odds balance"
+    rule: "Home + away implied prob ~100-110%"
+    note: "Vig included"
+
+  - name: "Status consistency"
+    rule: "If status='final', score should be present"
+
+data_freshness:
+  odds:
+    max_stale_minutes: 5
+    during_game: 1
+  predictions:
+    max_stale_minutes: 30
+  scores:
+    max_stale_minutes: 1
+    during_game: 0.5  # 30 seconds
+
+null_checks:
+  never_null:
+    - game_id
+    - home_team.name
+    - away_team.name
+    - start_time
+  warn_if_null:
+    - spread
+    - moneyline
+    - prediction
+
+edge_cases:
+  - name: "Postponed games"
+    rule: "Handle postponed status gracefully"
+
+  - name: "Missing odds"
+    rule: "Display 'N/A' if odds unavailable"
+
+  - name: "Live games"
+    rule: "Show live indicator and current score"
+
+  - name: "No prediction"
+    rule: "Show 'Analysis pending' if no prediction"
+
+known_issues:
+  - id: "ODDS_LAG"
+    description: "Odds may lag real-time by ~30 seconds"
+    workaround: "Show 'Last updated' timestamp"

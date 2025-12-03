@@ -404,7 +404,7 @@ class MagnusKnowledgeBase:
             logger.error(f"Error deleting document: {e}")
             return False
 
-    def clear_cache(self):
+    def clear_cache(self) -> None:
         """Clear the query cache"""
         self._query_cache.clear()
         logger.info("Query cache cleared")

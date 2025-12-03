@@ -34,7 +34,7 @@ class WorldClassOrchestrator:
     - Production-ready
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Initialize all components
         self.tracer = get_tracer()
         self.metrics = get_metrics_collector()

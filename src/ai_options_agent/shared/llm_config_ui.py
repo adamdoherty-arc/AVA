@@ -92,7 +92,7 @@ class LLMConfigUI:
 
         return selected_provider
 
-    def render_simple_provider_list(self):
+    def render_simple_provider_list(self) -> None:
         """Simple provider list display (no selection)"""
         available_providers = self.llm_manager.get_available_providers()
 
@@ -101,7 +101,7 @@ class LLMConfigUI:
             for p in available_providers:
                 st.write(f"- ✅ **{p['name']}** - {p['description']} ({p['cost']})")
 
-    def _render_add_provider_section(self):
+    def _render_add_provider_section(self) -> None:
         """Render 'Add New Provider' expander"""
         with st.expander("➕ Add New LLM Provider", expanded=False):
             st.markdown("Add a new AI provider by entering its API key:")

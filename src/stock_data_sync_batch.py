@@ -29,7 +29,7 @@ class StockDataSyncBatch:
         )
         self.create_tables()
 
-    def create_tables(self):
+    def create_tables(self) -> None:
         """Create stock data tables"""
         cur = self.conn.cursor()
 
@@ -247,7 +247,7 @@ class StockDataSyncBatch:
             logger.error(f"Error syncing premiums for {symbol}: {e}")
             return False
 
-    def sync_batch(self):
+    def sync_batch(self) -> None:
         """Sync a batch of symbols that haven't been updated recently"""
         cur = self.conn.cursor()
 
@@ -297,7 +297,7 @@ class StockDataSyncBatch:
 
         logger.info(f"Batch complete: {success_count} stocks, {premium_count} with premiums")
 
-    def get_sync_status(self):
+    def get_sync_status(self) -> None:
         """Get synchronization status"""
         cur = self.conn.cursor()
 
@@ -329,7 +329,7 @@ class StockDataSyncBatch:
             'percent_complete': (synced_total / total * 100) if total > 0 else 0
         }
 
-    def close(self):
+    def close(self) -> None:
         """Close database connection"""
         self.conn.close()
 

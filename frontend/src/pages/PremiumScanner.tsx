@@ -29,6 +29,8 @@ interface ScanResult {
     strike: number
     expiration: string
     dte: number
+    bid: number
+    ask: number
     premium: number
     premium_pct: number
     monthly_return: number
@@ -37,6 +39,75 @@ interface ScanResult {
     volume: number
     open_interest: number
     bid_ask_spread: number
+    spread_pct: number
+    spread_quality: 'tight' | 'moderate' | 'wide'
+    liquidity_score: number
+    delta: number
+    theta: number
+    otm_pct: number
+    collateral: number
+    // AI-powered fields
+    ai_score?: number
+    ai_recommendation?: 'STRONG_BUY' | 'BUY' | 'HOLD' | 'CAUTION' | 'AVOID'
+    ai_confidence?: number
+    fundamental_score?: number
+    technical_score?: number
+    greeks_score?: number
+    risk_score?: number
+    sentiment_score?: number
+    sector?: string
+    industry?: string
+    pe_ratio?: number
+    market_cap?: number
+    beta?: number
+}
+
+interface AIInsights {
+    summary: string
+    top_pick: {
+        symbol: string
+        strike: number
+        expiration: string
+        ai_score: number
+        recommendation: string
+        monthly_return: number
+        premium: number
+        reason: string
+    } | null
+    market_conditions: {
+        iv_environment: string
+        avg_iv: number
+        high_iv_opportunities: number
+        premium_quality: string
+        market_insight: string
+    }
+    risk_assessment: {
+        risk_level: string
+        avg_risk_score: number
+        avg_otm_distance: number
+        risk_insight: string
+    }
+    sector_analysis: {
+        sectors: Record<string, { count: number; avg_score: number; avg_return: number }>
+        best_sector: string
+        best_sector_score: number
+        diversification: string
+    }
+    recommendations: string[]
+}
+
+interface AIStats {
+    avg_ai_score: number
+    max_ai_score: number
+    min_ai_score: number
+    avg_monthly_return: number
+    max_monthly_return: number
+    recommendation_breakdown: Record<string, number>
+    strong_buy_count: number
+    buy_count: number
+    hold_count: number
+    top_sectors: Record<string, number>
+    unique_symbols: number
 }
 
 interface ScanHistory {
@@ -64,7 +135,7 @@ interface ScanProgress {
     saved?: boolean
 }
 
-type SortField = 'symbol' | 'stock_price' | 'strike' | 'expiration' | 'dte' | 'premium' | 'premium_pct' | 'monthly_return' | 'annual_return' | 'iv' | 'volume'
+type SortField = 'symbol' | 'stock_price' | 'strike' | 'expiration' | 'dte' | 'premium' | 'premium_pct' | 'monthly_return' | 'annual_return' | 'iv' | 'volume' | 'liquidity_score' | 'otm_pct' | 'collateral' | 'delta' | 'ai_score'
 type SortDirection = 'asc' | 'desc'
 
 const DTE_OPTIONS = [7, 14, 30, 45]
@@ -85,18 +156,29 @@ const sourceColors: Record<string, string> = {
     database: 'text-amber-400'
 }
 
+const AI_RECOMMENDATION_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+    'STRONG_BUY': { bg: 'bg-emerald-500/20', text: 'text-emerald-400', border: 'border-emerald-500/30' },
+    'BUY': { bg: 'bg-green-500/20', text: 'text-green-400', border: 'border-green-500/30' },
+    'HOLD': { bg: 'bg-amber-500/20', text: 'text-amber-400', border: 'border-amber-500/30' },
+    'CAUTION': { bg: 'bg-orange-500/20', text: 'text-orange-400', border: 'border-orange-500/30' },
+    'AVOID': { bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500/30' },
+}
+
 const COLUMNS: { key: SortField; label: string; minWidth: number; defaultWidth: number }[] = [
+    { key: 'ai_score', label: 'AI', minWidth: 55, defaultWidth: 65 },
     { key: 'symbol', label: 'Symbol', minWidth: 80, defaultWidth: 100 },
-    { key: 'stock_price', label: 'Price', minWidth: 70, defaultWidth: 90 },
-    { key: 'strike', label: 'Strike', minWidth: 70, defaultWidth: 90 },
-    { key: 'expiration', label: 'Expiration', minWidth: 100, defaultWidth: 120 },
-    { key: 'dte', label: 'DTE', minWidth: 60, defaultWidth: 80 },
-    { key: 'premium', label: 'Premium', minWidth: 80, defaultWidth: 100 },
-    { key: 'premium_pct', label: 'Premium %', minWidth: 90, defaultWidth: 110 },
-    { key: 'monthly_return', label: 'Monthly', minWidth: 90, defaultWidth: 110 },
-    { key: 'annual_return', label: 'Annual', minWidth: 80, defaultWidth: 100 },
-    { key: 'iv', label: 'IV', minWidth: 60, defaultWidth: 80 },
-    { key: 'volume', label: 'Volume', minWidth: 80, defaultWidth: 100 },
+    { key: 'stock_price', label: 'Price', minWidth: 70, defaultWidth: 85 },
+    { key: 'strike', label: 'Strike', minWidth: 70, defaultWidth: 85 },
+    { key: 'otm_pct', label: 'OTM%', minWidth: 60, defaultWidth: 70 },
+    { key: 'dte', label: 'DTE', minWidth: 50, defaultWidth: 60 },
+    { key: 'premium', label: 'Premium', minWidth: 80, defaultWidth: 95 },
+    { key: 'premium_pct', label: 'Prem%', minWidth: 70, defaultWidth: 80 },
+    { key: 'monthly_return', label: 'Monthly', minWidth: 80, defaultWidth: 90 },
+    { key: 'annual_return', label: 'Annual', minWidth: 70, defaultWidth: 80 },
+    { key: 'iv', label: 'IV', minWidth: 50, defaultWidth: 60 },
+    { key: 'delta', label: 'Delta', minWidth: 60, defaultWidth: 70 },
+    { key: 'liquidity_score', label: 'Liq', minWidth: 50, defaultWidth: 55 },
+    { key: 'collateral', label: 'Collateral', minWidth: 90, defaultWidth: 100 },
 ]
 
 export default function PremiumScanner() {
@@ -104,8 +186,8 @@ export default function PremiumScanner() {
     const [selectedDTE, setSelectedDTE] = useState(30)
     const [selectedWatchlistId, setSelectedWatchlistId] = useState<string>('popular')
     const [customSymbols, setCustomSymbols] = useState('')
-    const [maxPrice, setMaxPrice] = useState(100)
-    const [minPremium, setMinPremium] = useState(1.0)
+    const [maxPrice, setMaxPrice] = useState(250)  // Increased to include more stocks
+    const [minPremium, setMinPremium] = useState(0.5)  // Lowered to show more opportunities
     const [showFilters, setShowFilters] = useState(false)
     const [showWatchlistDropdown, setShowWatchlistDropdown] = useState(false)
     const [showHistoryDropdown, setShowHistoryDropdown] = useState(false)
@@ -116,6 +198,12 @@ export default function PremiumScanner() {
     const [scanResults, setScanResults] = useState<ScanResult[]>([])
     const [scanId, setScanId] = useState<string | null>(null)
     const [scanError, setScanError] = useState<string | null>(null)
+
+    // AI state
+    const [aiMode, setAiMode] = useState(true)  // Enable AI by default
+    const [aiInsights, setAiInsights] = useState<AIInsights | null>(null)
+    const [aiStats, setAiStats] = useState<AIStats | null>(null)
+    const [showAiInsights, setShowAiInsights] = useState(true)
 
     // Sort state
     const [sortField, setSortField] = useState<SortField>('monthly_return')
@@ -131,6 +219,9 @@ export default function PremiumScanner() {
 
     // Unique stocks filter
     const [showUniqueOnly, setShowUniqueOnly] = useState(false)
+
+    // Stock price filter for results
+    const [maxStockPriceFilter, setMaxStockPriceFilter] = useState<string>('')
 
     // Resizing refs
     const resizingRef = useRef<{ column: string; startX: number; startWidth: number } | null>(null)
@@ -174,6 +265,19 @@ export default function PremiumScanner() {
         }
     }, [])
 
+    // Load a previous scan (defined before useEffect that uses it)
+    const loadPreviousScan = useCallback(async (scanHistoryId: string) => {
+        try {
+            const { data } = await axiosInstance.get(`/scanner/history/${scanHistoryId}`)
+            setScanResults(data.results || [])
+            setScanId(data.scan_id)
+            setScanProgress({ type: 'complete', count: data.result_count })
+            setShowHistoryDropdown(false)
+        } catch (error) {
+            console.error('Failed to load scan:', error)
+        }
+    }, [])
+
     // Auto-load most recent scan on mount
     useEffect(() => {
         if (historyData?.history?.length && scanResults.length === 0 && !isScanning) {
@@ -212,6 +316,8 @@ export default function PremiumScanner() {
         setScanResults([])
         setScanError(null)
         setScanId(null)
+        setAiInsights(null)
+        setAiStats(null)
 
         // Close any existing connection
         if (eventSourceRef.current) {
@@ -221,7 +327,10 @@ export default function PremiumScanner() {
         // Use fetch with streaming for SSE (EventSource doesn't support POST)
         const baseUrl = axiosInstance.defaults.baseURL || ''
 
-        fetch(`${baseUrl}/scanner/scan-stream`, {
+        // Use AI endpoint if AI mode is enabled
+        const endpoint = aiMode ? '/scanner/scan-ai-stream' : '/scanner/scan-stream'
+
+        fetch(`${baseUrl}${endpoint}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -231,7 +340,8 @@ export default function PremiumScanner() {
                 max_price: maxPrice,
                 min_premium_pct: minPremium,
                 dte: selectedDTE,
-                save_to_db: true
+                save_to_db: true,
+                ...(aiMode && { min_ai_score: 0 })  // Include AI params when in AI mode
             })
         }).then(async response => {
             const reader = response.body?.getReader()
@@ -254,14 +364,22 @@ export default function PremiumScanner() {
                 for (const line of lines) {
                     if (line.startsWith('data: ')) {
                         try {
-                            const data: ScanProgress = JSON.parse(line.slice(6))
-                            setScanProgress(data)
+                            const data = JSON.parse(line.slice(6))
+                            setScanProgress(data as ScanProgress)
 
                             if (data.type === 'complete') {
                                 setScanResults(data.results || [])
                                 setScanId(data.scan_id || null)
                                 setIsScanning(false)
                                 refetchHistory()
+
+                                // Capture AI insights and stats if available
+                                if (data.ai_insights) {
+                                    setAiInsights(data.ai_insights)
+                                }
+                                if (data.stats) {
+                                    setAiStats(data.stats)
+                                }
                             } else if (data.type === 'error') {
                                 setScanError(data.error || 'Unknown error')
                                 setIsScanning(false)
@@ -277,20 +395,7 @@ export default function PremiumScanner() {
             setScanError(error.message || 'Failed to connect')
             setIsScanning(false)
         })
-    }, [customSymbols, selectedWatchlist, maxPrice, minPremium, selectedDTE, refetchHistory])
-
-    // Load a previous scan
-    const loadPreviousScan = useCallback(async (scanHistoryId: string) => {
-        try {
-            const { data } = await axiosInstance.get(`/scanner/history/${scanHistoryId}`)
-            setScanResults(data.results || [])
-            setScanId(data.scan_id)
-            setScanProgress({ type: 'complete', count: data.result_count })
-            setShowHistoryDropdown(false)
-        } catch (error) {
-            console.error('Failed to load scan:', error)
-        }
-    }, [])
+    }, [customSymbols, selectedWatchlist, maxPrice, minPremium, selectedDTE, refetchHistory, aiMode])
 
     // Handle column sort
     const handleSort = useCallback((field: SortField) => {
@@ -342,12 +447,18 @@ export default function PremiumScanner() {
         color: COLORS[index]
     })) : []
 
-    // Process results: filter by DTE, unique, then sort
+    // Process results: filter by DTE, stock price, unique, then sort
     const processedResults = useMemo(() => {
         let results = [...scanResults]
 
         if (resultDTEFilter > 0) {
             results = results.filter((r: ScanResult) => r.dte <= resultDTEFilter)
+        }
+
+        // Filter by max stock price
+        const maxPriceNum = parseFloat(maxStockPriceFilter)
+        if (!isNaN(maxPriceNum) && maxPriceNum > 0) {
+            results = results.filter((r: ScanResult) => r.stock_price <= maxPriceNum)
         }
 
         if (showUniqueOnly) {
@@ -376,7 +487,7 @@ export default function PremiumScanner() {
         })
 
         return results
-    }, [scanResults, resultDTEFilter, showUniqueOnly, sortField, sortDirection])
+    }, [scanResults, resultDTEFilter, maxStockPriceFilter, showUniqueOnly, sortField, sortDirection])
 
     const getSortIcon = (field: SortField) => {
         if (sortField !== field) {
@@ -764,26 +875,183 @@ export default function PremiumScanner() {
                         </div>
                     )}
 
+                    {/* AI Mode Toggle */}
+                    <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-xl border border-slate-700/50 mb-4">
+                        <div className="flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                                aiMode ? 'bg-gradient-to-br from-violet-500 to-purple-600' : 'bg-slate-700'
+                            }`}>
+                                <Sparkles className={`w-4 h-4 ${aiMode ? 'text-white' : 'text-slate-400'}`} />
+                            </div>
+                            <div>
+                                <div className="text-sm font-medium text-white">AI-Powered Analysis</div>
+                                <div className="text-xs text-slate-400">
+                                    {aiMode ? 'Multi-criteria scoring & insights enabled' : 'Basic scan mode'}
+                                </div>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => setAiMode(!aiMode)}
+                            className={`relative w-12 h-6 rounded-full transition-colors ${
+                                aiMode ? 'bg-violet-500' : 'bg-slate-600'
+                            }`}
+                        >
+                            <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
+                                aiMode ? 'translate-x-7' : 'translate-x-1'
+                            }`} />
+                        </button>
+                    </div>
+
                     {/* Scan Button */}
                     <button
                         onClick={handleScan}
                         disabled={isScanning || (!customSymbols && (!selectedWatchlist || selectedWatchlist.symbols.length === 0))}
-                        className="btn-primary w-full py-3 flex items-center justify-center gap-2 text-base"
+                        className={`w-full py-3 flex items-center justify-center gap-2 text-base rounded-xl font-semibold transition-all ${
+                            aiMode
+                                ? 'bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 text-white shadow-lg shadow-violet-500/25'
+                                : 'btn-primary'
+                        } disabled:opacity-50 disabled:cursor-not-allowed`}
                     >
                         {isScanning ? (
                             <>
                                 <Loader2 className="w-5 h-5 animate-spin" />
-                                Scanning... {scanProgress?.percent || 0}%
+                                {aiMode ? 'AI Analyzing...' : 'Scanning...'} {scanProgress?.percent || 0}%
                             </>
                         ) : (
                             <>
-                                <Search className="w-5 h-5" />
-                                Scan {selectedDTE} DTE Premiums
+                                {aiMode ? <Sparkles className="w-5 h-5" /> : <Search className="w-5 h-5" />}
+                                {aiMode ? `AI Scan ${selectedDTE} DTE` : `Scan ${selectedDTE} DTE Premiums`}
                             </>
                         )}
                     </button>
                 </div>
             </div>
+
+            {/* AI Insights Panel */}
+            {aiInsights && showAiInsights && (
+                <div className="glass-card overflow-hidden border-violet-500/30">
+                    <div className="p-4 border-b border-slate-700/50 bg-gradient-to-r from-violet-500/10 to-purple-500/10 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+                                <Sparkles className="w-4 h-4 text-white" />
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-white">AI Insights</h3>
+                                <p className="text-xs text-slate-400">{aiInsights.summary}</p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => setShowAiInsights(false)}
+                            className="text-slate-400 hover:text-white transition-colors"
+                        >
+                            <XCircle className="w-5 h-5" />
+                        </button>
+                    </div>
+
+                    <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {/* Top Pick */}
+                        {aiInsights.top_pick && (
+                            <div className="p-4 bg-emerald-500/10 rounded-xl border border-emerald-500/30">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <TrendingUp className="w-4 h-4 text-emerald-400" />
+                                    <span className="text-xs font-semibold text-emerald-400 uppercase">Top Pick</span>
+                                </div>
+                                <div className="text-lg font-bold text-white">{aiInsights.top_pick.symbol}</div>
+                                <div className="text-sm text-slate-300">${aiInsights.top_pick.strike} • {aiInsights.top_pick.monthly_return?.toFixed(1)}%/mo</div>
+                                <div className="text-xs text-slate-400 mt-1">{aiInsights.top_pick.reason}</div>
+                            </div>
+                        )}
+
+                        {/* Market Conditions */}
+                        {aiInsights.market_conditions && (
+                            <div className="p-4 bg-blue-500/10 rounded-xl border border-blue-500/30">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <Activity className="w-4 h-4 text-blue-400" />
+                                    <span className="text-xs font-semibold text-blue-400 uppercase">IV Environment</span>
+                                </div>
+                                <div className="text-lg font-bold text-white capitalize">{aiInsights.market_conditions.iv_environment}</div>
+                                <div className="text-sm text-slate-300">Avg IV: {aiInsights.market_conditions.avg_iv?.toFixed(1)}%</div>
+                                <div className="text-xs text-slate-400 mt-1">{aiInsights.market_conditions.market_insight}</div>
+                            </div>
+                        )}
+
+                        {/* Risk Assessment */}
+                        {aiInsights.risk_assessment && (
+                            <div className={`p-4 rounded-xl border ${
+                                aiInsights.risk_assessment.risk_level === 'low'
+                                    ? 'bg-emerald-500/10 border-emerald-500/30'
+                                    : aiInsights.risk_assessment.risk_level === 'moderate'
+                                    ? 'bg-amber-500/10 border-amber-500/30'
+                                    : 'bg-red-500/10 border-red-500/30'
+                            }`}>
+                                <div className="flex items-center gap-2 mb-2">
+                                    <Target className="w-4 h-4 text-amber-400" />
+                                    <span className="text-xs font-semibold text-amber-400 uppercase">Risk Level</span>
+                                </div>
+                                <div className="text-lg font-bold text-white capitalize">{aiInsights.risk_assessment.risk_level}</div>
+                                <div className="text-sm text-slate-300">Avg OTM: {aiInsights.risk_assessment.avg_otm_distance?.toFixed(1)}%</div>
+                                <div className="text-xs text-slate-400 mt-1">{aiInsights.risk_assessment.risk_insight}</div>
+                            </div>
+                        )}
+
+                        {/* Stats Summary */}
+                        {aiStats && (
+                            <div className="p-4 bg-slate-700/30 rounded-xl border border-slate-600/50">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <BarChart3 className="w-4 h-4 text-slate-400" />
+                                    <span className="text-xs font-semibold text-slate-400 uppercase">AI Scores</span>
+                                </div>
+                                <div className="space-y-1">
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-slate-400">Strong Buy</span>
+                                        <span className="text-emerald-400 font-bold">{aiStats.strong_buy_count || 0}</span>
+                                    </div>
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-slate-400">Buy</span>
+                                        <span className="text-green-400 font-bold">{aiStats.buy_count || 0}</span>
+                                    </div>
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-slate-400">Hold</span>
+                                        <span className="text-amber-400 font-bold">{aiStats.hold_count || 0}</span>
+                                    </div>
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-slate-400">Avg Score</span>
+                                        <span className="text-white font-bold">{aiStats.avg_ai_score || 0}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* AI Recommendations */}
+                    {aiInsights.recommendations && aiInsights.recommendations.length > 0 && (
+                        <div className="px-4 pb-4">
+                            <div className="p-3 bg-slate-800/50 rounded-xl">
+                                <div className="text-xs font-semibold text-slate-400 uppercase mb-2">AI Recommendations</div>
+                                <ul className="space-y-1">
+                                    {aiInsights.recommendations.slice(0, 3).map((rec, idx) => (
+                                        <li key={idx} className="text-sm text-slate-300 flex items-start gap-2">
+                                            <span className="text-violet-400 mt-0.5">•</span>
+                                            {rec}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Collapsed AI Insights Toggle */}
+            {aiInsights && !showAiInsights && (
+                <button
+                    onClick={() => setShowAiInsights(true)}
+                    className="w-full p-3 glass-card border-violet-500/30 hover:border-violet-500/50 flex items-center justify-center gap-2 text-violet-400 hover:text-violet-300 transition-all"
+                >
+                    <Sparkles className="w-4 h-4" />
+                    <span className="text-sm">Show AI Insights</span>
+                </button>
+            )}
 
             {/* Results */}
             {scanResults.length > 0 && (
@@ -823,6 +1091,29 @@ export default function PremiumScanner() {
                                         </button>
                                     ))}
                                 </div>
+                            </div>
+
+                            {/* Stock Price Filter */}
+                            <div className="flex items-center gap-2">
+                                <span className="text-sm text-slate-400">Max Price:</span>
+                                <div className="relative">
+                                    <DollarSign className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+                                    <input
+                                        type="number"
+                                        value={maxStockPriceFilter}
+                                        onChange={(e) => setMaxStockPriceFilter(e.target.value)}
+                                        placeholder="Any"
+                                        className="w-24 pl-7 pr-2 py-1.5 text-sm bg-slate-800/60 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50"
+                                    />
+                                </div>
+                                {maxStockPriceFilter && (
+                                    <button
+                                        onClick={() => setMaxStockPriceFilter('')}
+                                        className="text-xs text-slate-500 hover:text-slate-300"
+                                    >
+                                        Clear
+                                    </button>
+                                )}
                             </div>
 
                             <button
@@ -870,6 +1161,30 @@ export default function PremiumScanner() {
                                         key={`${opp.symbol}-${opp.strike}-${opp.expiration}-${idx}`}
                                         className="hover:bg-slate-800/30 transition-colors"
                                     >
+                                        {/* AI Score Column */}
+                                        <td style={{ width: columnWidths['ai_score'] }} className="px-3 py-3">
+                                            {opp.ai_score !== undefined ? (
+                                                <div className="flex flex-col items-center gap-0.5">
+                                                    <span className={`text-sm font-bold ${
+                                                        opp.ai_score >= 80 ? 'text-emerald-400' :
+                                                        opp.ai_score >= 60 ? 'text-green-400' :
+                                                        opp.ai_score >= 45 ? 'text-amber-400' :
+                                                        'text-red-400'
+                                                    }`}>
+                                                        {opp.ai_score}
+                                                    </span>
+                                                    {opp.ai_recommendation && (
+                                                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                                                            AI_RECOMMENDATION_COLORS[opp.ai_recommendation]?.bg || 'bg-slate-500/20'
+                                                        } ${AI_RECOMMENDATION_COLORS[opp.ai_recommendation]?.text || 'text-slate-400'}`}>
+                                                            {opp.ai_recommendation === 'STRONG_BUY' ? 'S.BUY' : opp.ai_recommendation}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <span className="text-slate-500">-</span>
+                                            )}
+                                        </td>
                                         <td style={{ width: columnWidths['symbol'] }} className="px-3 py-3">
                                             <button
                                                 onClick={() => openTradingView(opp.symbol)}
@@ -886,8 +1201,10 @@ export default function PremiumScanner() {
                                         <td style={{ width: columnWidths['strike'] }} className="px-3 py-3 font-mono text-white truncate">
                                             ${opp.strike}
                                         </td>
-                                        <td style={{ width: columnWidths['expiration'] }} className="px-3 py-3 text-slate-400 text-sm truncate">
-                                            {opp.expiration}
+                                        <td style={{ width: columnWidths['otm_pct'] }} className="px-3 py-3 font-mono truncate">
+                                            <span className={opp.otm_pct > 0 ? 'text-emerald-400' : 'text-amber-400'}>
+                                                {opp.otm_pct?.toFixed(1) || 0}%
+                                            </span>
                                         </td>
                                         <td style={{ width: columnWidths['dte'] }} className="px-3 py-3">
                                             <span className={`badge-${
@@ -900,23 +1217,35 @@ export default function PremiumScanner() {
                                             ${opp.premium}
                                         </td>
                                         <td style={{ width: columnWidths['premium_pct'] }} className="px-3 py-3 font-mono text-emerald-400 truncate">
-                                            {opp.premium_pct.toFixed(2)}%
+                                            {opp.premium_pct?.toFixed(2) || 0}%
                                         </td>
                                         <td style={{ width: columnWidths['monthly_return'] }} className="px-3 py-3">
                                             <span className="font-bold text-emerald-400 bg-emerald-500/15 px-2 py-1 rounded-lg">
-                                                {opp.monthly_return.toFixed(2)}%
+                                                {opp.monthly_return?.toFixed(2) || 0}%
                                             </span>
                                         </td>
                                         <td style={{ width: columnWidths['annual_return'] }} className="px-3 py-3 font-mono text-slate-400 truncate">
-                                            {opp.annual_return.toFixed(1)}%
+                                            {opp.annual_return?.toFixed(1) || 0}%
                                         </td>
                                         <td style={{ width: columnWidths['iv'] }} className="px-3 py-3 truncate">
                                             <span className={opp.iv >= 50 ? 'text-amber-400' : 'text-slate-400'}>
-                                                {opp.iv}%
+                                                {opp.iv || 0}%
                                             </span>
                                         </td>
-                                        <td style={{ width: columnWidths['volume'] }} className="px-3 py-3 text-slate-400 truncate">
-                                            {opp.volume.toLocaleString()}
+                                        <td style={{ width: columnWidths['delta'] }} className="px-3 py-3 font-mono text-slate-400 truncate">
+                                            {opp.delta?.toFixed(2) || '-'}
+                                        </td>
+                                        <td style={{ width: columnWidths['liquidity_score'] }} className="px-3 py-3">
+                                            <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+                                                (opp.liquidity_score || 0) >= 50 ? 'bg-emerald-500/20 text-emerald-400' :
+                                                (opp.liquidity_score || 0) >= 25 ? 'bg-amber-500/20 text-amber-400' :
+                                                'bg-red-500/20 text-red-400'
+                                            }`}>
+                                                {opp.liquidity_score || 0}
+                                            </span>
+                                        </td>
+                                        <td style={{ width: columnWidths['collateral'] }} className="px-3 py-3 font-mono text-slate-300 truncate">
+                                            ${opp.collateral?.toLocaleString() || 0}
                                         </td>
                                     </tr>
                                 ))}

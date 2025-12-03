@@ -23,7 +23,7 @@ except ImportError:
 class ToolRegistry:
     """Centralized tool registry for AVA"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._tools: Dict[str, BaseTool] = {}
         self._tool_metadata: Dict[str, Dict[str, Any]] = {}
         logger.info("ToolRegistry initialized")

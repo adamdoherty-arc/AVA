@@ -78,6 +78,27 @@ class XtradesScraper:
     LOGIN_URL = f"{BASE_URL}/login"
     DISCORD_OAUTH_URL = "https://discord.com/api/oauth2/authorize"
 
+    # Timing constants (seconds)
+    WAIT_SHORT = 1
+    WAIT_MEDIUM = 2
+    WAIT_LONG = 3
+    WAIT_VERY_LONG = 5
+    WAIT_PAGE_LOAD = 4
+    WAIT_OAUTH_REDIRECT = 10
+
+    # WebDriver timeouts
+    DEFAULT_TIMEOUT = 20
+    PAGE_VISIBLE_TIMEOUT = 15
+
+    # Scrolling constants
+    MAX_SCROLL_ATTEMPTS = 100
+    SCROLL_PAUSE_SECONDS = 1.5
+    NO_CHANGE_THRESHOLD = 3
+
+    # Limits
+    MAX_ALERTS_ABSOLUTE = 1000
+    MAX_LOGIN_RETRIES = 3
+
     # Alert action patterns
     ACTION_PATTERNS = {
         'BTO': r'\bBTO\b',
@@ -102,6 +123,18 @@ class XtradesScraper:
         'Butterfly': r'\b(?:Butterfly|BF)\b',
         'Straddle': r'\b(?:Straddle)\b',
         'Strangle': r'\b(?:Strangle)\b'
+    }
+
+    # Common words to exclude from ticker matching (false positives)
+    TICKER_EXCLUSIONS = {
+        'THE', 'AND', 'BUT', 'FOR', 'THIS', 'THAT', 'WITH', 'FROM', 'HAVE', 'BEEN',
+        'CALL', 'PUT', 'BUY', 'SELL', 'OPEN', 'CLOSE', 'HOLD', 'LONG', 'SHORT',
+        'MOVE', 'PLAY', 'RISK', 'STOP', 'TAKE', 'WAIT', 'WEEK', 'YEAR', 'TODAY',
+        'NOW', 'NEW', 'OUT', 'ALL', 'GET', 'CAN', 'MAY', 'DAY', 'UP', 'GO',
+        'ATM', 'OTM', 'ITM', 'DTE', 'EXP', 'LEAP', 'LEAPS', 'IV', 'HV',
+        'AM', 'PM', 'EST', 'PST', 'UTC', 'US', 'USD', 'EUR', 'ATH', 'EOD', 'EOW',
+        'HIGH', 'LOW', 'MID', 'NEXT', 'LAST', 'JUST', 'ALSO', 'ONLY', 'VERY',
+        'FREE', 'PAID', 'GOOD', 'BEST', 'NICE', 'BACK', 'DOWN', 'THEM', 'WHEN'
     }
 
     def __init__(self, headless: bool = False, cache_dir: Optional[str] = None):
@@ -141,11 +174,16 @@ class XtradesScraper:
         # options.add_experimental_option("excludeSwitches", ["enable-automation"])
         # options.add_experimental_option('useAutomationExtension', False)
 
-        # User agent
+        # Use persistent Chrome profile to retain Discord session
+        # This is more reliable than cookie-only approach for OAuth sessions
+        profile_dir = self.cache_dir / 'chrome_profile'
+        options.add_argument(f'--user-data-dir={profile_dir}')
+
+        # More natural user agent (match current Chrome version)
         options.add_argument(
             'user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
             'AppleWebKit/537.36 (KHTML, like Gecko) '
-            'Chrome/120.0.0.0 Safari/537.36'
+            'Chrome/142.0.0.0 Safari/537.36'
         )
 
         if self.headless:
@@ -329,13 +367,70 @@ class XtradesScraper:
 
         raise LoginFailedException(f"Failed to login after {retry_count} attempts")
 
+    def _wait_for_page_visible(self, timeout: int = 15) -> bool:
+        """
+        Wait for Angular Ionic page to become visible (remove ion-page-invisible class).
+
+        The Xtrades app uses Angular/Ionic which adds 'ion-page-invisible' class during
+        page transitions with pointer-events: none, preventing clicks.
+
+        Args:
+            timeout: Maximum seconds to wait
+
+        Returns:
+            True if page became visible, False if timeout
+        """
+        print("Waiting for page to become visible...")
+        start_time = time.time()
+
+        while time.time() - start_time < timeout:
+            try:
+                # Check if any ion-page is visible (without ion-page-invisible class)
+                visible_pages = self.driver.find_elements(
+                    By.CSS_SELECTOR,
+                    ".ion-page:not(.ion-page-invisible)"
+                )
+                if visible_pages:
+                    print("Page is now visible")
+                    return True
+
+                # Also check if discord button is interactable
+                discord_btn = self.driver.find_elements(By.CSS_SELECTOR, "button.discord-btn")
+                if discord_btn and discord_btn[0].is_displayed() and discord_btn[0].is_enabled():
+                    # Check if parent has pointer-events: none
+                    parent = self.driver.execute_script(
+                        "return arguments[0].closest('.ion-page')", discord_btn[0]
+                    )
+                    if parent:
+                        pointer_events = self.driver.execute_script(
+                            "return window.getComputedStyle(arguments[0]).pointerEvents", parent
+                        )
+                        if pointer_events != 'none':
+                            print("Discord button is now interactable")
+                            return True
+
+            except Exception as e:
+                pass  # Continue waiting
+
+            time.sleep(0.5)
+
+        print(f"Timeout waiting for page to become visible after {timeout}s")
+        return False
+
     def _find_discord_button(self) -> Optional[webdriver.remote.webelement.WebElement]:
         """Find and return Discord login button"""
+        # First wait for page to be fully visible (Angular/Ionic transition complete)
+        self._wait_for_page_visible()
+
         selectors = [
-            (By.XPATH, "//button[contains(., 'Discord')]"),
-            (By.XPATH, "//a[contains(., 'Discord')]"),
+            # Most specific first - class-based selectors for buttons/links
+            (By.CSS_SELECTOR, "button.discord-btn"),
+            (By.CSS_SELECTOR, ".discord-btn"),
             (By.CSS_SELECTOR, "button[class*='discord']"),
             (By.CSS_SELECTOR, "a[class*='discord']"),
+            # Text-based selectors (fallback if UI has text)
+            (By.XPATH, "//button[contains(., 'Discord')]"),
+            (By.XPATH, "//a[contains(., 'Discord')]"),
             (By.XPATH, "//*[contains(@class, 'discord')]"),
         ]
 
@@ -344,6 +439,7 @@ class XtradesScraper:
                 element = self.wait.until(
                     EC.element_to_be_clickable((by, selector))
                 )
+                print(f"Found Discord button with selector: {selector}")
                 return element
             except TimeoutException:
                 continue
@@ -381,7 +477,7 @@ class XtradesScraper:
                 )
                 email_input.clear()
                 email_input.send_keys(self.username)
-                print(f"Entered email: {self.username}")
+                print("Entered email credentials")
                 time.sleep(1)
             except TimeoutException:
                 print("Email input not found - might already be logged in")
@@ -719,10 +815,13 @@ class XtradesScraper:
                 'status': 'open'
             }
 
-            # Extract ticker (3-5 uppercase letters, isolated)
-            ticker_match = re.search(r'\b([A-Z]{1,5})\b', alert_text)
-            if ticker_match:
-                result['ticker'] = ticker_match.group(1)
+            # Extract ticker (2-5 uppercase letters, isolated)
+            # Must exclude common words that aren't tickers
+            ticker_matches = re.findall(r'\b([A-Z]{2,5})\b', alert_text)
+            for potential_ticker in ticker_matches:
+                if potential_ticker not in self.TICKER_EXCLUSIONS:
+                    result['ticker'] = potential_ticker
+                    break
 
             # Extract strategy
             for strategy, pattern in self.STRATEGY_PATTERNS.items():
@@ -785,15 +884,64 @@ class XtradesScraper:
             result['alert_timestamp'] = datetime.now().isoformat()
             result['scraped_at'] = datetime.now().isoformat()
 
-            # Only return if we have minimum required data
-            if result['ticker']:
-                return result
+            # Only return if we have minimum required data for a TRADE (not just any post)
+            # Requires: ticker AND at least one of (strategy, action, entry_price)
+            # This filters out general discussion posts that just mention stock symbols
+            if result['ticker'] and (result['strategy'] or result['action'] or result['entry_price']):
+                # Validate the parsed data
+                if self._validate_alert_data(result):
+                    return result
 
             return None
 
         except Exception as e:
             print(f"Error parsing alert: {e}")
             return None
+
+    def _validate_alert_data(self, result: Dict) -> bool:
+        """
+        Validate parsed alert data for sanity checks.
+
+        Args:
+            result: Parsed alert dictionary
+
+        Returns:
+            True if data passes validation, False otherwise
+        """
+        # Ticker must be valid length and uppercase
+        ticker = result.get('ticker', '')
+        if not ticker or len(ticker) < 2 or len(ticker) > 5:
+            return False
+
+        # Ticker should be uppercase (already filtered in extraction)
+        if ticker != ticker.upper():
+            return False
+
+        # Entry price should be positive if present
+        entry_price = result.get('entry_price')
+        if entry_price is not None and entry_price <= 0:
+            print(f"Warning: Invalid entry price {entry_price} for {ticker}")
+            return False
+
+        # Strike price should be positive if present
+        strike_price = result.get('strike_price')
+        if strike_price is not None and strike_price <= 0:
+            print(f"Warning: Invalid strike price {strike_price} for {ticker}")
+            return False
+
+        # Exit price should be positive if present
+        exit_price = result.get('exit_price')
+        if exit_price is not None and exit_price <= 0:
+            print(f"Warning: Invalid exit price {exit_price} for {ticker}")
+            return False
+
+        # Quantity should be positive if present
+        quantity = result.get('quantity')
+        if quantity is not None and quantity <= 0:
+            print(f"Warning: Invalid quantity {quantity} for {ticker}")
+            return False
+
+        return True
 
     def _parse_date(self, date_str: str) -> Optional[str]:
         """

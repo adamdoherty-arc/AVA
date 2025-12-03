@@ -1,0 +1,53 @@
+# Research UI Components Specification
+
+route: /research
+page_title: "Research"
+
+components:
+  - name: ResearchPage
+    type: page
+    children:
+      - SearchSection
+      - ResultsSection
+      - ContextPanel
+
+  - name: SearchSection
+    type: section
+    selector: "[data-testid='search-section']"
+    elements:
+      - name: QueryInput
+        selector: "[data-testid='query-input']"
+        type: textarea
+        placeholder: "Ask a research question..."
+      - name: SearchButton
+        selector: "[data-testid='search-button']"
+        text: "Search"
+      - name: IncludePositionsToggle
+        type: checkbox
+        label: "Include portfolio context"
+
+  - name: ResultsSection
+    type: section
+    selector: "[data-testid='results']"
+    elements:
+      - name: Answer
+        selector: ".answer"
+        shows: formatted answer
+      - name: SourcesList
+        selector: ".sources-list"
+        shows: source documents with similarity scores
+
+  - name: ContextPanel
+    type: sidebar
+    selector: "[data-testid='context-panel']"
+    shows:
+      - portfolio summary
+      - relevant positions
+
+interactions:
+  - name: Search
+    trigger: Submit query
+    expected_result: "Display answer with sources"
+  - name: Toggle Context
+    trigger: Check include positions
+    expected_result: "Add position context to results"

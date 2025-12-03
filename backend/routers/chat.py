@@ -77,6 +77,15 @@ class ChatResponse(BaseModel):
     confidence: float
     processing_time_ms: float = 0.0
 
+
+
+@router.get("/history")
+async def get_chat_history():
+    """
+    Get chat history - returns empty list for now (history managed by frontend).
+    """
+    return {"history": [], "count": 0}
+
 @router.get("/models")
 async def get_models():
     """Get available models for chat."""

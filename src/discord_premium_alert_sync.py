@@ -33,7 +33,7 @@ PREMIUM_ALERTS_CHANNEL_ID = '990331623260180580'
 class DiscordPremiumAlertSync:
     """Enhanced Discord sync with premium alert prioritization"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize sync manager"""
         self.discord_webhook_url = os.getenv('DISCORD_WEBHOOK_URL')
         self.discord_bot_webhook = os.getenv('DISCORD_BOT_WEBHOOK_URL')  # AVA bot webhook
@@ -45,7 +45,7 @@ class DiscordPremiumAlertSync:
         self.db_user = os.getenv('POSTGRES_USER', os.getenv('DB_USER', 'postgres'))
         self.db_password = os.getenv('POSTGRES_PASSWORD', os.getenv('DB_PASSWORD', ''))
 
-    def get_connection(self):
+    def get_connection(self) -> None:
         """Get database connection"""
         return psycopg2.connect(
             host=self.db_host,

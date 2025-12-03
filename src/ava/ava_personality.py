@@ -491,7 +491,11 @@ class AVAPersonality:
             PersonalityMode.WITTY: "😏 Witty & Clever - Humor meets market analysis",
             PersonalityMode.MENTOR: "🎓 Mentor & Teacher - Educational, guiding, patient",
             PersonalityMode.CONCISE: "⚡ Concise & Direct - Brief, essential info only",
-            PersonalityMode.CHARMING: "💕 Charming & Flirty - Romantic, playful, intimate trading companion"
+            PersonalityMode.CHARMING: "💕 Charming & Flirty - Romantic, playful, intimate trading companion",
+            PersonalityMode.ANALYST: "📈 Analyst & Quantitative - Bloomberg-style, data-obsessed, metrics-driven",
+            PersonalityMode.COACH: "💪 Coach & Motivational - Encouraging, performance-focused, energizing",
+            PersonalityMode.REBEL: "🔥 Rebel & Contrarian - Challenges conventional wisdom, independent thinking",
+            PersonalityMode.GURU: "🙏 Guru & Philosophical - Zen master, markets-as-life-lessons, wisdom-focused"
         }
         return descriptions.get(self.mode, "Unknown mode")
 

@@ -64,7 +64,7 @@ class XtradesDBSync:
         self.scraper: Optional[XtradesScraper] = None
         self._connect()
 
-    def _connect(self):
+    def _connect(self) -> None:
         """Establish database connection"""
         try:
             self.conn = psycopg2.connect(**self.db_config)
@@ -72,7 +72,7 @@ class XtradesDBSync:
         except psycopg2.Error as e:
             raise Exception(f"Database connection failed: {e}")
 
-    def _ensure_scraper(self):
+    def _ensure_scraper(self) -> None:
         """Initialize scraper if not already done"""
         if not self.scraper:
             self.scraper = XtradesScraper()
@@ -503,7 +503,7 @@ class XtradesDBSync:
         finally:
             cursor.close()
 
-    def close(self):
+    def close(self) -> None:
         """Close connections"""
         if self.conn:
             self.conn.close()

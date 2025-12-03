@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class AutoBalanceRecorder:
     """Automatically records portfolio balance changes to database"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.db_config = {
             'host': os.getenv('DB_HOST', 'localhost'),
             'port': os.getenv('DB_PORT', '5432'),

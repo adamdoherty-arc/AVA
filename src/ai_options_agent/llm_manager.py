@@ -505,12 +505,12 @@ class LLMManager:
         }
     }
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize LLM Manager"""
         self.providers = {}
         self._initialize_providers()
 
-    def _initialize_providers(self):
+    def _initialize_providers(self) -> None:
         """Initialize all available providers"""
         # Ollama (local, always try)
         ollama = OllamaProvider()

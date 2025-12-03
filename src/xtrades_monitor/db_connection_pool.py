@@ -67,7 +67,7 @@ class DatabaseConnectionPool:
                     cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize connection pool parameters"""
         if self._pool is None:
             self.db_url = os.getenv("DATABASE_URL")
@@ -164,7 +164,7 @@ class DatabaseConnectionPool:
             logger.error(f"Error returning connection to pool: {e}")
 
     @contextmanager
-    def get_connection(self):
+    def get_connection(self) -> None:
         """
         Context manager for safe connection handling.
 

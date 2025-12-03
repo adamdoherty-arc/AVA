@@ -249,7 +249,7 @@ class VoiceCommandHandler:
 
         logger.info(f"Voice command handler initialized with wake word: {self.config.wake_word.value}")
 
-    def _register_handlers(self):
+    def _register_handlers(self) -> None:
         """Register all command handlers"""
         self.handlers = {
             "show_portfolio": self._handle_show_portfolio,
@@ -545,7 +545,7 @@ class VoiceCommandHandler:
         """Get recent command history"""
         return self.command_history[-limit:]
 
-    def clear_history(self):
+    def clear_history(self) -> None:
         """Clear command history"""
         self.command_history.clear()
 
@@ -608,7 +608,7 @@ class WakeWordDetector:
             logger.warning("Picovoice Porcupine not installed. Wake word detection disabled.")
             logger.info("Install with: pip install pvporcupine")
 
-    def _initialize_porcupine(self):
+    def _initialize_porcupine(self) -> None:
         """Initialize Porcupine wake word engine"""
         try:
             import pvporcupine
@@ -684,7 +684,7 @@ class WakeWordDetector:
             audio_stream.close()
             pa.terminate()
 
-    def stop_listening(self):
+    def stop_listening(self) -> None:
         """Stop listening for wake word"""
         self.is_listening = False
         if self.porcupine:

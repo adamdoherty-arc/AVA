@@ -8,20 +8,16 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 
 interface CacheMetrics {
     total_size_mb: number
-    max_size_mb: number
-    item_count: number
-    hit_count: number
-    miss_count: number
-    hit_rate: number
-    evictions: number
-    last_cleared: string
+    total_entries: number
+    overall_hit_rate: number
+    last_updated: string
     caches: {
         name: string
         size_mb: number
-        items: number
-        hits: number
-        misses: number
-        ttl_seconds: number
+        entries: number
+        hit_rate: number
+        miss_rate: number
+        avg_ttl_seconds: number
     }[]
 }
 
@@ -49,7 +45,9 @@ export default function CacheMetrics() {
         }
     })
 
-    const usagePercent = metrics ? (metrics.total_size_mb / metrics.max_size_mb) * 100 : 0
+    // Calculate usage percent - API doesn't provide max_size_mb, so we estimate based on total
+    const estimatedMaxSize = 500 // Estimated max cache size in MB
+    const usagePercent = metrics ? (metrics.total_size_mb / estimatedMaxSize) * 100 : 0
 
     const pieData = metrics?.caches.map(cache => ({
         name: cache.name,
@@ -97,10 +95,10 @@ export default function CacheMetrics() {
                         </div>
                     </div>
                     <div className="text-2xl font-bold text-white mb-2">
-                        {metrics?.total_size_mb.toFixed(1) ?? 0} MB
+                        {(metrics?.total_size_mb ?? 0).toFixed(1)} MB
                     </div>
                     <div className="flex items-center justify-between text-sm text-slate-400 mb-2">
-                        <span>of {metrics?.max_size_mb ?? 0} MB</span>
+                        <span>of ~{estimatedMaxSize} MB</span>
                         <span>{usagePercent.toFixed(1)}%</span>
                     </div>
                     <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
@@ -125,13 +123,13 @@ export default function CacheMetrics() {
                         </div>
                     </div>
                     <div className={`text-2xl font-bold ${
-                        (metrics?.hit_rate ?? 0) >= 80 ? 'text-emerald-400' :
-                        (metrics?.hit_rate ?? 0) >= 50 ? 'text-amber-400' : 'text-red-400'
+                        (metrics?.overall_hit_rate ?? 0) >= 0.8 ? 'text-emerald-400' :
+                        (metrics?.overall_hit_rate ?? 0) >= 0.5 ? 'text-amber-400' : 'text-red-400'
                     }`}>
-                        {metrics?.hit_rate.toFixed(1) ?? 0}%
+                        {((metrics?.overall_hit_rate ?? 0) * 100).toFixed(1)}%
                     </div>
                     <div className="text-sm text-slate-400 mt-2">
-                        {metrics?.hit_count.toLocaleString() ?? 0} hits / {metrics?.miss_count.toLocaleString() ?? 0} misses
+                        {(metrics?.total_entries ?? 0).toLocaleString()} cached items
                     </div>
                 </div>
 
@@ -146,25 +144,25 @@ export default function CacheMetrics() {
                         </div>
                     </div>
                     <div className="text-2xl font-bold text-white">
-                        {metrics?.item_count.toLocaleString() ?? 0}
+                        {(metrics?.total_entries ?? 0).toLocaleString()}
                     </div>
                     <div className="text-sm text-slate-400 mt-2">
-                        {metrics?.evictions.toLocaleString() ?? 0} evictions
+                        across {metrics?.caches.length ?? 0} caches
                     </div>
                 </div>
 
-                {/* Last Cleared */}
+                {/* Last Updated */}
                 <div className="glass-card p-5">
                     <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center">
                                 <Clock className="w-5 h-5 text-amber-400" />
                             </div>
-                            <span className="font-semibold text-white">Last Cleared</span>
+                            <span className="font-semibold text-white">Last Updated</span>
                         </div>
                     </div>
                     <div className="text-lg font-bold text-white">
-                        {metrics?.last_cleared ? new Date(metrics.last_cleared).toLocaleString() : 'Never'}
+                        {metrics?.last_updated ? new Date(metrics.last_updated).toLocaleString() : 'Never'}
                     </div>
                 </div>
             </div>
@@ -222,23 +220,23 @@ export default function CacheMetrics() {
                                 <div className="grid grid-cols-4 gap-4 text-sm">
                                     <div>
                                         <span className="text-slate-400">Size</span>
-                                        <div className="text-white font-mono">{cache.size_mb.toFixed(2)} MB</div>
+                                        <div className="text-white font-mono">{(cache.size_mb ?? 0).toFixed(2)} MB</div>
                                     </div>
                                     <div>
-                                        <span className="text-slate-400">Items</span>
-                                        <div className="text-white font-mono">{cache.items.toLocaleString()}</div>
+                                        <span className="text-slate-400">Entries</span>
+                                        <div className="text-white font-mono">{(cache.entries ?? 0).toLocaleString()}</div>
                                     </div>
                                     <div>
                                         <span className="text-slate-400">Hit Rate</span>
                                         <div className={`font-mono ${
-                                            cache.hits / (cache.hits + cache.misses) >= 0.8 ? 'text-emerald-400' : 'text-amber-400'
+                                            (cache.hit_rate ?? 0) >= 0.8 ? 'text-emerald-400' : 'text-amber-400'
                                         }`}>
-                                            {((cache.hits / (cache.hits + cache.misses || 1)) * 100).toFixed(1)}%
+                                            {((cache.hit_rate ?? 0) * 100).toFixed(1)}%
                                         </div>
                                     </div>
                                     <div>
-                                        <span className="text-slate-400">TTL</span>
-                                        <div className="text-white font-mono">{cache.ttl_seconds}s</div>
+                                        <span className="text-slate-400">Avg TTL</span>
+                                        <div className="text-white font-mono">{cache.avg_ttl_seconds ?? 0}s</div>
                                     </div>
                                 </div>
                             </div>

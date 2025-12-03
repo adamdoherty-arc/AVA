@@ -74,8 +74,64 @@ async def agent_technical(request: TechnicalRequest):
 
 @router.get("/sectors")
 async def get_sectors(timeframe: str = "1M"):
-    """Alias route for sector overview - used by frontend SectorAnalysis page"""
-    return await get_sector_overview()
+    """
+    Sector analysis endpoint - returns data in format expected by SectorAnalysis frontend.
+    Maps internal sector data to frontend-expected format.
+    """
+    # Get raw sector data
+    raw_data = await get_sector_overview()
+    raw_sectors = raw_data.get("sectors", [])
+
+    # Top holdings for each sector ETF (common holdings)
+    top_holdings = {
+        "XLK": ["AAPL", "MSFT", "NVDA", "AVGO", "CRM"],
+        "XLV": ["UNH", "JNJ", "LLY", "ABBV", "MRK"],
+        "XLF": ["BRK.B", "JPM", "V", "MA", "BAC"],
+        "XLY": ["AMZN", "TSLA", "HD", "MCD", "NKE"],
+        "XLC": ["META", "GOOGL", "GOOG", "NFLX", "DIS"],
+        "XLI": ["GE", "CAT", "UNP", "HON", "RTX"],
+        "XLP": ["PG", "KO", "PEP", "COST", "WMT"],
+        "XLE": ["XOM", "CVX", "COP", "SLB", "EOG"],
+        "XLU": ["NEE", "SO", "DUK", "CEG", "SRE"],
+        "XLRE": ["PLD", "AMT", "EQIX", "PSA", "SPG"],
+        "XLB": ["LIN", "SHW", "APD", "FCX", "ECL"]
+    }
+
+    # Map to frontend-expected format
+    mapped_sectors = []
+    for sector in raw_sectors:
+        etf = sector.get("etf", "")
+        trend = sector.get("trend", "Neutral")
+
+        # Map trend to momentum enum
+        if trend == "Bullish":
+            momentum = "bullish"
+        elif trend == "Bearish":
+            momentum = "bearish"
+        else:
+            momentum = "neutral"
+
+        # Calculate flow sentiment from momentum score (normalize to 0-100)
+        momentum_score = sector.get("momentum_score", 0)
+        flow_sentiment = max(0, min(100, 50 + (momentum_score * 5)))
+
+        mapped_sectors.append({
+            "name": sector.get("name", ""),
+            "symbol": etf,  # Frontend expects 'symbol', backend has 'etf'
+            "performance_1d": sector.get("day_change", 0),
+            "performance_1w": sector.get("week_change", 0),
+            "performance_1m": sector.get("month_change", 0),
+            "performance_ytd": sector.get("ytd_change", 0),
+            "relative_strength": sector.get("relative_strength", 50),
+            "momentum": momentum,
+            "top_stocks": top_holdings.get(etf, []),
+            "flow_sentiment": round(flow_sentiment, 0)
+        })
+
+    return {
+        "sectors": mapped_sectors,
+        "generated_at": raw_data.get("generated_at")
+    }
 
 
 @router.get("/sectors/overview")

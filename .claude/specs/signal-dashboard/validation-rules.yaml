@@ -1,0 +1,35 @@
+# Signal Dashboard Validation Rules
+
+signal_validation:
+  signal_type:
+    valid_values: [buy, sell, hold, bullish, bearish, neutral, entry, exit]
+
+  confidence:
+    range: [0, 100]
+
+  timestamp:
+    rule: "Recent signals should be within acceptable freshness"
+
+freshness_checks:
+  - name: "Active signal age"
+    rule: "Active signals < 24 hours old"
+    severity: medium
+
+  - name: "Stale signal cleanup"
+    rule: "Signals > 7 days should be archived"
+
+consistency_checks:
+  - name: "No duplicate active signals"
+    rule: "Same symbol/signal_type should not have multiple active signals"
+
+  - name: "Status transitions"
+    rule: "active -> triggered or active -> expired only"
+
+null_checks:
+  never_null:
+    - symbol
+    - signal_type
+    - timestamp
+  warn_if_null:
+    - confidence
+    - source

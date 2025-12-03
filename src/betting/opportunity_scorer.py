@@ -41,7 +41,7 @@ class OpportunityScorer:
         'recency': 0.10      # 10% - Fifth: freshness of odds
     }
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.ev_calculator = UnifiedEVCalculator()
 
     def score_opportunity(

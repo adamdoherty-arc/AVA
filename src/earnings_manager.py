@@ -44,7 +44,7 @@ class EarningsManager:
         self.robinhood_logged_in = False
         self._ensure_tables()
 
-    def _ensure_tables(self):
+    def _ensure_tables(self) -> None:
         """Ensure earnings tables exist"""
         cur = self.conn.cursor()
 
@@ -784,7 +784,7 @@ class EarningsManager:
             'total': len(symbols)
         }
 
-    def close(self):
+    def close(self) -> None:
         """Close database connection"""
         if self.conn:
             self.conn.close()

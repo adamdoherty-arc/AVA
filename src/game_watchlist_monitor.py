@@ -45,7 +45,7 @@ class GameWatchlistMonitor:
         
         logger.info(f"GameWatchlistMonitor initialized (check interval: {check_interval}s)")
 
-    async def start(self):
+    async def start(self) -> None:
         """Start monitoring loop"""
         self.running = True
         logger.info("GameWatchlistMonitor started")
@@ -58,12 +58,12 @@ class GameWatchlistMonitor:
                 logger.error(f"Error in monitoring loop: {e}")
                 await asyncio.sleep(self.check_interval)
 
-    def stop(self):
+    def stop(self) -> None:
         """Stop monitoring"""
         self.running = False
         logger.info("GameWatchlistMonitor stopped")
 
-    async def _check_all_watched_games(self):
+    async def _check_all_watched_games(self) -> None:
         """Check all watched games for changes"""
         try:
             # Get all active watchlists for all users

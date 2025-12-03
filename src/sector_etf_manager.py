@@ -19,7 +19,7 @@ class SectorETFManager:
     Provides holdings, performance metrics, and sector rotation data
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the Sector ETF Manager"""
 
         # 11 Select Sector SPDR ETFs

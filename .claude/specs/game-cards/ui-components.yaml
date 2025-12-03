@@ -1,0 +1,139 @@
+# Game Cards UI Components Specification
+
+route: /games
+page_title: "Game Cards"
+
+components:
+  - name: GameCardsPage
+    type: page
+    children:
+      - SportSelector
+      - DateSelector
+      - GameCardGrid
+
+  - name: SportSelector
+    type: tabs
+    selector: "[data-testid='sport-selector'], .sport-tabs"
+    options:
+      - NFL
+      - NBA
+      - MLB
+      - NCAAF
+      - NCAAB
+    default: NFL
+    validation:
+      - "Active sport must be highlighted"
+
+  - name: DateSelector
+    type: date-picker
+    selector: "[data-testid='date-selector'], input[type='date']"
+    default: today
+    validation:
+      - "Can select past dates for results"
+      - "Can select future dates for upcoming"
+
+  - name: GameCardGrid
+    type: grid
+    selector: "[data-testid='game-grid'], .game-cards-grid"
+    layout: responsive-grid
+    children: GameCard[]
+
+  - name: GameCard
+    type: card
+    selector: "[data-testid='game-card'], .game-card"
+    elements:
+      - name: TeamLogos
+        displays:
+          - home_team.logo
+          - away_team.logo
+
+      - name: TeamNames
+        displays:
+          - home_team.name
+          - away_team.name
+        with:
+          - records
+
+      - name: GameTime
+        selector: ".game-time"
+        format: "h:mm A timezone"
+        validation:
+          - "Show local time"
+          - "Show 'LIVE' for in_progress"
+          - "Show 'FINAL' for completed"
+
+      - name: SpreadDisplay
+        selector: ".spread-odds"
+        displays:
+          - spread.line
+          - spread.favorite
+        format: "-3.5 (-110)"
+        validation:
+          - "Favorite indicated with negative"
+          - "Show odds in parentheses"
+
+      - name: MoneylineDisplay
+        selector: ".moneyline-odds"
+        displays:
+          - moneyline.home
+          - moneyline.away
+        format: "+150 / -180"
+
+      - name: TotalDisplay
+        selector: ".total-odds"
+        displays:
+          - total.line
+        format: "O/U 45.5"
+
+      - name: PredictionBadge
+        selector: ".prediction-badge, [data-testid='prediction']"
+        displays:
+          - prediction.pick
+          - prediction.confidence
+        validation:
+          - "Color coded by confidence"
+          - "Show confidence percentage"
+        color_coding:
+          high: "> 75% = green"
+          medium: "60-75% = yellow"
+          low: "< 60% = gray"
+
+      - name: AnalysisButton
+        type: button
+        selector: ".analysis-button, [data-testid='analyze']"
+        text: "Analyze"
+        action: "Show detailed analysis modal"
+
+interactions:
+  - name: Change Sport
+    trigger: Click sport tab
+    expected_result: "Load games for selected sport"
+
+  - name: Change Date
+    trigger: Select date
+    expected_result: "Load games for selected date"
+
+  - name: View Analysis
+    trigger: Click Analyze button
+    expected_result: "Open modal with detailed prediction analysis"
+
+  - name: Refresh Odds
+    trigger: Auto-refresh or manual
+    expected_result: "Update odds without full page reload"
+
+accessibility:
+  - "Game cards must have ARIA labels"
+  - "Color coding must have text alternative"
+  - "Team logos must have alt text"
+
+responsive:
+  - breakpoint: mobile
+    changes:
+      - "Single column card layout"
+      - "Condensed odds display"
+  - breakpoint: tablet
+    changes:
+      - "2-column card layout"
+  - breakpoint: desktop
+    changes:
+      - "3-column card layout"

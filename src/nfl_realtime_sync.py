@@ -82,7 +82,7 @@ class NFLRealtimeSync:
     # MAIN SYNC LOOP
     # ========================================================================
 
-    def run(self):
+    def run(self) -> None:
         """
         Main sync loop - runs continuously
 
@@ -130,7 +130,7 @@ class NFLRealtimeSync:
 
             raise
 
-    def _sync_cycle(self):
+    def _sync_cycle(self) -> None:
         """Execute one complete sync cycle"""
         try:
             # 1. Update live game scores
@@ -241,7 +241,7 @@ class NFLRealtimeSync:
     # ========================================================================
 
     @rate_limited
-    def _update_live_games(self):
+    def _update_live_games(self) -> None:
         """Update all live games"""
         sync_id = self.nfl_db.start_sync_log('scores', 'live_games')
 
@@ -378,7 +378,7 @@ class NFLRealtimeSync:
     # KALSHI PRICE MONITORING
     # ========================================================================
 
-    def _update_kalshi_prices(self):
+    def _update_kalshi_prices(self) -> None:
         """Update Kalshi market prices for NFL games"""
         try:
             # Get all NFL markets
@@ -497,7 +497,7 @@ class NFLRealtimeSync:
     # INJURY UPDATES
     # ========================================================================
 
-    def _update_injuries(self):
+    def _update_injuries(self) -> None:
         """Update injury reports (runs less frequently)"""
         try:
             logger.info("Updating injury reports...")
@@ -523,7 +523,7 @@ class NFLRealtimeSync:
     # ALERT PROCESSING
     # ========================================================================
 
-    def _process_alerts(self):
+    def _process_alerts(self) -> None:
         """Process configured alert triggers"""
         try:
             # Get active triggers

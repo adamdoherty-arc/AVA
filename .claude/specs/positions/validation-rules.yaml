@@ -1,0 +1,101 @@
+# Positions Validation Rules
+# Business logic validation requirements
+
+calculations:
+  stock_pl:
+    formula: "(current_price - avg_buy_price) * quantity"
+    tolerance: 0.02  # $0.02 tolerance
+
+  stock_pl_pct:
+    formula: "((current_price - avg_buy_price) / avg_buy_price) * 100"
+    tolerance: 0.1  # 0.1% tolerance
+
+  option_pl:
+    formula: "(current_price - avg_price) * quantity * 100"
+    note: "Options multiplier is 100"
+    tolerance: 0.02
+
+  cost_basis:
+    formula: "quantity * avg_buy_price"
+    tolerance: 0.01
+
+  current_value:
+    formula: "quantity * current_price"
+    tolerance: 0.01
+
+greeks_validation:
+  delta:
+    call_range: [0, 1]
+    put_range: [-1, 0]
+    tolerance: 0.05
+
+  gamma:
+    range: [0, null]
+    tolerance: 0.10
+
+  theta:
+    expected_sign: negative
+    tolerance: 0.10
+    note: "Theta should be negative (time decay)"
+
+  vega:
+    range: [0, null]
+    tolerance: 0.10
+
+dte_validation:
+  calculation: "expiration_date - today"
+  tolerance: 0  # Must be exact
+  edge_cases:
+    - name: "Weekend handling"
+      rule: "Friday expiration = 0 DTE on Friday"
+    - name: "Timezone"
+      rule: "Use market close (4 PM ET)"
+
+data_freshness:
+  positions:
+    max_stale_minutes: 5
+    during_market_hours: true
+  greeks:
+    max_stale_minutes: 15
+  prices:
+    max_stale_minutes: 1
+    during_market_hours: true
+
+consistency_checks:
+  - name: "Portfolio total"
+    rule: "sum(stocks.current_value) + sum(options.current_value) == total_equity"
+    tolerance: 0.01
+
+  - name: "Dashboard match"
+    rule: "positions_page.total == dashboard.portfolio_value"
+    tolerance: 0.01
+
+  - name: "Position count"
+    rule: "len(stocks) + len(options) == total_positions"
+
+null_checks:
+  never_null:
+    - symbol
+    - quantity
+    - current_price
+    - pl
+  warn_if_null:
+    - greeks.delta
+    - greeks.theta
+    - dte
+
+edge_cases:
+  - name: "Zero quantity"
+    rule: "Positions with 0 quantity should not appear"
+
+  - name: "Expired options"
+    rule: "Options with DTE < 0 should be filtered or marked"
+
+  - name: "Missing Greeks"
+    rule: "Options should have Greeks unless expired"
+    severity: high
+
+known_issues:
+  - id: "FLOAT_PRECISION"
+    description: "Floating point precision in P&L calculations"
+    workaround: "Use tolerance-based comparison"

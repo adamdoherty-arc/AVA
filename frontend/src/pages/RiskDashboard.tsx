@@ -92,7 +92,7 @@ export default function RiskDashboard() {
                                     <DollarSign className="w-4 h-4" />
                                     <span className="text-sm">Portfolio Value</span>
                                 </div>
-                                <p className="text-2xl font-bold">${data.portfolio_value.toLocaleString()}</p>
+                                <p className="text-2xl font-bold">${(data.portfolio_value ?? 0).toLocaleString()}</p>
                             </div>
                             <div className="bg-slate-800/50 rounded-lg p-4">
                                 <div className="flex items-center gap-2 text-slate-400 mb-1">
@@ -100,7 +100,7 @@ export default function RiskDashboard() {
                                     <span className="text-sm">Total Risk</span>
                                 </div>
                                 <p className={clsx("text-2xl font-bold", riskLevel.color)}>
-                                    ${data.total_risk.toLocaleString()}
+                                    ${(data.total_risk ?? 0).toLocaleString()}
                                 </p>
                             </div>
                             <div className="bg-slate-800/50 rounded-lg p-4">
@@ -109,7 +109,7 @@ export default function RiskDashboard() {
                                     <span className="text-sm">Risk %</span>
                                 </div>
                                 <p className={clsx("text-2xl font-bold", riskLevel.color)}>
-                                    {data.risk_pct.toFixed(1)}%
+                                    {(data.risk_pct ?? 0).toFixed(1)}%
                                 </p>
                             </div>
                             <div className="bg-slate-800/50 rounded-lg p-4">
@@ -118,7 +118,7 @@ export default function RiskDashboard() {
                                     <span className="text-sm">Max Drawdown</span>
                                 </div>
                                 <p className="text-2xl font-bold text-rose-400">
-                                    {data.max_drawdown.toFixed(1)}%
+                                    {(data.max_drawdown ?? 0).toFixed(1)}%
                                 </p>
                             </div>
                         </div>
@@ -135,13 +135,13 @@ export default function RiskDashboard() {
                                 <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
                                     <span className="text-slate-400">VaR 95%</span>
                                     <span className="font-mono font-bold text-amber-400">
-                                        ${data.var_95.toLocaleString()}
+                                        ${(data.var_95 ?? 0).toLocaleString()}
                                     </span>
                                 </div>
                                 <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
                                     <span className="text-slate-400">VaR 99%</span>
                                     <span className="font-mono font-bold text-rose-400">
-                                        ${data.var_99.toLocaleString()}
+                                        ${(data.var_99 ?? 0).toLocaleString()}
                                     </span>
                                 </div>
                                 <p className="text-xs text-slate-500">
@@ -160,31 +160,31 @@ export default function RiskDashboard() {
                                     <p className="text-xs text-slate-400">Beta</p>
                                     <p className={clsx(
                                         "text-xl font-bold",
-                                        data.beta <= 1 ? "text-emerald-400" : "text-amber-400"
+                                        (data.beta ?? 0) <= 1 ? "text-emerald-400" : "text-amber-400"
                                     )}>
-                                        {data.beta.toFixed(2)}
+                                        {(data.beta ?? 0).toFixed(2)}
                                     </p>
                                 </div>
                                 <div className="p-3 bg-slate-800/50 rounded-lg">
                                     <p className="text-xs text-slate-400">SPY Correlation</p>
-                                    <p className="text-xl font-bold">{(data.correlation_spy * 100).toFixed(0)}%</p>
+                                    <p className="text-xl font-bold">{((data.correlation_spy ?? 0) * 100).toFixed(0)}%</p>
                                 </div>
                                 <div className="p-3 bg-slate-800/50 rounded-lg">
                                     <p className="text-xs text-slate-400">Sharpe Ratio</p>
                                     <p className={clsx(
                                         "text-xl font-bold",
-                                        data.sharpe_ratio >= 1 ? "text-emerald-400" : "text-amber-400"
+                                        (data.sharpe_ratio ?? 0) >= 1 ? "text-emerald-400" : "text-amber-400"
                                     )}>
-                                        {data.sharpe_ratio.toFixed(2)}
+                                        {(data.sharpe_ratio ?? 0).toFixed(2)}
                                     </p>
                                 </div>
                                 <div className="p-3 bg-slate-800/50 rounded-lg">
                                     <p className="text-xs text-slate-400">Sortino Ratio</p>
                                     <p className={clsx(
                                         "text-xl font-bold",
-                                        data.sortino_ratio >= 1.5 ? "text-emerald-400" : "text-amber-400"
+                                        (data.sortino_ratio ?? 0) >= 1.5 ? "text-emerald-400" : "text-amber-400"
                                     )}>
-                                        {data.sortino_ratio.toFixed(2)}
+                                        {(data.sortino_ratio ?? 0).toFixed(2)}
                                     </p>
                                 </div>
                             </div>
@@ -202,30 +202,30 @@ export default function RiskDashboard() {
                                 <p className="text-sm text-slate-400">Delta</p>
                                 <p className={clsx(
                                     "text-2xl font-bold",
-                                    data.greeks.total_delta >= 0 ? "text-emerald-400" : "text-rose-400"
+                                    (data.greeks?.total_delta ?? 0) >= 0 ? "text-emerald-400" : "text-rose-400"
                                 )}>
-                                    {data.greeks.total_delta.toFixed(0)}
+                                    {(data.greeks?.total_delta ?? 0).toFixed(0)}
                                 </p>
                             </div>
                             <div className="p-3 bg-slate-800/50 rounded-lg text-center">
                                 <p className="text-sm text-slate-400">Gamma</p>
                                 <p className="text-2xl font-bold text-blue-400">
-                                    {data.greeks.total_gamma.toFixed(1)}
+                                    {(data.greeks?.total_gamma ?? 0).toFixed(1)}
                                 </p>
                             </div>
                             <div className="p-3 bg-slate-800/50 rounded-lg text-center">
                                 <p className="text-sm text-slate-400">Theta</p>
                                 <p className={clsx(
                                     "text-2xl font-bold",
-                                    data.greeks.total_theta >= 0 ? "text-emerald-400" : "text-rose-400"
+                                    (data.greeks?.total_theta ?? 0) >= 0 ? "text-emerald-400" : "text-rose-400"
                                 )}>
-                                    ${data.greeks.total_theta.toFixed(0)}
+                                    ${(data.greeks?.total_theta ?? 0).toFixed(0)}
                                 </p>
                             </div>
                             <div className="p-3 bg-slate-800/50 rounded-lg text-center">
                                 <p className="text-sm text-slate-400">Vega</p>
                                 <p className="text-2xl font-bold text-purple-400">
-                                    ${data.greeks.total_vega.toFixed(0)}
+                                    ${(data.greeks?.total_vega ?? 0).toFixed(0)}
                                 </p>
                             </div>
                         </div>
@@ -252,9 +252,9 @@ export default function RiskDashboard() {
                                     {data.positions_at_risk.map((pos, idx) => (
                                         <tr key={idx} className={idx % 2 === 0 ? "bg-slate-800/20" : ""}>
                                             <td className="p-3 font-mono font-bold text-primary">{pos.symbol}</td>
-                                            <td className="p-3 text-right font-mono">${pos.position_size.toLocaleString()}</td>
+                                            <td className="p-3 text-right font-mono">${(pos.position_size ?? 0).toLocaleString()}</td>
                                             <td className="p-3 text-right font-mono text-rose-400">
-                                                ${pos.risk_amount.toLocaleString()}
+                                                ${(pos.risk_amount ?? 0).toLocaleString()}
                                             </td>
                                             <td className="p-3 text-right">
                                                 <span className={clsx(
@@ -263,10 +263,10 @@ export default function RiskDashboard() {
                                                     pos.risk_pct <= 5 ? "bg-amber-500/20 text-amber-400" :
                                                     "bg-rose-500/20 text-rose-400"
                                                 )}>
-                                                    {pos.risk_pct.toFixed(1)}%
+                                                    {(pos.risk_pct ?? 0).toFixed(1)}%
                                                 </span>
                                             </td>
-                                            <td className="p-3 text-right font-mono">{pos.delta.toFixed(2)}</td>
+                                            <td className="p-3 text-right font-mono">{(pos.delta ?? 0).toFixed(2)}</td>
                                         </tr>
                                     ))}
                                 </tbody>

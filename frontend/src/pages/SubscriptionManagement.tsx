@@ -42,7 +42,7 @@ export default function SubscriptionManagement() {
     const { data: subscription, isLoading } = useQuery<Subscription>({
         queryKey: ['subscription'],
         queryFn: async () => {
-            const { data } = await axiosInstance.get('/subscription')
+            const { data } = await axiosInstance.get('/subscriptions')
             return data
         }
     })
@@ -50,7 +50,7 @@ export default function SubscriptionManagement() {
     const { data: usage } = useQuery<UsageStats>({
         queryKey: ['subscription-usage'],
         queryFn: async () => {
-            const { data } = await axiosInstance.get('/subscription/usage')
+            const { data } = await axiosInstance.get('/subscriptions/usage')
             return data
         }
     })
@@ -58,14 +58,14 @@ export default function SubscriptionManagement() {
     const { data: plans } = useQuery<Plan[]>({
         queryKey: ['subscription-plans'],
         queryFn: async () => {
-            const { data } = await axiosInstance.get('/subscription/plans')
+            const { data } = await axiosInstance.get('/subscriptions/plans')
             return data?.plans || []
         }
     })
 
     const cancelMutation = useMutation({
         mutationFn: async () => {
-            const { data } = await axiosInstance.post('/subscription/cancel')
+            const { data } = await axiosInstance.post('/subscriptions/cancel')
             return data
         },
         onSuccess: () => {
@@ -75,7 +75,7 @@ export default function SubscriptionManagement() {
 
     const reactivateMutation = useMutation({
         mutationFn: async () => {
-            const { data } = await axiosInstance.post('/subscription/reactivate')
+            const { data } = await axiosInstance.post('/subscriptions/reactivate')
             return data
         },
         onSuccess: () => {
@@ -216,13 +216,13 @@ export default function SubscriptionManagement() {
                             <div className="flex justify-between items-center mb-2">
                                 <span className="text-slate-400 text-sm">API Calls</span>
                                 <span className="text-white text-sm">
-                                    {usage.api_calls.used.toLocaleString()} / {usage.api_calls.limit.toLocaleString()}
+                                    {(usage.api_calls?.used ?? 0).toLocaleString()} / {(usage.api_calls?.limit ?? 0).toLocaleString()}
                                 </span>
                             </div>
                             <div className="h-2 bg-slate-700 rounded-full">
                                 <div
-                                    className={`h-full rounded-full transition-all ${getUsageColor(getUsagePercent(usage.api_calls.used, usage.api_calls.limit))}`}
-                                    style={{ width: `${getUsagePercent(usage.api_calls.used, usage.api_calls.limit)}%` }}
+                                    className={`h-full rounded-full transition-all ${getUsageColor(getUsagePercent(usage.api_calls?.used ?? 0, usage.api_calls?.limit ?? 1))}`}
+                                    style={{ width: `${getUsagePercent(usage.api_calls?.used ?? 0, usage.api_calls?.limit ?? 1)}%` }}
                                 />
                             </div>
                         </div>
@@ -230,13 +230,13 @@ export default function SubscriptionManagement() {
                             <div className="flex justify-between items-center mb-2">
                                 <span className="text-slate-400 text-sm">AI Queries</span>
                                 <span className="text-white text-sm">
-                                    {usage.ai_queries.used.toLocaleString()} / {usage.ai_queries.limit.toLocaleString()}
+                                    {(usage.ai_queries?.used ?? 0).toLocaleString()} / {(usage.ai_queries?.limit ?? 0).toLocaleString()}
                                 </span>
                             </div>
                             <div className="h-2 bg-slate-700 rounded-full">
                                 <div
-                                    className={`h-full rounded-full transition-all ${getUsageColor(getUsagePercent(usage.ai_queries.used, usage.ai_queries.limit))}`}
-                                    style={{ width: `${getUsagePercent(usage.ai_queries.used, usage.ai_queries.limit)}%` }}
+                                    className={`h-full rounded-full transition-all ${getUsageColor(getUsagePercent(usage.ai_queries?.used ?? 0, usage.ai_queries?.limit ?? 1))}`}
+                                    style={{ width: `${getUsagePercent(usage.ai_queries?.used ?? 0, usage.ai_queries?.limit ?? 1)}%` }}
                                 />
                             </div>
                         </div>
@@ -244,13 +244,13 @@ export default function SubscriptionManagement() {
                             <div className="flex justify-between items-center mb-2">
                                 <span className="text-slate-400 text-sm">Storage</span>
                                 <span className="text-white text-sm">
-                                    {usage.storage_mb.used} MB / {usage.storage_mb.limit} MB
+                                    {usage.storage_mb?.used ?? 0} MB / {usage.storage_mb?.limit ?? 0} MB
                                 </span>
                             </div>
                             <div className="h-2 bg-slate-700 rounded-full">
                                 <div
-                                    className={`h-full rounded-full transition-all ${getUsageColor(getUsagePercent(usage.storage_mb.used, usage.storage_mb.limit))}`}
-                                    style={{ width: `${getUsagePercent(usage.storage_mb.used, usage.storage_mb.limit)}%` }}
+                                    className={`h-full rounded-full transition-all ${getUsageColor(getUsagePercent(usage.storage_mb?.used ?? 0, usage.storage_mb?.limit ?? 1))}`}
+                                    style={{ width: `${getUsagePercent(usage.storage_mb?.used ?? 0, usage.storage_mb?.limit ?? 1)}%` }}
                                 />
                             </div>
                         </div>
@@ -258,13 +258,13 @@ export default function SubscriptionManagement() {
                             <div className="flex justify-between items-center mb-2">
                                 <span className="text-slate-400 text-sm">Exports</span>
                                 <span className="text-white text-sm">
-                                    {usage.exports.used} / {usage.exports.limit}
+                                    {usage.exports?.used ?? 0} / {usage.exports?.limit ?? 0}
                                 </span>
                             </div>
                             <div className="h-2 bg-slate-700 rounded-full">
                                 <div
-                                    className={`h-full rounded-full transition-all ${getUsageColor(getUsagePercent(usage.exports.used, usage.exports.limit))}`}
-                                    style={{ width: `${getUsagePercent(usage.exports.used, usage.exports.limit)}%` }}
+                                    className={`h-full rounded-full transition-all ${getUsageColor(getUsagePercent(usage.exports?.used ?? 0, usage.exports?.limit ?? 1))}`}
+                                    style={{ width: `${getUsagePercent(usage.exports?.used ?? 0, usage.exports?.limit ?? 1)}%` }}
                                 />
                             </div>
                         </div>

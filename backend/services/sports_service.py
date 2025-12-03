@@ -20,7 +20,7 @@ def get_nfl_predictor():
     return _nfl_predictor
 
 class SportsService:
-    def __init__(self):
+    def __init__(self) -> None:
         self.nfl_db = NFLDBManager()
 
     def get_markets_with_predictions(self, market_type: Optional[str] = None, limit: int = 50) -> List[Market]:

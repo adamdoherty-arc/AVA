@@ -409,7 +409,7 @@ class SimpleRAG:
 
         return chunks
 
-    def clear_collection(self):
+    def clear_collection(self) -> None:
         """Clear all documents from the collection."""
         try:
             self.client.delete_collection(name=self.collection_name)

@@ -44,7 +44,7 @@ class AIConsensusEngine:
     to generate consensus scores and recommendations.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize AI consensus engine"""
         self.db_url = os.getenv("DATABASE_URL")
         if not self.db_url:
@@ -66,7 +66,7 @@ class AIConsensusEngine:
             'gemini': 0.20,  # 20% - Fast opinion
         }
 
-    def get_connection(self):
+    def get_connection(self) -> None:
         """Get database connection"""
         return psycopg2.connect(self.db_url)
 

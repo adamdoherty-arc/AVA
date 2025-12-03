@@ -18,7 +18,7 @@ load_dotenv()
 class TradingViewDBSync:
     """Sync TradingView watchlists to PostgreSQL database automatically"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.db_config = {
             'host': os.getenv('DB_HOST', 'localhost'),
             'port': os.getenv('DB_PORT', '5432'),
@@ -31,7 +31,7 @@ class TradingViewDBSync:
         self.conn = None
         self.cursor = None
 
-    def connect_db(self):
+    def connect_db(self) -> None:
         """Connect to PostgreSQL database"""
         try:
             self.conn = psycopg2.connect(**self.db_config)
@@ -41,14 +41,14 @@ class TradingViewDBSync:
             print(f"Database connection error: {e}")
             return False
 
-    def disconnect_db(self):
+    def disconnect_db(self) -> None:
         """Disconnect from database"""
         if self.cursor:
             self.cursor.close()
         if self.conn:
             self.conn.close()
 
-    def create_tables(self):
+    def create_tables(self) -> None:
         """Create watchlist tables if they don't exist"""
         try:
             # Create watchlists table

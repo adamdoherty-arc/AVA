@@ -66,7 +66,7 @@ class APMMonitor:
     Provides graceful degradation if Sentry is not available or not configured.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.enabled = False
         self.sentry_initialized = False
 

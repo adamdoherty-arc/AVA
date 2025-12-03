@@ -49,7 +49,7 @@ class EntityMemory:
     contexts: List[str] = None
     tags: List[str] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.contexts is None:
             self.contexts = []
         if self.tags is None:
@@ -95,7 +95,7 @@ class MemoryManager:
         self._ensure_connection()
         logger.info("Memory Manager initialized")
 
-    def _ensure_connection(self):
+    def _ensure_connection(self) -> None:
         """Ensure database connection is alive"""
         try:
             if self._conn is None or self._conn.closed:
@@ -105,7 +105,7 @@ class MemoryManager:
             logger.error(f"Failed to connect to database: {e}")
             raise
 
-    def _get_cursor(self):
+    def _get_cursor(self) -> None:
         """Get database cursor with dict factory"""
         self._ensure_connection()
         return self._conn.cursor(cursor_factory=RealDictCursor)
@@ -592,13 +592,13 @@ class MemoryManager:
     # Utility Methods
     # =========================================================================
 
-    def close(self):
+    def close(self) -> None:
         """Close database connection"""
         if self._conn and not self._conn.closed:
             self._conn.close()
             logger.info("Memory Manager connection closed")
 
-    def __enter__(self):
+    def __enter__(self) -> None:
         """Context manager entry"""
         return self
 

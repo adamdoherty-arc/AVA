@@ -33,7 +33,7 @@ class BaseModelClient(ABC):
 class GPT4Client(BaseModelClient):
     """OpenAI GPT-4 Turbo client"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.api_key = os.getenv('OPENAI_API_KEY')
         if not self.api_key:
             logger.warning("OPENAI_API_KEY not set - GPT-4 unavailable")
@@ -86,7 +86,7 @@ class GPT4Client(BaseModelClient):
 class ClaudeClient(BaseModelClient):
     """Anthropic Claude 3.5 Sonnet client"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.api_key = os.getenv('ANTHROPIC_API_KEY')
         if not self.api_key:
             logger.warning("ANTHROPIC_API_KEY not set - Claude unavailable")
@@ -136,7 +136,7 @@ class ClaudeClient(BaseModelClient):
 class GeminiClient(BaseModelClient):
     """Google Gemini Pro client"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.api_key = os.getenv('GOOGLE_API_KEY')
         if not self.api_key:
             logger.warning("GOOGLE_API_KEY not set - Gemini unavailable")
@@ -188,7 +188,7 @@ class GeminiClient(BaseModelClient):
 class GroqClient(BaseModelClient):
     """Groq - FREE Llama 3.1 70B (30 req/min free tier)"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.api_key = os.getenv('GROQ_API_KEY')
         if not self.api_key:
             logger.warning("GROQ_API_KEY not set - Groq unavailable")
@@ -242,7 +242,7 @@ class GroqClient(BaseModelClient):
 class DeepSeekClient(BaseModelClient):
     """DeepSeek - ULTRA CHEAP ($0.14/$0.28 per 1M tokens)"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.api_key = os.getenv('DEEPSEEK_API_KEY')
         if not self.api_key:
             logger.warning("DEEPSEEK_API_KEY not set - DeepSeek unavailable")
@@ -305,7 +305,7 @@ class LocalModelClient(BaseModelClient):
     Install: ollama pull llama3:70b
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.model = "llama3:70b"
         self.base_url = "http://localhost:11434"
 

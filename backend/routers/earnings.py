@@ -4,13 +4,30 @@ NO MOCK DATA - All endpoints use real database via EarningsManager
 """
 
 from fastapi import APIRouter, HTTPException, Query
-from typing import List, Optional
+from typing import List, Optional, Any
 from datetime import datetime, timedelta
 import logging
+import math
 
 from src.earnings_manager import EarningsManager
 
 logger = logging.getLogger(__name__)
+
+
+def safe_float(value: Any, default: float = 0.0) -> float:
+    """
+    Safely convert a value to float, handling NaN, None, and invalid values.
+    Returns default if value cannot be converted or is NaN/Inf.
+    """
+    if value is None:
+        return default
+    try:
+        f = float(value)
+        if math.isnan(f) or math.isinf(f):
+            return default
+        return f
+    except (TypeError, ValueError):
+        return default
 
 router = APIRouter(
     prefix="/api/earnings",
@@ -81,9 +98,9 @@ async def get_upcoming_earnings(
                     continue
 
             # Calculate quality score (0-100 numeric) based on IV and beat rate
-            iv_rank = float(row.get('pre_earnings_iv', 0) or 0)
-            beat_rate = float(row.get('beat_rate', 75) or 75)  # Default 75 if not available
-            avg_surprise = float(row.get('avg_surprise', 5) or 5)  # Default 5% if not available
+            iv_rank = safe_float(row.get('pre_earnings_iv'), 0.0)
+            beat_rate = safe_float(row.get('beat_rate'), 75.0)  # Default 75 if not available
+            avg_surprise = safe_float(row.get('avg_surprise'), 5.0)  # Default 5% if not available
 
             # Quality score: 40% beat rate + 30% IV rank + 30% surprise magnitude
             quality_score = min(100, max(0,
@@ -101,7 +118,7 @@ async def get_upcoming_earnings(
                 "company_name": row.get('company_name', row.get('symbol', '')),
                 "earnings_date": row.get('earnings_date').strftime("%Y-%m-%d") if row.get('earnings_date') else None,
                 "earnings_time": frontend_time,
-                "expected_move_pct": float(row.get('expected_move', 0) or 0),
+                "expected_move_pct": safe_float(row.get('expected_move'), 0.0),
                 "iv_rank": iv_rank,
                 "beat_rate": beat_rate,
                 "avg_surprise": avg_surprise,
@@ -145,15 +162,23 @@ async def get_earnings_calendar(
     try:
         manager = get_earnings_manager()
 
-        if not start_date:
+        # Safely handle start_date
+        if not start_date or not isinstance(start_date, str):
             start_dt = datetime.now().date()
         else:
-            start_dt = datetime.strptime(start_date, "%Y-%m-%d").date()
+            try:
+                start_dt = datetime.strptime(start_date, "%Y-%m-%d").date()
+            except ValueError:
+                start_dt = datetime.now().date()
 
-        if not end_date:
+        # Safely handle end_date
+        if not end_date or not isinstance(end_date, str):
             end_dt = (datetime.now() + timedelta(days=14)).date()
         else:
-            end_dt = datetime.strptime(end_date, "%Y-%m-%d").date()
+            try:
+                end_dt = datetime.strptime(end_date, "%Y-%m-%d").date()
+            except ValueError:
+                end_dt = (datetime.now() + timedelta(days=14)).date()
 
         # Get earnings from database
         df = manager.get_earnings_events(start_date=start_dt, end_date=end_dt)
@@ -169,7 +194,7 @@ async def get_earnings_calendar(
                     "symbol": row.get('symbol'),
                     "company_name": row.get('company_name', row.get('symbol')),
                     "time": row.get('earnings_time', 'TBD'),
-                    "eps_estimate": float(row.get('eps_estimate', 0) or 0)
+                    "eps_estimate": safe_float(row.get('eps_estimate'), 0.0)
                 })
 
         return {
@@ -180,11 +205,14 @@ async def get_earnings_calendar(
         }
 
     except Exception as e:
-        logger.error(f"Error fetching earnings calendar: {e}")
+        logger.error(f"Error fetching earnings calendar: {e}", exc_info=True)
+        # Always return valid JSON, never raise HTTPException
+        now = datetime.now()
         return {
             "calendar": {},
-            "start_date": start_date or datetime.now().strftime("%Y-%m-%d"),
-            "end_date": end_date or (datetime.now() + timedelta(days=14)).strftime("%Y-%m-%d"),
+            "start_date": now.strftime("%Y-%m-%d"),
+            "end_date": (now + timedelta(days=14)).strftime("%Y-%m-%d"),
+            "total_events": 0,
             "error": str(e)
         }
 
@@ -290,8 +318,8 @@ async def get_symbol_earnings(symbol: str):
         total_moves = 0.0
 
         for _, row in history_df.iterrows():
-            eps_actual = float(row.get('eps_actual', 0) or 0)
-            eps_estimate = float(row.get('eps_estimate', 0) or 0)
+            eps_actual = safe_float(row.get('eps_actual'), 0.0)
+            eps_estimate = safe_float(row.get('eps_estimate'), 0.0)
 
             if eps_estimate != 0:
                 surprise = ((eps_actual - eps_estimate) / abs(eps_estimate)) * 100
@@ -318,7 +346,7 @@ async def get_symbol_earnings(symbol: str):
             upcoming = {
                 "date": row.get('earnings_date').strftime("%Y-%m-%d") if row.get('earnings_date') else None,
                 "time": row.get('earnings_time', 'TBD'),
-                "eps_estimate": float(row.get('eps_estimate', 0) or 0)
+                "eps_estimate": safe_float(row.get('eps_estimate'), 0.0)
             }
 
         num_reports = len(history_df) if not history_df.empty else 0

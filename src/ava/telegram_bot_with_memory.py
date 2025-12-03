@@ -59,7 +59,7 @@ except ImportError:
 class AVATelegramBotWithMemory:
     """AVA Telegram Bot with persistent memory"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize bot with memory-enhanced AVA"""
         self.token = os.getenv("TELEGRAM_BOT_TOKEN")
         if not self.token or self.token == "YOUR_BOT_TOKEN_HERE":
@@ -308,7 +308,7 @@ I remember everything we discuss - your preferences, favorite stocks, and strate
                 "I apologize, but I encountered an error processing your message. Please try again."
             )
 
-    def run(self):
+    def run(self) -> None:
         """Start the bot"""
         logger.info("🚀 Starting AVA Telegram Bot with Memory...")
 

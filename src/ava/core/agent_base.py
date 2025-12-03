@@ -100,7 +100,7 @@ class BaseAgent(ABC):
         
         logger.info(f"Initialized agent: {self.name}")
     
-    def _init_huggingface(self):
+    def _init_huggingface(self) -> None:
         """Initialize Hugging Face endpoint"""
         if not HUGGINGFACE_AVAILABLE:
             logger.warning("langchain-huggingface not installed, Hugging Face disabled")

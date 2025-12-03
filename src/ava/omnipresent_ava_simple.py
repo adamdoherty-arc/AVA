@@ -36,6 +36,29 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 import json
 
+# Personality system (optional)
+try:
+    from src.ava.ava_personality import AVAPersonality, PersonalityMode, EmotionalState
+    PERSONALITY_AVAILABLE = True
+except ImportError:
+    PERSONALITY_AVAILABLE = False
+    AVAPersonality = PersonalityMode = EmotionalState = None
+
+# RAG system (optional)
+try:
+    from src.rag.unified_rag import get_unified_rag
+    RAG_AVAILABLE = True
+except ImportError:
+    RAG_AVAILABLE = False
+
+# Autonomous Task System (optional)
+try:
+    from src.ava.autonomous_task_system import get_task_system
+    TASK_SYSTEM_AVAILABLE = True
+except ImportError:
+    TASK_SYSTEM_AVAILABLE = False
+    get_task_system = None
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -43,9 +66,76 @@ logger = logging.getLogger(__name__)
 class SimpleAVA:
     """Simplified AVA without LangChain dependencies"""
 
-    def __init__(self):
-        """Initialize simple AVA"""
+    def __init__(self) -> None:
+        """Initialize simple AVA with personality and RAG support"""
         self.memory_manager = ConversationMemoryManager()
+
+        # Initialize personality system
+        if PERSONALITY_AVAILABLE:
+            self.personality = AVAPersonality(mode=PersonalityMode.FRIENDLY)
+            logger.info("✅ Personality system initialized")
+        else:
+            self.personality = None
+            logger.info("ℹ️ Personality system not available")
+
+        # Initialize RAG system
+        if RAG_AVAILABLE:
+            try:
+                self.rag = get_unified_rag()
+                logger.info("✅ RAG system initialized")
+            except Exception as e:
+                self.rag = None
+                logger.warning(f"⚠️ RAG initialization failed: {e}")
+        else:
+            self.rag = None
+            logger.info("ℹ️ RAG system not available")
+
+        # Initialize Autonomous Task System
+        if TASK_SYSTEM_AVAILABLE and get_task_system:
+            try:
+                self.task_system = get_task_system(auto_execute=False)
+                logger.info("✅ Autonomous Task System initialized")
+            except Exception as e:
+                self.task_system = None
+                logger.warning(f"⚠️ Task system initialization failed: {e}")
+        else:
+            self.task_system = None
+            logger.info("ℹ️ Autonomous Task System not available")
+
+    def set_personality(self, mode_name: str) -> bool:
+        """Change personality mode"""
+        if not PERSONALITY_AVAILABLE or not self.personality:
+            return False
+        try:
+            mode = PersonalityMode(mode_name.lower())
+            self.personality.set_mode(mode)
+            return True
+        except (ValueError, KeyError):
+            return False
+
+    def apply_personality(self, response: str, context: dict = None) -> str:
+        """Apply personality styling to response"""
+        if self.personality:
+            try:
+                if context:
+                    emotional_state = self.personality.detect_emotional_context(context)
+                    self.personality.set_emotional_state(emotional_state)
+                return self.personality.style_response(response, context or {})
+            except Exception as e:
+                logger.warning(f"Personality styling failed: {e}")
+        return response
+
+    def query_rag(self, question: str) -> Optional[str]:
+        """Query RAG knowledge base"""
+        if not self.rag:
+            return None
+        try:
+            result = self.rag.query(question)
+            if result and result.confidence >= 0.5:
+                return result.answer
+        except Exception as e:
+            logger.warning(f"RAG query failed: {e}")
+        return None
 
     def query_database(self, query: str) -> str:
         """Execute SQL query on Magnus database"""
@@ -138,8 +228,35 @@ class SimpleAVA:
         success = True
 
         try:
+            # AUTONOMOUS TASK SYSTEM - Check for "task:" commands first
+            if self.task_system and (message_lower.startswith('task:') or message_lower.startswith('task ')):
+                intent = "autonomous_task"
+                task_result = self.task_system.process_message(user_message, user_id)
+
+                if task_result.get('is_task'):
+                    if task_result.get('success'):
+                        response = f"""**Autonomous Task Created**
+
+**Task #{task_result.get('task_id')}** - {task_result.get('task_type', 'general').replace('_', ' ').title()}
+
+{task_result.get('message', '')}"""
+
+                        if task_result.get('files_modified'):
+                            response += f"\n\n**Files Modified:** {', '.join(task_result['files_modified'])}"
+
+                        if task_result.get('execution_time'):
+                            response += f"\n**Execution Time:** {task_result['execution_time']:.1f}s"
+
+                        action = "autonomous_task_executed"
+                    else:
+                        response = f"Task creation failed: {task_result.get('message', 'Unknown error')}"
+                        success = False
+                else:
+                    response = "Could not parse task. Try: 'task: add a new feature to...'"
+                    success = False
+
             # Database queries
-            if any(word in message_lower for word in ['query', 'database', 'select', 'show me', 'how many']):
+            elif any(word in message_lower for word in ['query', 'database', 'select', 'show me', 'how many']):
                 intent = "database_query"
                 if 'select' in message_lower:
                     # Extract SQL query
@@ -245,35 +362,100 @@ I'm AVA, your AI assistant. I can help you analyze positions, create tasks, quer
 """
                 action = "about_provided"
 
-            # Default response
+            # Default response - try RAG first, then provide helpful suggestions
             else:
                 intent = "general_conversation"
-                response = f"""I'm not sure how to help with "{user_message}".
+                query_lower = user_message.lower()
 
-Try asking me to:
-- Analyze a watchlist
-- Create a task
-- Check your portfolio
-- Get a stock price
-- Query the database
+                # First, try RAG knowledge base
+                rag_answer = self.query_rag(user_message)
+                if rag_answer:
+                    response = rag_answer
+                    action = "rag_response"
+                    success = True
+                # Provide context-aware suggestions
+                elif any(w in query_lower for w in ['option', 'put', 'call', 'wheel', 'spread']):
+                    response = """I can help with options! Try asking:
+• "What is the wheel strategy?"
+• "Explain covered calls"
+• "Find CSP opportunities"
+• "What are the Greeks?"
 
-Type "help" to see all available commands."""
-                success = False
+Or ask about a specific stock's options!"""
+                    action = "options_suggestions"
+                    success = True  # Helpful suggestions count as success
+                elif any(w in query_lower for w in ['portfolio', 'position', 'balance']):
+                    response = """I can help with your portfolio! Try:
+• "Show my portfolio"
+• "What positions do I have?"
+• "Show my balance"
+• "Analyze my positions" """
+                    action = "portfolio_suggestions"
+                    success = True
+                elif any(w in query_lower for w in ['stock', 'price', 'chart']):
+                    response = """I can help with stocks! Try:
+• "What's AAPL at?"
+• "Show NVDA chart"
+• "Analyze TSLA" """
+                    action = "stock_suggestions"
+                    success = True
+                elif any(w in query_lower for w in ['personality', 'mode', 'style']):
+                    # Handle personality change requests
+                    personalities = ['professional', 'friendly', 'witty', 'mentor', 'concise',
+                                   'charming', 'analyst', 'coach', 'rebel', 'guru']
+                    for p in personalities:
+                        if p in query_lower:
+                            if self.set_personality(p):
+                                response = f"✅ Personality changed to **{p.title()}**! {self.personality.get_greeting() if self.personality else ''}"
+                                action = "personality_changed"
+                                success = True
+                                break
+                    else:
+                        response = f"""I can change my personality style! Available modes:
 
-                # Log as unanswered question
-                self.memory_manager.record_unanswered_question(
-                    user_question=user_message,
-                    intent_detected=intent,
-                    confidence_score=0.0,
-                    failure_reason="unsupported_query",
-                    conversation_id=conversation_id,
-                    context={'platform': platform}
-                )
+• **professional** - Formal & data-focused
+• **friendly** - Warm & approachable (default)
+• **witty** - Clever & humorous
+• **mentor** - Educational & patient
+• **analyst** - Bloomberg style
+• **coach** - Motivational
+• **rebel** - Contrarian
+• **guru** - Zen master
+
+Say "Change to coach mode" or "Be more witty" to switch!"""
+                        action = "personality_help"
+                        success = True
+                else:
+                    response = """I'm here to help! Here's what I can do:
+
+**Quick Commands:**
+• "Show my portfolio" - See your positions
+• "Find opportunities" - Scan for trades
+• "What's AAPL at?" - Get stock prices
+• "Explain wheel strategy" - Learn options
+
+Type "help" for all commands!"""
+                    action = "general_help"
+                    success = False  # Only mark as failed if completely unhelpful
+
+                    # Log as unanswered question only if we couldn't help at all
+                    self.memory_manager.record_unanswered_question(
+                        user_question=user_message,
+                        intent_detected=intent,
+                        confidence_score=0.0,
+                        failure_reason="unsupported_query",
+                        conversation_id=conversation_id,
+                        context={'platform': platform}
+                    )
 
         except Exception as e:
             logger.error(f"Error processing message: {e}")
             response = f"I encountered an error: {str(e)}"
             success = False
+
+        # Apply personality styling to response
+        if response:
+            response = self.apply_personality(response)
 
         # Log the interaction
         self.memory_manager.log_message(

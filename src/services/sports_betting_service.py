@@ -19,7 +19,7 @@ class SportsBettingService:
     Service to aggregate sports data and betting opportunities
     """
     
-    def __init__(self):
+    def __init__(self) -> None:
         self.nfl_db = NFLDBManager()
         self.kalshi_db = KalshiDBManager()
         

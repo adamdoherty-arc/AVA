@@ -112,7 +112,7 @@ class NFLPredictor(BaseSportsPredictor):
         self._load_team_data()
         self._load_elo_ratings()
 
-    def _load_team_data(self):
+    def _load_team_data(self) -> None:
         """Load NFL team data (divisions, current stats)."""
         # NFL divisions
         self.division_map = {
@@ -165,7 +165,7 @@ class NFLPredictor(BaseSportsPredictor):
             'Seattle Seahawks': 'NFC West',
         }
 
-    def _load_elo_ratings(self):
+    def _load_elo_ratings(self) -> None:
         """Load or initialize Elo ratings for all teams."""
         # Try to load from file
         ratings_file = 'src/data/nfl_elo_ratings.json'
@@ -185,7 +185,7 @@ class NFLPredictor(BaseSportsPredictor):
 
         self.logger.info("Initialized Elo ratings to base value")
 
-    def _save_elo_ratings(self):
+    def _save_elo_ratings(self) -> None:
         """Save current Elo ratings to file."""
         ratings_file = 'src/data/nfl_elo_ratings.json'
 

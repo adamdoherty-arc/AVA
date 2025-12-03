@@ -1,0 +1,137 @@
+# Positions UI Components Specification
+
+route: /positions
+page_title: "Positions"
+
+components:
+  - name: PositionsPage
+    type: page
+    children:
+      - SummaryCards
+      - PositionsTabs
+
+  - name: SummaryCards
+    type: section
+    elements:
+      - name: TotalEquityCard
+        selector: "[data-testid='total-equity']"
+        displays:
+          - total_equity
+          - day_change
+          - day_change_pct
+        validation:
+          - "Value must not be null"
+          - "Value must be formatted as currency"
+
+      - name: BuyingPowerCard
+        selector: "[data-testid='buying-power']"
+        displays:
+          - buying_power
+
+      - name: PositionsCountCard
+        selector: "[data-testid='positions-count']"
+        displays:
+          - total_positions
+
+  - name: PositionsTabs
+    type: tabs
+    tabs:
+      - name: Stocks
+        selector: "[role='tab'][data-value='stocks']"
+        content: StocksTable
+      - name: Options
+        selector: "[role='tab'][data-value='options']"
+        content: OptionsTable
+
+  - name: StocksTable
+    type: table
+    selector: "[data-testid='stocks-table']"
+    columns:
+      - header: Symbol
+        sortable: true
+      - header: Qty
+        sortable: true
+      - header: Avg Price
+        format: currency
+      - header: Current
+        format: currency
+      - header: P/L
+        format: currency_signed
+        color_coded: true
+      - header: P/L %
+        format: percentage_signed
+        color_coded: true
+    row_actions:
+      - name: View Details
+        selector: ".row-action-details"
+
+  - name: OptionsTable
+    type: table
+    selector: "[data-testid='options-table']"
+    columns:
+      - header: Symbol
+        sortable: true
+      - header: Type
+        values: [Call, Put]
+      - header: Strike
+        format: currency
+      - header: Exp
+        format: date
+      - header: DTE
+        format: integer
+        highlight_if: "< 7"
+      - header: Qty
+      - header: Delta
+        format: decimal(2)
+      - header: Theta
+        format: decimal(2)
+      - header: P/L
+        format: currency_signed
+        color_coded: true
+
+  - name: SyncButton
+    type: button
+    selector: "[data-testid='sync-button']"
+    text: "Sync"
+    action: POST /api/portfolio/sync
+    states:
+      - idle: "Sync"
+      - loading: "Syncing..."
+      - success: "Synced"
+      - error: "Sync Failed"
+    validation:
+      - "Button must be clickable when idle"
+      - "Button must show loading state during sync"
+      - "Must refresh data after successful sync"
+
+interactions:
+  - name: Sync Portfolio
+    trigger: Click SyncButton
+    steps:
+      - "Show loading state"
+      - "POST /api/portfolio/sync"
+      - "Refresh positions data"
+      - "Update UI"
+    expected_result: "Positions updated with fresh data"
+
+  - name: Sort Table
+    trigger: Click column header
+    expected_result: "Table sorted by clicked column"
+
+  - name: Tab Switch
+    trigger: Click tab
+    expected_result: "Display corresponding table"
+
+accessibility:
+  - "All interactive elements must be keyboard accessible"
+  - "Tables must have proper ARIA labels"
+  - "Color coding must have text alternative"
+
+responsive:
+  - breakpoint: mobile
+    changes:
+      - "Stack summary cards vertically"
+      - "Reduce table columns (hide DTE, Delta)"
+  - breakpoint: tablet
+    changes:
+      - "2-column summary cards"

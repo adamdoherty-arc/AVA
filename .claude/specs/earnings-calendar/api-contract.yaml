@@ -1,0 +1,123 @@
+# Earnings Calendar API Contract
+
+endpoints:
+  - path: /api/earnings/calendar
+    method: GET
+    description: Get earnings calendar for date range
+    parameters:
+      start_date:
+        type: string
+        format: date
+      end_date:
+        type: string
+        format: date
+      watchlist_only:
+        type: boolean
+        default: false
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          earnings:
+            type: array
+            items:
+              type: object
+              required:
+                - symbol
+                - date
+              properties:
+                symbol:
+                  type: string
+                company_name:
+                  type: string
+                date:
+                  type: string
+                  format: date
+                time:
+                  type: string
+                  enum: [bmo, amc, unknown]
+                  description: Before market open, after market close
+                estimated_eps:
+                  type: number
+                  nullable: true
+                actual_eps:
+                  type: number
+                  nullable: true
+                surprise_pct:
+                  type: number
+                  nullable: true
+                is_held:
+                  type: boolean
+                  description: Symbol in current positions
+
+  - path: /api/earnings/upcoming
+    method: GET
+    description: Get upcoming earnings for held positions
+    parameters:
+      days:
+        type: integer
+        default: 14
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          upcoming:
+            type: array
+            items:
+              type: object
+              properties:
+                symbol:
+                  type: string
+                date:
+                  type: string
+                time:
+                  type: string
+                days_until:
+                  type: integer
+                position_value:
+                  type: number
+          total_value_at_risk:
+            type: number
+
+  - path: /api/earnings/symbol
+    method: GET
+    description: Get earnings history for specific symbol
+    parameters:
+      symbol:
+        type: string
+        required: true
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          symbol:
+            type: string
+          next_earnings:
+            type: object
+            properties:
+              date:
+                type: string
+              time:
+                type: string
+          history:
+            type: array
+            items:
+              type: object
+              properties:
+                date:
+                  type: string
+                estimated:
+                  type: number
+                actual:
+                  type: number
+                surprise_pct:
+                  type: number
+
+error_responses:
+  404:
+    description: Symbol not found
+  503:
+    description: Earnings data unavailable

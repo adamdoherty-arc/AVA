@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
 class RealtimeBettingSync:
     """Real-time sync service for betting opportunities"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.espn_nfl = get_espn_client()
         self.espn_ncaa = get_espn_ncaa_client()
         self.kalshi = KalshiIntegration()

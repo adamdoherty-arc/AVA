@@ -145,7 +145,7 @@ class MarketRegimeDetector:
     Detects changes in market conditions that affect trading strategies
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize regime detector"""
         self.regime_history = []
 
@@ -278,7 +278,7 @@ class PatternExtractor:
     Extracts learnings and insights that can be embedded and reused
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize pattern extractor"""
         pass
 
@@ -441,7 +441,7 @@ class ConfidenceCalibrator:
     Ensures that X% confident recommendations are X% accurate
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize confidence calibrator"""
         self.confidence_bands = [
             (0, 50),    # Low confidence
@@ -539,7 +539,7 @@ class ContinuousLearningPipeline:
     Monitors trade outcomes and updates the RAG system accordingly
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize continuous learning pipeline"""
         self.db_config = {
             'host': os.getenv('DB_HOST', 'localhost'),
@@ -554,7 +554,7 @@ class ContinuousLearningPipeline:
         self.regime_detector = MarketRegimeDetector()
         self.confidence_calibrator = ConfidenceCalibrator()
 
-    def get_connection(self):
+    def get_connection(self) -> None:
         """Get PostgreSQL connection"""
         return psycopg2.connect(**self.db_config)
 

@@ -1,0 +1,47 @@
+# Calendar Spreads UI Components Specification
+
+route: /calendar-spreads
+page_title: "Calendar Spreads"
+
+components:
+  - name: CalendarSpreadsPage
+    type: page
+    children:
+      - SpreadBuilder
+      - OpportunitiesTable
+      - PLChart
+
+  - name: SpreadBuilder
+    type: form
+    selector: "[data-testid='spread-builder']"
+    elements:
+      - SymbolInput
+      - FrontExpSelector
+      - BackExpSelector
+      - StrikeSelector
+
+  - name: OpportunitiesTable
+    type: table
+    selector: "[data-testid='opportunities-table']"
+    columns:
+      - header: Symbol
+      - header: Front Exp
+      - header: Back Exp
+      - header: Strike
+      - header: Credit
+      - header: Max Profit
+      - header: Net Theta
+      - header: R/R
+
+  - name: PLChart
+    type: chart
+    selector: "[data-testid='pl-chart']"
+    shows: profit/loss vs price at front expiration
+
+interactions:
+  - name: Build Spread
+    trigger: Select options
+    expected_result: "Show spread analysis"
+  - name: View Opportunity
+    trigger: Click row
+    expected_result: "Load spread in builder"

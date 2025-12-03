@@ -1,0 +1,78 @@
+# XTrades Watchlists Validation Rules
+
+sync_validation:
+  - name: "Sync freshness"
+    rule: "last_sync within acceptable window"
+    max_stale_hours: 1
+    during_market_hours: 0.25  # 15 minutes
+
+  - name: "Sync status consistency"
+    rule: "If status='synced', last_sync should be recent"
+
+  - name: "Symbol count matches"
+    rule: "watchlist.symbols.length == watchlist.symbol_count"
+
+data_quality:
+  - name: "No duplicate watchlist names"
+    rule: "All watchlist names unique"
+    severity: medium
+
+  - name: "Valid symbols"
+    rule: "Symbols match expected format (uppercase, alphanumeric)"
+
+  - name: "No empty watchlists"
+    rule: "Each watchlist has at least one symbol"
+    note: "Warning only, allow empty lists"
+
+price_validation:
+  - name: "Current price positive"
+    rule: "current_price > 0"
+
+  - name: "Change percentage reasonable"
+    range: [-50, 100]
+    note: "Flag extreme movements"
+
+alert_validation:
+  - name: "Alert timestamp recent"
+    rule: "Alert timestamp within expected range"
+
+  - name: "Alert references valid watchlist"
+    rule: "watchlist field matches existing watchlist"
+
+consistency_checks:
+  - name: "Symbols across watchlists"
+    rule: "Total unique symbols matches /symbols endpoint"
+
+  - name: "Alert watchlist exists"
+    rule: "Alert references existing watchlist"
+
+data_freshness:
+  watchlists:
+    max_stale_hours: 1
+  prices:
+    max_stale_minutes: 5
+  alerts:
+    max_stale_minutes: 1
+
+null_checks:
+  never_null:
+    - watchlist.name
+    - watchlist.symbols
+  warn_if_null:
+    - symbol.current_price
+    - last_sync
+
+edge_cases:
+  - name: "First sync"
+    rule: "Handle never-synced state gracefully"
+
+  - name: "Sync in progress"
+    rule: "Show syncing indicator, disable sync button"
+
+  - name: "Large watchlists"
+    rule: "Handle watchlists with 100+ symbols"
+
+known_issues:
+  - id: "SYNC_DELAY"
+    description: "Sync may take 30+ seconds for large watchlists"
+    workaround: "Show progress indicator"

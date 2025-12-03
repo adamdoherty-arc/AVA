@@ -55,7 +55,7 @@ def get_option_market_data_rate_limited(option_id: str):
 class CalendarSpreadAnalyzer:
     """Analyzes and scores calendar spread opportunities"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.min_iv = 0.10  # Minimum IV to consider (10%)
         self.max_iv = 0.30  # Maximum IV for ideal spreads (30%)
         self.target_short_dte = (30, 45)  # Target DTE range for short leg

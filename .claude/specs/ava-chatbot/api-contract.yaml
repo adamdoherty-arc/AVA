@@ -1,0 +1,122 @@
+# AVA Chatbot API Contract
+
+endpoints:
+  - path: /api/ava/chat
+    method: POST
+    description: Send message to AVA chatbot
+    request:
+      schema:
+        type: object
+        required:
+          - message
+        properties:
+          message:
+            type: string
+            description: User message
+          conversation_id:
+            type: string
+            description: Optional conversation ID for context
+          include_context:
+            type: boolean
+            default: true
+    response:
+      status: 200
+      schema:
+        type: object
+        required:
+          - response
+        properties:
+          response:
+            type: string
+            description: AVA's response
+          conversation_id:
+            type: string
+          sources:
+            type: array
+            items:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum: [rag, feature, web]
+                title:
+                  type: string
+                content:
+                  type: string
+          data:
+            type: object
+            description: Any structured data included in response
+          latency_ms:
+            type: integer
+
+  - path: /api/ava/query
+    method: POST
+    description: Direct data query through AVA
+    request:
+      schema:
+        type: object
+        properties:
+          query_type:
+            type: string
+            enum: [positions, earnings, premium, market]
+          filters:
+            type: object
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          results:
+            type: array
+          summary:
+            type: string
+
+  - path: /api/ava/history
+    method: GET
+    description: Get conversation history
+    parameters:
+      conversation_id:
+        type: string
+      limit:
+        type: integer
+        default: 50
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          messages:
+            type: array
+            items:
+              type: object
+              properties:
+                role:
+                  type: string
+                  enum: [user, assistant]
+                content:
+                  type: string
+                timestamp:
+                  type: string
+
+  - path: /api/ava/context
+    method: GET
+    description: Get current context for conversation
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          portfolio_summary:
+            type: object
+          recent_alerts:
+            type: array
+          market_status:
+            type: string
+
+error_responses:
+  400:
+    description: Invalid message format
+  429:
+    description: Rate limited
+  503:
+    description: LLM service unavailable

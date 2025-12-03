@@ -1,0 +1,112 @@
+# DTE Scanner UI Components Specification
+
+route: /dte-scanner
+page_title: "7-Day DTE Scanner"
+
+components:
+  - name: DTEScannerPage
+    type: page
+    children:
+      - RiskWarning
+      - ScanControls
+      - ResultsTable
+
+  - name: RiskWarning
+    type: alert
+    selector: "[data-testid='risk-warning'], .risk-alert"
+    variant: warning
+    text: "Short-term options carry elevated gamma and assignment risk"
+    dismissible: true
+
+  - name: ScanControls
+    type: section
+    selector: "[data-testid='scan-controls'], .controls"
+    elements:
+      - name: MaxDTESelector
+        selector: "[data-testid='max-dte'], select[name='max_dte']"
+        type: select
+        options: [1, 2, 3, 5, 7]
+        default: 7
+
+      - name: MinPremiumInput
+        selector: "[data-testid='min-premium'], input[name='min_premium']"
+        type: number
+        default: 0.5
+
+      - name: AvoidEarningsToggle
+        selector: "[data-testid='avoid-earnings'], input[type='checkbox']"
+        type: checkbox
+        default: true
+
+      - name: RiskToleranceSelector
+        selector: "[data-testid='risk-tolerance']"
+        type: select
+        options: [Conservative, Moderate, Aggressive]
+
+      - name: ScanButton
+        selector: "[data-testid='scan-button'], button:has-text('Scan')"
+        type: button
+        text: "Scan"
+        states:
+          - idle: "Scan"
+          - loading: "Scanning..."
+
+  - name: ResultsTable
+    type: table
+    selector: "[data-testid='results-table'], .dte-results"
+    columns:
+      - header: Symbol
+        sortable: true
+      - header: Strike
+        format: currency
+      - header: Exp
+        format: date
+      - header: DTE
+        sortable: true
+        highlight_if: "<= 2"
+        color: "DTE <= 2: red, DTE <= 5: yellow"
+      - header: Premium
+        format: currency
+      - header: Prem %
+        format: percentage
+        sortable: true
+      - header: Daily Theta
+        format: currency
+      - header: Delta
+        format: decimal(2)
+      - header: Risk
+        format: "1-10 scale"
+        color_coded: true
+      - header: Earnings
+        type: badge
+        shows: "conflict icon if earnings_conflict"
+    row_styling:
+      earnings_conflict: "background: light-red"
+      low_dte: "font-weight: bold"
+
+interactions:
+  - name: Run Scan
+    trigger: Click Scan button
+    expected_result: "Table populated with results"
+
+  - name: Sort Results
+    trigger: Click column header
+    expected_result: "Table sorted by column"
+
+  - name: View Details
+    trigger: Click row
+    expected_result: "Show option details modal"
+
+  - name: Quick Trade
+    trigger: Click trade button on row
+    expected_result: "Open order form for option"
+
+accessibility:
+  - "Risk colors have text indicators"
+  - "Earnings warning announced"
+
+responsive:
+  - breakpoint: mobile
+    changes:
+      - "Horizontal scroll for table"
+      - "Stacked controls"

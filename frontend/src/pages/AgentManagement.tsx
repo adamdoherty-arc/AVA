@@ -320,7 +320,7 @@ function AgentCard({
                             agent.success_rate >= 90 ? "text-emerald-400" :
                             agent.success_rate >= 70 ? "text-amber-400" : "text-red-400"
                         )}>
-                            {agent.success_rate.toFixed(0)}%
+                            {(agent.success_rate ?? 0).toFixed(0)}%
                         </p>
                     </div>
                     <ChevronDown className={clsx(

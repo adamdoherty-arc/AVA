@@ -1,0 +1,38 @@
+# Best Bets / Sports Betting Hub Feature Manifest
+# SpecAgent: BestBetsSpecAgent
+
+name: best-bets
+version: 1.0.0
+description: Aggregated best betting opportunities across all sports and markets
+
+tier: 3  # Additional
+priority: 1
+
+dependencies:
+  - game-cards  # Derives from game analysis
+  - kalshi-markets  # Includes Kalshi opportunities
+  - database
+
+endpoints:
+  - /api/sports/best-bets
+  - /api/sports/value-bets
+  - /api/sports/nfl/bets
+  - /api/sports/nba/bets
+
+frontend_routes:
+  - /best-bets
+  - /sports
+
+key_components:
+  - BestBetsGrid
+  - BetCard
+  - FilterControls
+  - ConfidenceIndicator
+
+validation_focus:
+  - Bet recommendations accuracy
+  - Value calculation
+  - Confidence scoring
+  - Odds freshness
+
+last_updated: 2025-11-26

@@ -100,7 +100,7 @@ export default function TaxLotOptimizer() {
                         "text-2xl font-bold",
                         summary.total_unrealized_gain >= 0 ? "text-emerald-400" : "text-rose-400"
                     )}>
-                        ${summary.total_unrealized_gain.toLocaleString()}
+                        ${(summary.total_unrealized_gain ?? 0).toLocaleString()}
                     </p>
                 </div>
                 <div className="card p-4">
@@ -109,7 +109,7 @@ export default function TaxLotOptimizer() {
                         <span className="text-sm">Short-Term Gain</span>
                     </div>
                     <p className="text-2xl font-bold text-amber-400">
-                        ${summary.short_term_gain.toLocaleString()}
+                        ${(summary.short_term_gain ?? 0).toLocaleString()}
                     </p>
                     <p className="text-xs text-slate-500">Taxed at income rate</p>
                 </div>
@@ -119,7 +119,7 @@ export default function TaxLotOptimizer() {
                         <span className="text-sm">Long-Term Gain</span>
                     </div>
                     <p className="text-2xl font-bold text-emerald-400">
-                        ${summary.long_term_gain.toLocaleString()}
+                        ${(summary.long_term_gain ?? 0).toLocaleString()}
                     </p>
                     <p className="text-xs text-slate-500">Lower tax rate</p>
                 </div>
@@ -129,7 +129,7 @@ export default function TaxLotOptimizer() {
                         <span className="text-sm">Est. Tax Liability</span>
                     </div>
                     <p className="text-2xl font-bold text-rose-400">
-                        ${summary.estimated_tax.toLocaleString()}
+                        ${(summary.estimated_tax ?? 0).toLocaleString()}
                     </p>
                 </div>
             </div>
@@ -142,7 +142,7 @@ export default function TaxLotOptimizer() {
                         Tax-Loss Harvesting Available
                     </h3>
                     <p className="text-3xl font-bold text-rose-400 mb-1">
-                        ${(summary.short_term_loss + summary.long_term_loss).toLocaleString()}
+                        ${((summary.short_term_loss ?? 0) + (summary.long_term_loss ?? 0)).toLocaleString()}
                     </p>
                     <p className="text-sm text-slate-400">
                         Potential losses available to offset gains
@@ -154,7 +154,7 @@ export default function TaxLotOptimizer() {
                         Wash Sale Risk
                     </h3>
                     <p className="text-3xl font-bold text-amber-400 mb-1">
-                        ${summary.wash_sale_risk.toLocaleString()}
+                        ${(summary.wash_sale_risk ?? 0).toLocaleString()}
                     </p>
                     <p className="text-sm text-slate-400">
                         Positions at risk of wash sale if sold
@@ -250,20 +250,20 @@ export default function TaxLotOptimizer() {
                                     </td>
                                     <td className="p-4 text-center text-slate-400">{lot.purchase_date}</td>
                                     <td className="p-4 text-right font-mono">{lot.quantity}</td>
-                                    <td className="p-4 text-right font-mono">${lot.cost_basis.toLocaleString()}</td>
-                                    <td className="p-4 text-right font-mono">${lot.current_value.toLocaleString()}</td>
+                                    <td className="p-4 text-right font-mono">${(lot.cost_basis ?? 0).toLocaleString()}</td>
+                                    <td className="p-4 text-right font-mono">${(lot.current_value ?? 0).toLocaleString()}</td>
                                     <td className="p-4 text-right">
                                         <div className={clsx(
                                             "font-mono font-bold",
-                                            lot.gain_loss >= 0 ? "text-emerald-400" : "text-rose-400"
+                                            (lot.gain_loss ?? 0) >= 0 ? "text-emerald-400" : "text-rose-400"
                                         )}>
-                                            {lot.gain_loss >= 0 ? '+' : ''}${lot.gain_loss.toLocaleString()}
+                                            {(lot.gain_loss ?? 0) >= 0 ? '+' : ''}${(lot.gain_loss ?? 0).toLocaleString()}
                                         </div>
                                         <div className={clsx(
                                             "text-xs",
-                                            lot.gain_loss_pct >= 0 ? "text-emerald-400" : "text-rose-400"
+                                            (lot.gain_loss_pct ?? 0) >= 0 ? "text-emerald-400" : "text-rose-400"
                                         )}>
-                                            ({lot.gain_loss_pct.toFixed(1)}%)
+                                            ({(lot.gain_loss_pct ?? 0).toFixed(1)}%)
                                         </div>
                                     </td>
                                     <td className="p-4 text-center">

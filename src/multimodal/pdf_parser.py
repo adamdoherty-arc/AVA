@@ -58,7 +58,7 @@ class PDFParser:
     Supports multiple parsing backends with automatic fallback.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize PDF parser"""
         self.backends_available = self._check_available_backends()
         logger.info(f"PDF parser initialized with backends: {list(self.backends_available.keys())}")

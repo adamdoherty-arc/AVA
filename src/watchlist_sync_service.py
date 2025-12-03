@@ -23,7 +23,7 @@ load_dotenv()
 class WatchlistSyncService:
     """Background service to sync watchlist data to database"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.conn = psycopg2.connect(
             host=os.getenv('DB_HOST', 'localhost'),
             port=os.getenv('DB_PORT', 5432),
@@ -162,7 +162,7 @@ class WatchlistSyncService:
 
         return None
 
-    def login_robinhood_once(self):
+    def login_robinhood_once(self) -> None:
         """Login to Robinhood once for the session"""
         if self.robinhood_logged_in:
             return True
@@ -377,7 +377,7 @@ class WatchlistSyncService:
         logger.info(f"Sync Complete: {success_count}/{len(symbols)} prices, {options_count} symbols with {total_expirations} total expirations")
         logger.info(f"{'='*60}\n")
 
-    def close(self):
+    def close(self) -> None:
         """Close database connection"""
         self.conn.close()
 

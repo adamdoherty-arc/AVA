@@ -214,7 +214,7 @@ class ConnectorRegistry:
     Provides centralized access to all feature connectors.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize connector registry."""
         self.connectors: Dict[str, BaseConnector] = {}
         logger.info("Initialized ConnectorRegistry")
@@ -256,7 +256,7 @@ class ConnectorRegistry:
             }
         }
 
-    def clear_all_caches(self):
+    def clear_all_caches(self) -> None:
         """Clear caches for all connectors."""
         for connector in self.connectors.values():
             connector.clear_cache()

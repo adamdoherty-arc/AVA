@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class NFLDBManager:
     """Manages database operations for NFL real-time data pipeline"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.db_config = {
             'host': 'localhost',
             'port': '5432',
@@ -30,7 +30,7 @@ class NFLDBManager:
         }
         self.initialize_database()
 
-    def get_connection(self):
+    def get_connection(self) -> None:
         """Get database connection from shared pool"""
         try:
             pool = DatabaseConnectionPool()
@@ -58,7 +58,7 @@ class NFLDBManager:
             except:
                 pass
 
-    def initialize_database(self):
+    def initialize_database(self) -> None:
         """Initialize database tables from schema file"""
         try:
             schema_path = os.path.join(os.path.dirname(__file__), 'nfl_data_schema.sql')

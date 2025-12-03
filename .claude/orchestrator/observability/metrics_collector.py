@@ -41,7 +41,7 @@ class MetricsCollector:
         self._init_database()
         logger.info("Metrics collector initialized")
 
-    def _init_database(self):
+    def _init_database(self) -> None:
         """Initialize SQLite schema for metrics"""
         conn = sqlite3.connect(str(self.db_path))
         cursor = conn.cursor()
@@ -282,7 +282,7 @@ class MetricsCollector:
 
         return "\n".join(metrics)
 
-    def rollup_hourly_metrics(self):
+    def rollup_hourly_metrics(self) -> None:
         """Rollup metrics into hourly aggregates (run periodically)"""
         conn = sqlite3.connect(str(self.db_path))
         cursor = conn.cursor()

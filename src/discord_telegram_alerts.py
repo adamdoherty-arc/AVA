@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 class DiscordTelegramAlerts:
     """Detect important Discord messages and send Telegram alerts"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.telegram = TelegramNotifier()
 
         # Database connection
@@ -41,7 +41,7 @@ class DiscordTelegramAlerts:
         self.high_value_keywords = ['strong buy', 'lock', 'max confidence', 'high conviction']
         self.ticker_patterns = [r'\$([A-Z]{1,5})', r'\b([A-Z]{2,5})\b']
 
-    def get_connection(self):
+    def get_connection(self) -> None:
         """Get database connection"""
         return psycopg2.connect(
             host=self.db_host,
@@ -233,7 +233,7 @@ class DiscordTelegramAlerts:
         except Exception as e:
             logger.error(f"Error checking for alerts: {e}", exc_info=True)
 
-    def test_alert(self):
+    def test_alert(self) -> None:
         """Send a test alert to verify Telegram is working"""
         test_message = """
 🚨 <b>Test Alert</b>

@@ -105,7 +105,7 @@ export default function TradeJournal() {
                         "text-xl font-bold",
                         stats.win_rate >= 50 ? "text-emerald-400" : "text-rose-400"
                     )}>
-                        {stats.win_rate.toFixed(0)}%
+                        {(stats.win_rate ?? 0).toFixed(0)}%
                     </p>
                 </div>
                 <div className="card p-4">
@@ -117,7 +117,7 @@ export default function TradeJournal() {
                         "text-xl font-bold",
                         stats.total_pnl >= 0 ? "text-emerald-400" : "text-rose-400"
                     )}>
-                        ${stats.total_pnl.toLocaleString()}
+                        ${(stats.total_pnl ?? 0).toLocaleString()}
                     </p>
                 </div>
                 <div className="card p-4">
@@ -129,7 +129,7 @@ export default function TradeJournal() {
                         "text-xl font-bold",
                         stats.avg_pnl >= 0 ? "text-emerald-400" : "text-rose-400"
                     )}>
-                        ${stats.avg_pnl.toFixed(0)}
+                        ${(stats.avg_pnl ?? 0).toFixed(0)}
                     </p>
                 </div>
                 <div className="card p-4">
@@ -137,14 +137,14 @@ export default function TradeJournal() {
                         <TrendingUp className="w-4 h-4" />
                         <span className="text-xs">Best</span>
                     </div>
-                    <p className="text-xl font-bold text-emerald-400">${stats.best_trade.toLocaleString()}</p>
+                    <p className="text-xl font-bold text-emerald-400">${(stats.best_trade ?? 0).toLocaleString()}</p>
                 </div>
                 <div className="card p-4">
                     <div className="flex items-center gap-2 text-slate-400 mb-1">
                         <TrendingDown className="w-4 h-4" />
                         <span className="text-xs">Worst</span>
                     </div>
-                    <p className="text-xl font-bold text-rose-400">${stats.worst_trade.toLocaleString()}</p>
+                    <p className="text-xl font-bold text-rose-400">${(stats.worst_trade ?? 0).toLocaleString()}</p>
                 </div>
                 <div className="card p-4">
                     <div className="flex items-center gap-2 text-slate-400 mb-1">
@@ -210,15 +210,15 @@ export default function TradeJournal() {
                                 <div className="text-right">
                                     <p className={clsx(
                                         "text-xl font-bold",
-                                        entry.pnl >= 0 ? "text-emerald-400" : "text-rose-400"
+                                        (entry.pnl ?? 0) >= 0 ? "text-emerald-400" : "text-rose-400"
                                     )}>
-                                        {entry.pnl >= 0 ? '+' : ''}${entry.pnl.toFixed(0)}
+                                        {(entry.pnl ?? 0) >= 0 ? '+' : ''}${(entry.pnl ?? 0).toFixed(0)}
                                     </p>
                                     <p className={clsx(
                                         "text-sm",
-                                        entry.pnl_pct >= 0 ? "text-emerald-400" : "text-rose-400"
+                                        (entry.pnl_pct ?? 0) >= 0 ? "text-emerald-400" : "text-rose-400"
                                     )}>
-                                        {entry.pnl_pct >= 0 ? '+' : ''}{entry.pnl_pct.toFixed(1)}%
+                                        {(entry.pnl_pct ?? 0) >= 0 ? '+' : ''}{(entry.pnl_pct ?? 0).toFixed(1)}%
                                     </p>
                                 </div>
                             </div>
@@ -226,11 +226,11 @@ export default function TradeJournal() {
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-3">
                                 <div>
                                     <p className="text-slate-400">Entry</p>
-                                    <p className="font-mono">${entry.entry_price.toFixed(2)}</p>
+                                    <p className="font-mono">${(entry.entry_price ?? 0).toFixed(2)}</p>
                                 </div>
                                 <div>
                                     <p className="text-slate-400">Exit</p>
-                                    <p className="font-mono">${entry.exit_price.toFixed(2)}</p>
+                                    <p className="font-mono">${(entry.exit_price ?? 0).toFixed(2)}</p>
                                 </div>
                                 <div>
                                     <p className="text-slate-400">Emotion</p>

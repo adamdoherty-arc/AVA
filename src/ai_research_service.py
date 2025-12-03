@@ -12,7 +12,7 @@ import random
 class AIResearchService:
     """Service for fetching AI-powered research reports"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.cache_ttl_minutes = 30
 
     @st.cache_data(ttl=1800, show_spinner=False)  # 30 minutes cache
@@ -242,7 +242,7 @@ class AIResearchService:
 
         return report
 
-    def clear_cache(self):
+    def clear_cache(self) -> None:
         """Clear the research report cache"""
         st.cache_data.clear()
 

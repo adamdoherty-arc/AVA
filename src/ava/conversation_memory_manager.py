@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 class ConversationMemoryManager:
     """Manages conversation memory, recall, and unanswered questions"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize memory manager with database connection"""
         self.db_config = {
             'host': os.getenv('DB_HOST', 'localhost'),
@@ -48,11 +48,11 @@ class ConversationMemoryManager:
         # Ensure schema exists
         self._initialize_schema()
 
-    def get_connection(self):
+    def get_connection(self) -> None:
         """Get database connection"""
         return psycopg2.connect(**self.db_config)
 
-    def _initialize_schema(self):
+    def _initialize_schema(self) -> None:
         """Initialize database schema if not exists"""
         try:
             schema_file = os.path.join(

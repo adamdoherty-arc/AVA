@@ -1,0 +1,110 @@
+# Kalshi Markets UI Components Specification
+
+route: /kalshi
+page_title: "Prediction Markets"
+
+components:
+  - name: KalshiPage
+    type: page
+    children:
+      - CategoryTabs
+      - MarketsGrid
+      - PositionsPanel
+
+  - name: CategoryTabs
+    type: tabs
+    selector: "[data-testid='category-tabs'], .category-selector"
+    options:
+      - All
+      - Sports
+      - NFL
+      - Economics
+      - Politics
+    default: Sports
+
+  - name: MarketsGrid
+    type: grid
+    selector: "[data-testid='markets-grid'], .markets-grid"
+    children: MarketCard[]
+
+  - name: MarketCard
+    type: card
+    selector: "[data-testid='market-card'], .market-card"
+    elements:
+      - name: MarketTitle
+        selector: ".market-title"
+        displays:
+          - title
+          - subtitle
+
+      - name: PriceDisplay
+        selector: ".price-display"
+        elements:
+          - name: YesPrice
+            format: "Yes: 65c"
+            color: green
+          - name: NoPrice
+            format: "No: 35c"
+            color: red
+
+      - name: ProbabilityBar
+        selector: ".probability-bar"
+        type: progress-bar
+        shows: yes_price as percentage
+
+      - name: VolumeDisplay
+        selector: ".volume"
+        format: "Vol: 1,234"
+
+      - name: CloseTime
+        selector: ".close-time"
+        format: "Closes: Dec 1, 4:00 PM"
+
+  - name: PositionsPanel
+    type: panel
+    selector: "[data-testid='positions-panel'], .positions-panel"
+    collapsible: true
+    elements:
+      - name: PortfolioSummary
+        displays:
+          - balance
+          - invested
+          - total_pl
+
+      - name: PositionsList
+        type: list
+        items:
+          - ticker
+          - side
+          - quantity
+          - pl
+
+interactions:
+  - name: View Market Details
+    trigger: Click market card
+    expected_result: "Open market detail modal"
+
+  - name: Place Order
+    trigger: Click Yes/No button
+    expected_result: "Open order form modal"
+
+  - name: Filter Category
+    trigger: Click category tab
+    expected_result: "Filter markets to category"
+
+  - name: Refresh Prices
+    trigger: Auto every 30s or manual
+    expected_result: "Update all prices"
+
+accessibility:
+  - "Price changes announced to screen readers"
+  - "Color coding has text alternative"
+
+responsive:
+  - breakpoint: mobile
+    changes:
+      - "Single column market cards"
+      - "Collapse positions panel"
+  - breakpoint: tablet
+    changes:
+      - "2-column grid"

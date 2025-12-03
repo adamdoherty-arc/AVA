@@ -492,7 +492,7 @@ _Last updated: {datetime.now().strftime('%I:%M %p')}_
         # Save current state
         self.save_game_state(game_id, sport, game_data, ai_prediction)
 
-    def run_monitoring_cycle(self):
+    def run_monitoring_cycle(self) -> None:
         """Run one complete monitoring cycle - check all watched games"""
         logger.info("=" * 80)
         logger.info(f"Starting monitoring cycle at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -519,7 +519,7 @@ _Last updated: {datetime.now().strftime('%I:%M %p')}_
 
         logger.info(f"Monitoring cycle complete at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-    def start(self):
+    def start(self) -> None:
         """Start the background monitoring service"""
         logger.info("=" * 80)
         logger.info("GAME WATCHLIST MONITOR STARTED")

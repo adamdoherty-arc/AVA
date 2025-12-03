@@ -507,7 +507,7 @@ class GraphQLAPI:
     Provides FastAPI-based GraphQL endpoint with Playground UI.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize GraphQL API."""
         if not GRAPHQL_AVAILABLE:
             raise ImportError(

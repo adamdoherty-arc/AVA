@@ -22,7 +22,7 @@ class AgentRegistry:
     - Agent metadata tracking
     """
     
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize agent registry"""
         self._agents: Dict[str, BaseAgent] = {}
         self._capabilities: Dict[str, List[str]] = {}  # capability -> [agent_names]

@@ -23,7 +23,7 @@ load_dotenv()
 class DatabaseMigrator:
     """Handles database migration operations."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize migrator with database credentials."""
         self.source_config = {
             'host': os.getenv('DB_HOST', 'localhost'),

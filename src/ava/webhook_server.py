@@ -250,7 +250,7 @@ def create_message_payload(update: TelegramUpdate) -> Dict[str, Any]:
         "user_id": user_id,
         "message_type": message_type,
         "content": content,
-        "raw_update": update.dict(),
+        "raw_update": update.{},
         "timestamp": datetime.utcnow().isoformat(),
         "retry_count": 0
     }

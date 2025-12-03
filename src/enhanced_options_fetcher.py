@@ -18,11 +18,11 @@ logger = logging.getLogger(__name__)
 class EnhancedOptionsFetcher:
     """Fetches options data with multiple expirations and Greeks"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.logged_in = False
         self.risk_free_rate = 0.045  # Current risk-free rate (~4.5%)
 
-    def login_robinhood(self):
+    def login_robinhood(self) -> None:
         """Login to Robinhood once"""
         if self.logged_in:
             return True

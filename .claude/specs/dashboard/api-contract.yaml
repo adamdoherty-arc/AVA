@@ -1,0 +1,70 @@
+# Dashboard API Contract
+# Defines expected API endpoints and responses
+
+endpoints:
+  - path: /api/dashboard/summary
+    method: GET
+    description: Get dashboard summary with portfolio overview
+    response:
+      status: 200
+      content_type: application/json
+      schema:
+        type: object
+        required:
+          - total_value
+        properties:
+          total_value:
+            type: number
+            description: Total portfolio value
+          buying_power:
+            type: number
+            description: Available buying power
+          day_change:
+            type: number
+            description: Day change in dollars
+          day_change_pct:
+            type: number
+            description: Day change percentage
+          allocations:
+            type: object
+            properties:
+              stocks:
+                type: number
+                description: Stock allocation percentage
+              options:
+                type: number
+                description: Options allocation percentage
+              cash:
+                type: number
+                description: Cash allocation percentage
+          positions_count:
+            type: integer
+            description: Total number of positions
+          last_updated:
+            type: string
+            format: datetime
+            description: Last data refresh time
+
+  - path: /api/health
+    method: GET
+    description: System health check
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          status:
+            type: string
+            enum: [healthy, degraded, unhealthy]
+          database:
+            type: string
+          api:
+            type: string
+          timestamp:
+            type: string
+
+error_responses:
+  401:
+    description: Not authenticated
+  503:
+    description: Service unavailable

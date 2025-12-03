@@ -32,7 +32,7 @@ class LLMOptionsStrategist:
     Generates options trading strategies based on market data and risk profile
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.llm = get_magnus_llm()
 
     def generate_strategy(self, 

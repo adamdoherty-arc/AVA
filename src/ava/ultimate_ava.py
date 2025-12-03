@@ -50,7 +50,7 @@ class UltimateAVA:
     - And more!
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize Ultimate AVA with all systems"""
         logger.info("🚀 Initializing Ultimate AVA...")
 
@@ -65,7 +65,7 @@ class UltimateAVA:
 
         logger.info("✅ Ultimate AVA initialized and ready!")
 
-    def _init_world_class_ava(self):
+    def _init_world_class_ava(self) -> None:
         """Initialize world-class AVA core"""
         try:
             from src.ava.world_class_ava_integration import WorldClassAVA
@@ -75,7 +75,7 @@ class UltimateAVA:
             logger.warning(f"World-Class AVA not available: {e}")
             self.world_class_ava = None
 
-    def _init_portfolio_integration(self):
+    def _init_portfolio_integration(self) -> None:
         """Initialize real portfolio integration"""
         try:
             from src.services.robinhood_client import get_robinhood_client
@@ -89,31 +89,31 @@ class UltimateAVA:
             self.robinhood_client = None
             self.portfolio_agent = None
 
-    def _init_risk_analytics(self):
+    def _init_risk_analytics(self) -> None:
         """Initialize risk analytics suite"""
         from src.ava.systems.risk_analytics import RiskAnalytics
         self.risk_analytics = RiskAnalytics()
         logger.info("✅ Risk analytics suite loaded")
 
-    def _init_monitoring_system(self):
+    def _init_monitoring_system(self) -> None:
         """Initialize proactive monitoring"""
         from src.ava.systems.proactive_monitor import ProactiveMonitor
         self.monitor = ProactiveMonitor()
         logger.info("✅ Proactive monitoring active")
 
-    def _init_opportunity_scanner(self):
+    def _init_opportunity_scanner(self) -> None:
         """Initialize opportunity scanner"""
         from src.ava.systems.opportunity_scanner import OpportunityScanner
         self.scanner = OpportunityScanner()
         logger.info("✅ Opportunity scanner ready")
 
-    def _init_outcome_tracker(self):
+    def _init_outcome_tracker(self) -> None:
         """Initialize outcome tracking"""
         from src.ava.systems.outcome_tracker import OutcomeTracker
         self.tracker = OutcomeTracker()
         logger.info("✅ Outcome tracking active")
 
-    def _init_tax_optimizer(self):
+    def _init_tax_optimizer(self) -> None:
         """Initialize tax optimization"""
         from src.ava.systems.tax_optimizer import TaxOptimizer
         self.tax_optimizer = TaxOptimizer()

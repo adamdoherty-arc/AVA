@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 class TradingViewAPISync:
     """Sync TradingView watchlists using API with session cookies"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.db_config = {
             'host': os.getenv('DB_HOST', 'localhost'),
             'port': os.getenv('DB_PORT', '5432'),
@@ -35,11 +35,11 @@ class TradingViewAPISync:
         # Initialize database tables
         self.init_database()
 
-    def get_connection(self):
+    def get_connection(self) -> None:
         """Get database connection"""
         return psycopg2.connect(**self.db_config)
 
-    def init_database(self):
+    def init_database(self) -> None:
         """Initialize database tables for TradingView watchlists"""
         conn = self.get_connection()
         cur = conn.cursor()
@@ -94,7 +94,7 @@ class TradingViewAPISync:
             cur.close()
             conn.close()
 
-    def get_headers(self):
+    def get_headers(self) -> None:
         """Get headers for API requests"""
         return {
             'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',

@@ -95,7 +95,7 @@ class EarningsSyncService:
 
         logger.info("EarningsSyncService initialized")
 
-    def get_db_connection(self):
+    def get_db_connection(self) -> None:
         """Get database connection"""
         try:
             conn = psycopg2.connect(**self.db_config)
@@ -130,7 +130,7 @@ class EarningsSyncService:
             logger.error(f"Robinhood login error: {e}")
             return False
 
-    def logout_robinhood(self):
+    def logout_robinhood(self) -> None:
         """Logout from Robinhood API"""
         if self.is_logged_in:
             try:

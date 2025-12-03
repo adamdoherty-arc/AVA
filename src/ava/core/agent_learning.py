@@ -82,7 +82,7 @@ class AgentLearningSystem:
         
         logger.info("AgentLearningSystem initialized")
     
-    def _initialize_database(self):
+    def _initialize_database(self) -> None:
         """Initialize database tables for learning system"""
         try:
             conn = psycopg2.connect(**self.db_config)

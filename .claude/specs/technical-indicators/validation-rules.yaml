@@ -1,0 +1,42 @@
+# Technical Indicators Validation Rules
+
+indicator_validation:
+  rsi:
+    range: [0, 100]
+    overbought: 70
+    oversold: 30
+
+  macd:
+    components:
+      - macd_line
+      - signal_line
+      - histogram
+
+  bollinger:
+    bands:
+      - upper
+      - middle
+      - lower
+    rule: "upper > middle > lower"
+
+  sma_ema:
+    rule: "Length matches specified period"
+
+calculation_checks:
+  - name: "RSI formula"
+    rule: "100 - (100 / (1 + RS))"
+  - name: "MACD"
+    rule: "12-day EMA - 26-day EMA"
+
+data_freshness:
+  indicators:
+    max_stale_minutes: 5
+  signals:
+    max_stale_minutes: 1
+
+null_checks:
+  never_null:
+    - symbol
+  warn_if_null:
+    - trend
+    - signals

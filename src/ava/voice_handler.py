@@ -28,13 +28,13 @@ import json
 class AVAVoiceHandler:
     """Handles voice interactions with AVA"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize voice handler"""
         self.whisper_model = None
         self.piper_voice = None
         self._load_models()
 
-    def _load_models(self):
+    def _load_models(self) -> None:
         """Load Whisper and Piper models"""
         try:
             import whisper

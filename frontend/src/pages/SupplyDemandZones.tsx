@@ -135,12 +135,12 @@ export default function SupplyDemandZones() {
                                     <div className="text-sm text-slate-400">Supply & Demand Analysis</div>
                                 </div>
                                 <div>
-                                    <div className="text-2xl font-mono text-white">${analysis.current_price.toFixed(2)}</div>
+                                    <div className="text-2xl font-mono text-white">${(analysis.current_price ?? 0).toFixed(2)}</div>
                                     <div className={`flex items-center gap-1 text-sm ${
-                                        analysis.change_pct >= 0 ? 'text-emerald-400' : 'text-red-400'
+                                        (analysis.change_pct ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
                                     }`}>
-                                        {analysis.change_pct >= 0 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
-                                        {Math.abs(analysis.change_pct).toFixed(2)}%
+                                        {(analysis.change_pct ?? 0) >= 0 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
+                                        {Math.abs(analysis.change_pct ?? 0).toFixed(2)}%
                                     </div>
                                 </div>
                             </div>
@@ -172,13 +172,13 @@ export default function SupplyDemandZones() {
                                     <div className="flex justify-between">
                                         <span className="text-slate-400">Zone Range</span>
                                         <span className="text-red-400 font-mono">
-                                            ${analysis.nearest_supply.price_low.toFixed(2)} - ${analysis.nearest_supply.price_high.toFixed(2)}
+                                            ${(analysis.nearest_supply.price_low ?? 0).toFixed(2)} - ${(analysis.nearest_supply.price_high ?? 0).toFixed(2)}
                                         </span>
                                     </div>
                                     <div className="flex justify-between">
                                         <span className="text-slate-400">Distance</span>
                                         <span className="text-white font-mono">
-                                            {((analysis.nearest_supply.price_low - analysis.current_price) / analysis.current_price * 100).toFixed(2)}%
+                                            {((((analysis.nearest_supply?.price_low ?? 0) - (analysis.current_price ?? 0)) / (analysis.current_price || 1)) * 100).toFixed(2)}%
                                         </span>
                                     </div>
                                     <div className="flex justify-between">
@@ -218,13 +218,13 @@ export default function SupplyDemandZones() {
                                     <div className="flex justify-between">
                                         <span className="text-slate-400">Zone Range</span>
                                         <span className="text-emerald-400 font-mono">
-                                            ${analysis.nearest_demand.price_low.toFixed(2)} - ${analysis.nearest_demand.price_high.toFixed(2)}
+                                            ${(analysis.nearest_demand.price_low ?? 0).toFixed(2)} - ${(analysis.nearest_demand.price_high ?? 0).toFixed(2)}
                                         </span>
                                     </div>
                                     <div className="flex justify-between">
                                         <span className="text-slate-400">Distance</span>
                                         <span className="text-white font-mono">
-                                            {((analysis.current_price - analysis.nearest_demand.price_high) / analysis.current_price * 100).toFixed(2)}%
+                                            {((((analysis.current_price ?? 0) - (analysis.nearest_demand?.price_high ?? 0)) / (analysis.current_price || 1)) * 100).toFixed(2)}%
                                         </span>
                                     </div>
                                     <div className="flex justify-between">
@@ -349,7 +349,7 @@ export default function SupplyDemandZones() {
                                                 </span>
                                             </td>
                                             <td className="font-mono text-white">
-                                                ${zone.price_low.toFixed(2)} - ${zone.price_high.toFixed(2)}
+                                                ${(zone.price_low ?? 0).toFixed(2)} - ${(zone.price_high ?? 0).toFixed(2)}
                                             </td>
                                             <td>
                                                 <div className="flex items-center gap-2">
@@ -387,9 +387,9 @@ export default function SupplyDemandZones() {
                                 {analysis.resistance_levels.map((level, idx) => (
                                     <div key={idx} className="flex items-center justify-between p-3 bg-red-500/10 rounded-lg">
                                         <span className="text-sm text-slate-400">R{idx + 1}</span>
-                                        <span className="font-mono text-red-400">${level.toFixed(2)}</span>
+                                        <span className="font-mono text-red-400">${(level ?? 0).toFixed(2)}</span>
                                         <span className="text-xs text-slate-500">
-                                            +{((level - analysis.current_price) / analysis.current_price * 100).toFixed(1)}%
+                                            +{((((level ?? 0) - (analysis.current_price ?? 0)) / (analysis.current_price || 1)) * 100).toFixed(1)}%
                                         </span>
                                     </div>
                                 ))}
@@ -404,9 +404,9 @@ export default function SupplyDemandZones() {
                                 {analysis.support_levels.map((level, idx) => (
                                     <div key={idx} className="flex items-center justify-between p-3 bg-emerald-500/10 rounded-lg">
                                         <span className="text-sm text-slate-400">S{idx + 1}</span>
-                                        <span className="font-mono text-emerald-400">${level.toFixed(2)}</span>
+                                        <span className="font-mono text-emerald-400">${(level ?? 0).toFixed(2)}</span>
                                         <span className="text-xs text-slate-500">
-                                            {((level - analysis.current_price) / analysis.current_price * 100).toFixed(1)}%
+                                            {((((level ?? 0) - (analysis.current_price ?? 0)) / (analysis.current_price || 1)) * 100).toFixed(1)}%
                                         </span>
                                     </div>
                                 ))}

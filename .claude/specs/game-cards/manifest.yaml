@@ -1,0 +1,49 @@
+# Game Cards Feature Manifest
+# SpecAgent: GameCardsSpecAgent
+
+name: game-cards
+version: 1.0.0
+description: Sports betting game cards with AI predictions and analysis
+
+tier: 1  # Critical
+priority: 5
+
+dependencies:
+  - database
+  - llm-api
+  - sports-data-api
+
+endpoints:
+  - /api/sports/games
+  - /api/sports/predictions
+  - /api/sports/analysis
+
+frontend_routes:
+  - /games
+  - /game-cards
+
+key_components:
+  - GameCardGrid
+  - GameCard
+  - PredictionDisplay
+  - SpreadAnalysis
+  - MoneylineOdds
+
+data_sources:
+  - sports_schedules
+  - odds_data
+  - ai_predictions
+  - team_stats
+
+validation_focus:
+  - Game data accuracy
+  - Prediction confidence levels
+  - Odds display format
+  - Time zone handling
+  - Live score updates
+
+owners:
+  - team: sports
+  - critical: true
+
+last_updated: 2025-11-26

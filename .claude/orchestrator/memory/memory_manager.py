@@ -22,13 +22,13 @@ class MemoryManager:
     - Long-term: Project knowledge (90 days, SQLite)
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.short_term = None  # Will initialize ChromaDB
         self.long_term_db = Path(".claude/orchestrator/databases/memory.db")
         self._init_storage()
         logger.info("Memory manager initialized")
 
-    def _init_storage(self):
+    def _init_storage(self) -> None:
         """Initialize all storage backends"""
         # Initialize ChromaDB for short-term semantic memory
         try:
@@ -48,7 +48,7 @@ class MemoryManager:
         # Initialize SQLite for long-term memory
         self._init_sqlite()
 
-    def _init_sqlite(self):
+    def _init_sqlite(self) -> None:
         """Initialize SQLite schema"""
         import sqlite3
         self.long_term_db.parent.mkdir(parents=True, exist_ok=True)
@@ -287,7 +287,7 @@ class MemoryManager:
             logger.error(f"Short-term search failed: {e}")
             return []
 
-    def cleanup_expired(self):
+    def cleanup_expired(self) -> None:
         """Clean up expired context cache"""
         import sqlite3
         conn = sqlite3.connect(str(self.long_term_db))

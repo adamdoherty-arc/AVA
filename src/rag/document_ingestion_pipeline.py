@@ -112,7 +112,7 @@ class DocumentIngestionPipeline:
 
         logger.info(f"Document ingestion pipeline initialized with {embedding_model}")
 
-    def _init_chromadb(self):
+    def _init_chromadb(self) -> None:
         """Initialize ChromaDB client"""
         try:
             import chromadb

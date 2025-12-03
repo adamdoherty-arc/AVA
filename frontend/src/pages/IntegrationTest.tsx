@@ -186,7 +186,7 @@ export default function IntegrationTest() {
                             </div>
                             <div>
                                 <p className="text-sm text-slate-400">Total Time</p>
-                                <p className="text-2xl font-bold text-white">{(testResults.summary.total_time_ms / 1000).toFixed(1)}s</p>
+                                <p className="text-2xl font-bold text-white">{((testResults.summary?.total_time_ms ?? 0) / 1000).toFixed(1)}s</p>
                             </div>
                         </div>
                     </div>
@@ -252,7 +252,7 @@ export default function IntegrationTest() {
                                         {result.status.toUpperCase()}
                                     </span>
                                     <p className="text-xs text-slate-500 mt-1">
-                                        {result.response_time_ms.toFixed(0)}ms
+                                        {(result.response_time_ms ?? 0).toFixed(0)}ms
                                     </p>
                                 </div>
                             </div>

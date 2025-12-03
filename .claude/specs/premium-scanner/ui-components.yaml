@@ -1,0 +1,122 @@
+# Premium Scanner UI Components Specification
+
+route: /scanner
+page_title: "Premium Scanner"
+
+components:
+  - name: ScannerPage
+    type: page
+    children:
+      - FilterControls
+      - ScannerResultsTable
+      - ScanButton
+
+  - name: FilterControls
+    type: section
+    selector: "[data-testid='scanner-filters'], .filters, form"
+    elements:
+      - name: MinPremiumInput
+        selector: "[data-testid='min-premium'], input[name='min_premium']"
+        type: number
+        validation:
+          - "Value must be >= 0"
+
+      - name: MaxDTEInput
+        selector: "[data-testid='max-dte'], input[name='max_dte']"
+        type: number
+        validation:
+          - "Value must be > 0"
+
+      - name: AvoidEarningsToggle
+        selector: "[data-testid='avoid-earnings'], input[type='checkbox']"
+        type: checkbox
+        default: true
+
+      - name: SymbolSearch
+        selector: "[data-testid='symbol-search'], input[type='search']"
+        type: text
+
+  - name: ScanButton
+    type: button
+    selector: "[data-testid='scan-button'], button:has-text('Scan')"
+    text: "Scan"
+    action: POST /api/scanner/scan
+    states:
+      - idle: "Scan"
+      - loading: "Scanning..."
+      - success: "Scan Complete"
+      - error: "Scan Failed"
+    validation:
+      - "Button must be clickable when idle"
+      - "Button must show loading state during scan"
+
+  - name: ScannerResultsTable
+    type: table
+    selector: "[data-testid='scanner-table'], table.scanner-results, .scanner-table"
+    columns:
+      - header: Symbol
+        sortable: true
+      - header: Strike
+        format: currency
+        sortable: true
+      - header: Exp
+        format: date
+        sortable: true
+      - header: DTE
+        format: integer
+        sortable: true
+        highlight_if: "< 7"
+      - header: Premium
+        format: currency
+      - header: Premium %
+        format: percentage
+        sortable: true
+      - header: Monthly
+        format: percentage
+        sortable: true
+      - header: Annual
+        format: percentage
+        sortable: true
+      - header: Delta
+        format: decimal(2)
+      - header: IV
+        format: percentage
+      - header: OI
+        format: integer
+    row_actions:
+      - name: View Details
+        selector: ".row-action-details"
+      - name: Add to Watchlist
+        selector: ".row-action-watchlist"
+
+interactions:
+  - name: Run Scan
+    trigger: Click Scan Button
+    steps:
+      - "Show loading state"
+      - "POST /api/scanner/scan with filters"
+      - "Display results in table"
+      - "Show result count"
+    expected_result: "Table populated with scan results"
+
+  - name: Sort Results
+    trigger: Click column header
+    expected_result: "Table sorted by clicked column"
+
+  - name: Filter by Symbol
+    trigger: Type in symbol search
+    expected_result: "Results filtered to matching symbols"
+
+accessibility:
+  - "Table must have proper column headers"
+  - "Loading state must be announced to screen readers"
+  - "Color-coded values must have text alternative"
+
+responsive:
+  - breakpoint: mobile
+    changes:
+      - "Horizontal scroll for table"
+      - "Collapse less important columns"
+  - breakpoint: tablet
+    changes:
+      - "Show all columns"

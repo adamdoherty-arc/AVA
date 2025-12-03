@@ -15,7 +15,7 @@ class KalshiIntegration:
     Note: Market data endpoints are PUBLIC (no authentication required)
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.base_url = "https://api.elections.kalshi.com/trade-api/v2"
         self.session = requests.Session()
         self.session.headers.update({

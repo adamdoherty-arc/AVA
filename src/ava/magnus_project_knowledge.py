@@ -522,7 +522,7 @@ class MagnusProjectKnowledge:
 
         return summary
 
-    def index_project_knowledge(self):
+    def index_project_knowledge(self) -> None:
         """Index project knowledge into RAG system"""
         if not self.rag_service:
             logger.warning("No RAG service provided, skipping indexing")
@@ -623,7 +623,7 @@ def main():
     print("KNOWLEDGE BUILDING COMPLETE")
     print("=" * 80)
     print(f"\nAVA can now answer questions about:")
-    print("  - All {0} Magnus features and capabilities".format(len(features)))
+    print("  - All {0} Magnus features and capabilities"f-string))
     print("  - Database schemas and data sources")
     print("  - API integrations and endpoints")
     print("  - Common tasks and workflows")

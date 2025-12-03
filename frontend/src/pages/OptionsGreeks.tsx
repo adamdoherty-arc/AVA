@@ -3,11 +3,12 @@ import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import {
   Calculator, TrendingUp, TrendingDown, Search, RefreshCw, Target, Gauge,
-  ArrowUpRight, ArrowDownRight, AlertCircle, Lightbulb
+  ArrowUpRight, ArrowDownRight, AlertCircle, Lightbulb, BarChart3
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceLine } from 'recharts'
+import { API_HOST } from '@/config/api'
 
 interface IVRData {
   symbol: string
@@ -100,7 +101,7 @@ interface ComprehensiveData {
   available_expirations: string[]
 }
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8002'
+const API_BASE = API_HOST
 
 export default function OptionsGreeks() {
   const [symbol, setSymbol] = useState('AAPL')
@@ -205,7 +206,7 @@ export default function OptionsGreeks() {
               <CardContent className="p-4">
                 <div className="flex flex-col">
                   <span className="text-slate-400 text-sm">Current Price</span>
-                  <span className="text-2xl font-bold text-white">${comprehensiveData.current_price.toFixed(2)}</span>
+                  <span className="text-2xl font-bold text-white">${(comprehensiveData.current_price ?? 0).toFixed(2)}</span>
                 </div>
               </CardContent>
             </Card>
@@ -214,17 +215,17 @@ export default function OptionsGreeks() {
               <CardContent className="p-4">
                 <div className="flex flex-col">
                   <span className="text-slate-400 text-sm">Current IV</span>
-                  <span className="text-2xl font-bold text-white">{comprehensiveData.iv_analysis.current_iv.toFixed(1)}%</span>
+                  <span className="text-2xl font-bold text-white">{(comprehensiveData.iv_analysis?.current_iv ?? 0).toFixed(1)}%</span>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className={`bg-gradient-to-br ${getIVRGradient(comprehensiveData.iv_analysis.ivr)} border-slate-800`}>
+            <Card className={`bg-gradient-to-br ${getIVRGradient(comprehensiveData.iv_analysis?.ivr ?? 0)} border-slate-800`}>
               <CardContent className="p-4">
                 <div className="flex flex-col">
                   <span className="text-slate-400 text-sm">IV Rank (IVR)</span>
-                  <span className={`text-2xl font-bold ${getIVRColor(comprehensiveData.iv_analysis.ivr)}`}>
-                    {comprehensiveData.iv_analysis.ivr.toFixed(0)}%
+                  <span className={`text-2xl font-bold ${getIVRColor(comprehensiveData.iv_analysis?.ivr ?? 0)}`}>
+                    {(comprehensiveData.iv_analysis?.ivr ?? 0).toFixed(0)}%
                   </span>
                 </div>
               </CardContent>
@@ -234,7 +235,7 @@ export default function OptionsGreeks() {
               <CardContent className="p-4">
                 <div className="flex flex-col">
                   <span className="text-slate-400 text-sm">IV Percentile (IVP)</span>
-                  <span className="text-2xl font-bold text-white">{comprehensiveData.iv_analysis.ivp.toFixed(0)}%</span>
+                  <span className="text-2xl font-bold text-white">{(comprehensiveData.iv_analysis?.ivp ?? 0).toFixed(0)}%</span>
                 </div>
               </CardContent>
             </Card>
@@ -244,9 +245,9 @@ export default function OptionsGreeks() {
                 <div className="flex flex-col">
                   <span className="text-slate-400 text-sm">Expected Move</span>
                   <span className="text-2xl font-bold text-amber-500">
-                    {comprehensiveData.expected_move.move_pct.toFixed(1)}%
+                    {(comprehensiveData.expected_move?.move_pct ?? 0).toFixed(1)}%
                   </span>
-                  <span className="text-xs text-slate-500">{comprehensiveData.expected_move.dte} DTE</span>
+                  <span className="text-xs text-slate-500">{comprehensiveData.expected_move?.dte ?? 0} DTE</span>
                 </div>
               </CardContent>
             </Card>
@@ -267,14 +268,14 @@ export default function OptionsGreeks() {
                   <div className="relative h-8 bg-slate-800 rounded-full overflow-hidden">
                     <div
                       className={`absolute left-0 top-0 h-full rounded-full transition-all duration-500 ${
-                        comprehensiveData.iv_analysis.ivr >= 80 ? 'bg-red-500' :
-                        comprehensiveData.iv_analysis.ivr >= 50 ? 'bg-amber-500' :
-                        comprehensiveData.iv_analysis.ivr >= 20 ? 'bg-slate-500' : 'bg-green-500'
+                        (comprehensiveData.iv_analysis?.ivr ?? 0) >= 80 ? 'bg-red-500' :
+                        (comprehensiveData.iv_analysis?.ivr ?? 0) >= 50 ? 'bg-amber-500' :
+                        (comprehensiveData.iv_analysis?.ivr ?? 0) >= 20 ? 'bg-slate-500' : 'bg-green-500'
                       }`}
-                      style={{ width: `${comprehensiveData.iv_analysis.ivr}%` }}
+                      style={{ width: `${comprehensiveData.iv_analysis?.ivr ?? 0}%` }}
                     />
                     <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-white font-bold">{comprehensiveData.iv_analysis.ivr.toFixed(0)}%</span>
+                      <span className="text-white font-bold">{(comprehensiveData.iv_analysis?.ivr ?? 0).toFixed(0)}%</span>
                     </div>
                   </div>
                   <div className="flex justify-between text-xs text-slate-500">
@@ -284,13 +285,13 @@ export default function OptionsGreeks() {
                   </div>
 
                   <div className={`p-4 rounded-lg border ${
-                    comprehensiveData.iv_analysis.ivr >= 50
+                    (comprehensiveData.iv_analysis?.ivr ?? 0) >= 50
                       ? 'bg-amber-500/10 border-amber-500/20'
                       : 'bg-green-500/10 border-green-500/20'
                   }`}>
                     <div className="flex items-start gap-3">
                       <AlertCircle className={`w-5 h-5 mt-0.5 ${
-                        comprehensiveData.iv_analysis.ivr >= 50 ? 'text-amber-500' : 'text-green-500'
+                        (comprehensiveData.iv_analysis?.ivr ?? 0) >= 50 ? 'text-amber-500' : 'text-green-500'
                       }`} />
                       <div>
                         <p className="font-medium text-white">{comprehensiveData.iv_analysis.interpretation}</p>
@@ -309,7 +310,7 @@ export default function OptionsGreeks() {
                     Recommended Strategies
                   </h3>
                   <div className="space-y-2">
-                    {comprehensiveData.iv_analysis.ivr >= 50 ? (
+                    {(comprehensiveData.iv_analysis?.ivr ?? 0) >= 50 ? (
                       <>
                         <div className="p-3 bg-slate-800/50 rounded-lg flex items-center gap-2">
                           <TrendingDown className="w-4 h-4 text-green-500" />
@@ -363,16 +364,16 @@ export default function OptionsGreeks() {
                       <div className="flex justify-between p-3 bg-slate-800/50 rounded-lg">
                         <span className="text-slate-400">Expected Move</span>
                         <span className="text-amber-500 font-bold">
-                          ${emData.expected_move['1_std_dev'].move.toFixed(2)} ({emData.expected_move['1_std_dev'].move_pct.toFixed(1)}%)
+                          ${(emData.expected_move?.['1_std_dev']?.move ?? 0).toFixed(2)} ({(emData.expected_move?.['1_std_dev']?.move_pct ?? 0).toFixed(1)}%)
                         </span>
                       </div>
                       <div className="flex justify-between p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
                         <span className="text-slate-400">Upper Bound</span>
-                        <span className="text-green-500 font-bold">${emData.expected_move['1_std_dev'].upper_bound.toFixed(2)}</span>
+                        <span className="text-green-500 font-bold">${(emData.expected_move?.['1_std_dev']?.upper_bound ?? 0).toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
                         <span className="text-slate-400">Lower Bound</span>
-                        <span className="text-red-500 font-bold">${emData.expected_move['1_std_dev'].lower_bound.toFixed(2)}</span>
+                        <span className="text-red-500 font-bold">${(emData.expected_move?.['1_std_dev']?.lower_bound ?? 0).toFixed(2)}</span>
                       </div>
                     </div>
                   </div>
@@ -382,16 +383,16 @@ export default function OptionsGreeks() {
                       <div className="flex justify-between p-3 bg-slate-800/50 rounded-lg">
                         <span className="text-slate-400">Expected Move</span>
                         <span className="text-amber-500 font-bold">
-                          ${emData.expected_move['2_std_dev'].move.toFixed(2)} ({emData.expected_move['2_std_dev'].move_pct.toFixed(1)}%)
+                          ${(emData.expected_move?.['2_std_dev']?.move ?? 0).toFixed(2)} ({(emData.expected_move?.['2_std_dev']?.move_pct ?? 0).toFixed(1)}%)
                         </span>
                       </div>
                       <div className="flex justify-between p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
                         <span className="text-slate-400">Upper Bound</span>
-                        <span className="text-green-500 font-bold">${emData.expected_move['2_std_dev'].upper_bound.toFixed(2)}</span>
+                        <span className="text-green-500 font-bold">${(emData.expected_move?.['2_std_dev']?.upper_bound ?? 0).toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
                         <span className="text-slate-400">Lower Bound</span>
-                        <span className="text-red-500 font-bold">${emData.expected_move['2_std_dev'].lower_bound.toFixed(2)}</span>
+                        <span className="text-red-500 font-bold">${(emData.expected_move?.['2_std_dev']?.lower_bound ?? 0).toFixed(2)}</span>
                       </div>
                     </div>
                   </div>
@@ -403,19 +404,19 @@ export default function OptionsGreeks() {
                   <div className="grid md:grid-cols-4 gap-4">
                     <div className="p-4 bg-slate-800/50 rounded-lg">
                       <span className="text-slate-400 text-sm">Safe Put Strike</span>
-                      <p className="text-xl font-bold text-green-500">${emData.trading_guidance.strike_selection.safe_put_strike.toFixed(2)}</p>
+                      <p className="text-xl font-bold text-green-500">${(emData.trading_guidance?.strike_selection?.safe_put_strike ?? 0).toFixed(2)}</p>
                     </div>
                     <div className="p-4 bg-slate-800/50 rounded-lg">
                       <span className="text-slate-400 text-sm">Aggressive Put</span>
-                      <p className="text-xl font-bold text-amber-500">${emData.trading_guidance.strike_selection.aggressive_put_strike.toFixed(2)}</p>
+                      <p className="text-xl font-bold text-amber-500">${(emData.trading_guidance?.strike_selection?.aggressive_put_strike ?? 0).toFixed(2)}</p>
                     </div>
                     <div className="p-4 bg-slate-800/50 rounded-lg">
                       <span className="text-slate-400 text-sm">Safe Call Strike</span>
-                      <p className="text-xl font-bold text-green-500">${emData.trading_guidance.strike_selection.safe_call_strike.toFixed(2)}</p>
+                      <p className="text-xl font-bold text-green-500">${(emData.trading_guidance?.strike_selection?.safe_call_strike ?? 0).toFixed(2)}</p>
                     </div>
                     <div className="p-4 bg-slate-800/50 rounded-lg">
                       <span className="text-slate-400 text-sm">Aggressive Call</span>
-                      <p className="text-xl font-bold text-amber-500">${emData.trading_guidance.strike_selection.aggressive_call_strike.toFixed(2)}</p>
+                      <p className="text-xl font-bold text-amber-500">${(emData.trading_guidance?.strike_selection?.aggressive_call_strike ?? 0).toFixed(2)}</p>
                     </div>
                   </div>
                 </div>
@@ -446,11 +447,11 @@ export default function OptionsGreeks() {
                       </div>
                       <div className="flex justify-between p-3 bg-slate-800/50 rounded-lg">
                         <span className="text-slate-400">Put Volume</span>
-                        <span className="text-red-400">{pcrData.volume_pcr.put_volume.toLocaleString()}</span>
+                        <span className="text-red-400">{(pcrData.volume_pcr?.put_volume ?? 0).toLocaleString()}</span>
                       </div>
                       <div className="flex justify-between p-3 bg-slate-800/50 rounded-lg">
                         <span className="text-slate-400">Call Volume</span>
-                        <span className="text-green-400">{pcrData.volume_pcr.call_volume.toLocaleString()}</span>
+                        <span className="text-green-400">{(pcrData.volume_pcr?.call_volume ?? 0).toLocaleString()}</span>
                       </div>
                     </div>
                   </div>
@@ -466,11 +467,11 @@ export default function OptionsGreeks() {
                       </div>
                       <div className="flex justify-between p-3 bg-slate-800/50 rounded-lg">
                         <span className="text-slate-400">Put OI</span>
-                        <span className="text-red-400">{pcrData.oi_pcr.put_oi.toLocaleString()}</span>
+                        <span className="text-red-400">{(pcrData.oi_pcr?.put_oi ?? 0).toLocaleString()}</span>
                       </div>
                       <div className="flex justify-between p-3 bg-slate-800/50 rounded-lg">
                         <span className="text-slate-400">Call OI</span>
-                        <span className="text-green-400">{pcrData.oi_pcr.call_oi.toLocaleString()}</span>
+                        <span className="text-green-400">{(pcrData.oi_pcr?.call_oi ?? 0).toLocaleString()}</span>
                       </div>
                     </div>
                   </div>

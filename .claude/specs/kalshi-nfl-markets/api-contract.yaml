@@ -1,0 +1,142 @@
+# Kalshi Markets API Contract
+
+endpoints:
+  - path: /api/kalshi/markets
+    method: GET
+    description: Get available Kalshi markets
+    parameters:
+      category:
+        type: string
+        enum: [sports, economics, politics, crypto]
+      status:
+        type: string
+        enum: [active, closed, settled]
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          markets:
+            type: array
+            items:
+              type: object
+              required:
+                - ticker
+                - title
+                - yes_price
+                - no_price
+              properties:
+                ticker:
+                  type: string
+                title:
+                  type: string
+                subtitle:
+                  type: string
+                category:
+                  type: string
+                yes_price:
+                  type: number
+                  description: Yes price (0-100 cents)
+                no_price:
+                  type: number
+                volume:
+                  type: integer
+                open_interest:
+                  type: integer
+                close_time:
+                  type: string
+                  format: datetime
+                status:
+                  type: string
+
+  - path: /api/kalshi/nfl
+    method: GET
+    description: Get NFL-specific prediction markets
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          games:
+            type: array
+            items:
+              type: object
+              properties:
+                game_id:
+                  type: string
+                home_team:
+                  type: string
+                away_team:
+                  type: string
+                markets:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                        enum: [winner, spread, total, props]
+                      ticker:
+                        type: string
+                      yes_price:
+                        type: number
+                      no_price:
+                        type: number
+
+  - path: /api/kalshi/positions
+    method: GET
+    description: Get user's Kalshi positions
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          positions:
+            type: array
+            items:
+              type: object
+              properties:
+                ticker:
+                  type: string
+                title:
+                  type: string
+                side:
+                  type: string
+                  enum: [yes, no]
+                quantity:
+                  type: integer
+                avg_price:
+                  type: number
+                current_price:
+                  type: number
+                pl:
+                  type: number
+          total_value:
+            type: number
+          total_pl:
+            type: number
+
+  - path: /api/kalshi/portfolio
+    method: GET
+    description: Get Kalshi portfolio summary
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          balance:
+            type: number
+          available:
+            type: number
+          invested:
+            type: number
+          total_pl:
+            type: number
+
+error_responses:
+  401:
+    description: Not authenticated with Kalshi
+  429:
+    description: Rate limited
+  503:
+    description: Kalshi API unavailable

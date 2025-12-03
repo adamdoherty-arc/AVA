@@ -83,7 +83,7 @@ class DatabaseConnectionManager:
                     cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize connection manager (only once)"""
         if self._pool is not None:
             return  # Already initialized
@@ -94,7 +94,7 @@ class DatabaseConnectionManager:
 
         self._initialize_pool()
 
-    def _initialize_pool(self):
+    def _initialize_pool(self) -> None:
         """Initialize the connection pool"""
         try:
             with self._lock:
@@ -191,7 +191,7 @@ class DatabaseConnectionManager:
             logger.error(f"Error returning connection to pool: {e}")
 
     @contextmanager
-    def get_connection(self):
+    def get_connection(self) -> None:
         """
         Context manager for safe connection handling.
 
@@ -308,7 +308,7 @@ class DatabaseConnectionManager:
             logger.error(f"Database query error: {e}")
             raise DatabaseError("Failed to execute database query")
 
-    def close_all(self):
+    def close_all(self) -> None:
         """
         Close all connections in the pool.
 

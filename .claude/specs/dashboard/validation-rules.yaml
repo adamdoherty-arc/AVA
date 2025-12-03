@@ -1,0 +1,56 @@
+# Dashboard Validation Rules
+# Business logic validation requirements
+
+calculations:
+  day_change_pct:
+    formula: "(day_change / (total_value - day_change)) * 100"
+    tolerance: 1  # 1% tolerance
+    note: "Percentage based on previous day close"
+
+  allocations_total:
+    formula: "stocks + options + cash"
+    expected: 100
+    tolerance: 1  # Must sum to 100%
+
+consistency_checks:
+  - name: "Dashboard matches positions"
+    rule: "dashboard.total_value == positions.summary.total_equity"
+    tolerance: 0.01
+    severity: high
+
+  - name: "Allocation percentages valid"
+    rule: "all(0 <= x <= 100 for x in [stocks, options, cash])"
+
+  - name: "Day change consistency"
+    rule: "day_change_pct matches calculated value from day_change"
+    tolerance: 1
+
+data_freshness:
+  summary:
+    max_stale_minutes: 5
+    during_market_hours: true
+  allocations:
+    max_stale_minutes: 15
+
+null_checks:
+  never_null:
+    - total_value
+  warn_if_null:
+    - buying_power
+    - day_change
+    - day_change_pct
+
+edge_cases:
+  - name: "Zero portfolio value"
+    rule: "Handle new/empty accounts gracefully"
+
+  - name: "Negative day change"
+    rule: "Should display correctly with proper formatting"
+
+  - name: "Market closed"
+    rule: "Should show last market close values"
+
+known_issues:
+  - id: "STALE_DATA"
+    description: "Summary may be stale outside market hours"
+    workaround: "Check last_updated timestamp"

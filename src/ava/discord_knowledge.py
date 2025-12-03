@@ -16,14 +16,14 @@ load_dotenv()
 class DiscordKnowledge:
     """Provides AVA with Discord message analysis capabilities"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.db_host = os.getenv('DB_HOST', 'localhost')
         self.db_port = os.getenv('DB_PORT', '5432')
         self.db_name = os.getenv('DB_NAME', 'magnus')
         self.db_user = os.getenv('DB_USER', 'postgres')
         self.db_password = os.getenv('DB_PASSWORD', '')
 
-    def get_connection(self):
+    def get_connection(self) -> None:
         """Get database connection"""
         return psycopg2.connect(
             host=self.db_host,

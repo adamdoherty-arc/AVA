@@ -41,7 +41,7 @@ class MagnusIntegration:
     Provides unified access to Robinhood, TradingView, and Xtrades data.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize Magnus integration"""
         self.db = get_db_manager()
         self.rh_client = RobinhoodClient()

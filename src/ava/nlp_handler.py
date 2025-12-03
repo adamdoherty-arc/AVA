@@ -47,7 +47,7 @@ class NaturalLanguageHandler:
     Uses existing FREE LLM service to understand user queries and route to commands
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.rag = RAGService(collection_name='magnus_knowledge')
         """Initialize NLP handler with FREE LLM service"""
         self.llm_service = LLMService()  # Auto-selects: groq > deepseek > gemini (FREE!)

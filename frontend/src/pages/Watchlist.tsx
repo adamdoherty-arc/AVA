@@ -278,7 +278,7 @@ function StrategyCard({ strategy }: { strategy: Strategy }) {
                             "text-lg font-bold",
                             strategy.expected_return >= 0 ? "text-emerald-400" : "text-red-400"
                         )}>
-                            {strategy.expected_return >= 0 ? '+' : ''}{strategy.expected_return.toFixed(1)}%
+                            {(strategy.expected_return ?? 0) >= 0 ? '+' : ''}{(strategy.expected_return ?? 0).toFixed(1)}%
                         </span>
                     </div>
                 </div>

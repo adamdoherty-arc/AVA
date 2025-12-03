@@ -408,7 +408,7 @@ class ErrorContext:
         self.reraise = reraise
         self.log_level = log_level
 
-    def __enter__(self):
+    def __enter__(self) -> None:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):

@@ -124,7 +124,7 @@ class BettingFilterPanel:
         """Get number of filters in the panel."""
         return len(self.filters)
 
-    def clear_filters(self):
+    def clear_filters(self) -> None:
         """Remove all filters from the panel."""
         self.filters = []
 

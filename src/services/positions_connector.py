@@ -39,7 +39,7 @@ class PositionsConnector(BaseConnector):
         self.logged_in = False
         self._ensure_login()
 
-    def _ensure_login(self):
+    def _ensure_login(self) -> None:
         """Ensure Robinhood is logged in."""
         if self.logged_in:
             return

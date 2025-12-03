@@ -13,10 +13,10 @@ import os
 class DiscordSignalExtractor:
     """Extract structured trading signals from Discord messages"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.db_password = os.getenv('DB_PASSWORD')
 
-    def get_connection(self):
+    def get_connection(self) -> None:
         """Get database connection"""
         return psycopg2.connect(
             host='localhost',

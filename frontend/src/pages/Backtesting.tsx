@@ -186,31 +186,31 @@ export default function Backtesting() {
                                             "text-xl font-bold",
                                             result.total_return >= 0 ? "text-emerald-400" : "text-rose-400"
                                         )}>
-                                            {result.total_return >= 0 ? '+' : ''}{result.total_return.toFixed(1)}%
+                                            {(result.total_return ?? 0) >= 0 ? '+' : ''}{(result.total_return ?? 0).toFixed(1)}%
                                         </p>
                                     </div>
                                     <div className="bg-slate-800/50 rounded-lg p-3">
                                         <p className="text-xs text-slate-400">CAGR</p>
                                         <p className={clsx(
                                             "text-xl font-bold",
-                                            result.cagr >= 0 ? "text-emerald-400" : "text-rose-400"
+                                            (result.cagr ?? 0) >= 0 ? "text-emerald-400" : "text-rose-400"
                                         )}>
-                                            {result.cagr.toFixed(1)}%
+                                            {(result.cagr ?? 0).toFixed(1)}%
                                         </p>
                                     </div>
                                     <div className="bg-slate-800/50 rounded-lg p-3">
                                         <p className="text-xs text-slate-400">Max Drawdown</p>
                                         <p className="text-xl font-bold text-rose-400">
-                                            {result.max_drawdown.toFixed(1)}%
+                                            {(result.max_drawdown ?? 0).toFixed(1)}%
                                         </p>
                                     </div>
                                     <div className="bg-slate-800/50 rounded-lg p-3">
                                         <p className="text-xs text-slate-400">Sharpe Ratio</p>
                                         <p className={clsx(
                                             "text-xl font-bold",
-                                            result.sharpe_ratio >= 1 ? "text-emerald-400" : "text-amber-400"
+                                            (result.sharpe_ratio ?? 0) >= 1 ? "text-emerald-400" : "text-amber-400"
                                         )}>
-                                            {result.sharpe_ratio.toFixed(2)}
+                                            {(result.sharpe_ratio ?? 0).toFixed(2)}
                                         </p>
                                     </div>
                                 </div>
@@ -218,7 +218,7 @@ export default function Backtesting() {
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
                                     <div className="bg-slate-800/50 rounded-lg p-3">
                                         <p className="text-xs text-slate-400">Win Rate</p>
-                                        <p className="text-xl font-bold">{result.win_rate.toFixed(0)}%</p>
+                                        <p className="text-xl font-bold">{(result.win_rate ?? 0).toFixed(0)}%</p>
                                     </div>
                                     <div className="bg-slate-800/50 rounded-lg p-3">
                                         <p className="text-xs text-slate-400">Total Trades</p>
@@ -228,18 +228,18 @@ export default function Backtesting() {
                                         <p className="text-xs text-slate-400">Profit Factor</p>
                                         <p className={clsx(
                                             "text-xl font-bold",
-                                            result.profit_factor >= 1.5 ? "text-emerald-400" : "text-amber-400"
+                                            (result.profit_factor ?? 0) >= 1.5 ? "text-emerald-400" : "text-amber-400"
                                         )}>
-                                            {result.profit_factor.toFixed(2)}
+                                            {(result.profit_factor ?? 0).toFixed(2)}
                                         </p>
                                     </div>
                                     <div className="bg-slate-800/50 rounded-lg p-3">
                                         <p className="text-xs text-slate-400">Avg Trade</p>
                                         <p className={clsx(
                                             "text-xl font-bold",
-                                            result.avg_trade >= 0 ? "text-emerald-400" : "text-rose-400"
+                                            (result.avg_trade ?? 0) >= 0 ? "text-emerald-400" : "text-rose-400"
                                         )}>
-                                            ${result.avg_trade.toFixed(0)}
+                                            ${(result.avg_trade ?? 0).toFixed(0)}
                                         </p>
                                     </div>
                                 </div>
@@ -254,7 +254,7 @@ export default function Backtesting() {
                                 <div className="flex items-center justify-between p-4 bg-slate-800/50 rounded-lg">
                                     <div>
                                         <p className="text-sm text-slate-400">Initial</p>
-                                        <p className="text-2xl font-bold">${result.initial_capital.toLocaleString()}</p>
+                                        <p className="text-2xl font-bold">${(result.initial_capital ?? 0).toLocaleString()}</p>
                                     </div>
                                     <TrendingUp className={clsx(
                                         "w-8 h-8",
@@ -266,7 +266,7 @@ export default function Backtesting() {
                                             "text-2xl font-bold",
                                             result.final_capital >= result.initial_capital ? "text-emerald-400" : "text-rose-400"
                                         )}>
-                                            ${result.final_capital.toLocaleString()}
+                                            ${(result.final_capital ?? 0).toLocaleString()}
                                         </p>
                                     </div>
                                 </div>
@@ -299,12 +299,12 @@ export default function Backtesting() {
                                                             {trade.type.toUpperCase()}
                                                         </span>
                                                     </td>
-                                                    <td className="p-2 text-right font-mono">${trade.price.toFixed(2)}</td>
+                                                    <td className="p-2 text-right font-mono">${(trade.price ?? 0).toFixed(2)}</td>
                                                     <td className={clsx(
                                                         "p-2 text-right font-mono font-bold",
-                                                        trade.pnl >= 0 ? "text-emerald-400" : "text-rose-400"
+                                                        (trade.pnl ?? 0) >= 0 ? "text-emerald-400" : "text-rose-400"
                                                     )}>
-                                                        {trade.pnl >= 0 ? '+' : ''}${trade.pnl.toFixed(0)}
+                                                        {(trade.pnl ?? 0) >= 0 ? '+' : ''}${(trade.pnl ?? 0).toFixed(0)}
                                                     </td>
                                                 </tr>
                                             ))}

@@ -1,0 +1,48 @@
+# Options Analysis Feature Manifest
+# SpecAgent: OptionsAnalysisSpecAgent
+
+name: options-analysis
+version: 1.0.0
+description: Advanced options analysis with Greeks, P&L scenarios, and strategy optimization
+
+tier: 1  # Critical
+priority: 4
+
+dependencies:
+  - positions  # Analyzes current option positions
+  - robinhood-api
+  - database
+
+endpoints:
+  - /api/options/analysis
+  - /api/options/chain
+  - /api/options/greeks
+  - /api/options/scenarios
+
+frontend_routes:
+  - /options
+  - /options-analysis
+
+key_components:
+  - OptionsChainTable
+  - GreeksDisplay
+  - PLScenarioChart
+  - StrategySelector
+
+data_sources:
+  - options_chain
+  - calculated_greeks
+  - volatility_data
+  - historical_prices
+
+validation_focus:
+  - Greeks calculations
+  - P&L scenario accuracy
+  - Volatility surface
+  - Break-even calculations
+
+owners:
+  - team: trading
+  - critical: true
+
+last_updated: 2025-11-26

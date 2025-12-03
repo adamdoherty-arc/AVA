@@ -44,7 +44,7 @@ class MultiAgentQAService:
     Ensures all tasks go through proper QA review before being marked complete.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.db_config = {
             'host': os.getenv('DB_HOST', 'localhost'),
             'port': os.getenv('DB_PORT', '5432'),
@@ -54,7 +54,7 @@ class MultiAgentQAService:
         }
         self.expertise_registry = get_expertise_registry()
 
-    def get_connection(self):
+    def get_connection(self) -> None:
         """Get database connection"""
         return psycopg2.connect(**self.db_config)
 

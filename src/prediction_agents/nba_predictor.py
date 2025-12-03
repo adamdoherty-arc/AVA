@@ -26,13 +26,13 @@ class NBAPredictor:
     # File paths for persistence
     ELO_FILE = 'data/nba_elo_ratings.json'
     
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize NBA predictor"""
         self.elo_ratings = {}
         self.logger = logging.getLogger(__name__)
         self._load_elo_ratings()
     
-    def _load_elo_ratings(self):
+    def _load_elo_ratings(self) -> None:
         """Load Elo ratings from file or initialize defaults"""
         try:
             if os.path.exists(self.ELO_FILE):
@@ -50,7 +50,7 @@ class NBAPredictor:
             self.logger.error(f"Error loading Elo ratings: {e}")
             self.elo_ratings = {}
     
-    def _save_elo_ratings(self):
+    def _save_elo_ratings(self) -> None:
         """Save Elo ratings to file"""
         try:
             os.makedirs(os.path.dirname(self.ELO_FILE), exist_ok=True)

@@ -82,7 +82,7 @@ class QueryCache:
                 del self._cache[k]
             logger.info(f"Invalidated {len(keys_to_remove)} keys matching '{key_pattern}'")
 
-    def _cleanup(self):
+    def _cleanup(self) -> None:
         """Remove expired items"""
         now = time.time()
         keys_to_remove = [k for k, (_, expiry) in self._cache.items() if now >= expiry]

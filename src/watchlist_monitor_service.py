@@ -58,7 +58,7 @@ class WatchlistMonitorService:
                 cls._instance._initialized = False
             return cls._instance
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the service (only once due to singleton)"""
         if self._initialized:
             return
@@ -78,7 +78,7 @@ class WatchlistMonitorService:
         self._initialized = True
         logger.info("WatchlistMonitorService initialized (singleton)")
 
-    def _initialize_components(self):
+    def _initialize_components(self) -> None:
         """Lazy initialization of components when service starts"""
         if self.db is None:
             self.db = KalshiDBManager()
@@ -89,7 +89,7 @@ class WatchlistMonitorService:
             self.espn_ncaa = get_espn_ncaa_client()
             logger.info("Service components initialized")
 
-    def get_all_watched_games(self):
+    def get_all_watched_games(self) -> None:
         """Get all active games in user's watchlist"""
         try:
             conn = self.db.get_connection()
@@ -218,7 +218,7 @@ class WatchlistMonitorService:
         except Exception as e:
             logger.error(f"Error sending update: {e}")
 
-    def _monitoring_cycle(self):
+    def _monitoring_cycle(self) -> None:
         """
         Main monitoring cycle - called by APScheduler
         This method is non-blocking and runs in background

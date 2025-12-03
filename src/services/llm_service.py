@@ -67,7 +67,7 @@ class ResponseCache:
             self._cache[key] = (response, time.time())
             logger.debug(f"Cached response for {provider}/{model}")
 
-    def clear(self):
+    def clear(self) -> None:
         """Clear all cached responses"""
         with self._lock:
             self._cache.clear()
@@ -96,7 +96,7 @@ class ResponseCache:
 class UsageTracker:
     """Track LLM usage and costs per provider"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._usage: Dict[str, Dict[str, Any]] = {}
         self._lock = threading.Lock()
 
@@ -150,7 +150,7 @@ class UsageTracker:
         with self._lock:
             return sum(usage['total_cost'] for usage in self._usage.values())
 
-    def reset(self):
+    def reset(self) -> None:
         """Reset all usage statistics"""
         with self._lock:
             self._usage.clear()
@@ -184,7 +184,7 @@ class LLMService:
                     cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize LLM service (singleton pattern)"""
         if not hasattr(self, '_initialized'):
             self._providers = {}
@@ -196,7 +196,7 @@ class LLMService:
             self._initialized = True
             logger.info("LLM service initialized")
 
-    def _initialize_providers(self):
+    def _initialize_providers(self) -> None:
         """Initialize all available LLM providers"""
         # Import existing LLM manager
         try:
@@ -266,7 +266,7 @@ class LLMService:
         except ImportError as e:
             logger.error(f"Failed to import LLM providers: {e}")
 
-    def _initialize_router(self):
+    def _initialize_router(self) -> None:
         """Initialize intelligent LLM router for cost optimization"""
         try:
             from src.services.intelligent_llm_router import IntelligentLLMRouter
@@ -467,11 +467,11 @@ class LLMService:
             "cache_stats": self._cache.get_stats()
         }
 
-    def clear_cache(self):
+    def clear_cache(self) -> None:
         """Clear response cache"""
         self._cache.clear()
 
-    def reset_usage(self):
+    def reset_usage(self) -> None:
         """Reset usage statistics"""
         self._usage.reset()
 

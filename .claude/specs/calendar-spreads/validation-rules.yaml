@@ -1,0 +1,34 @@
+# Calendar Spreads Validation Rules
+
+spread_validation:
+  - name: "Expiration order"
+    rule: "front_exp < back_exp"
+    severity: critical
+
+  - name: "Same strike"
+    rule: "Front and back have same strike"
+
+  - name: "Net credit/debit"
+    rule: "credit = front_premium - back_premium"
+
+greeks_validation:
+  net_theta:
+    expected_sign: positive
+    note: "Calendar spreads should be theta positive"
+
+  net_delta:
+    expected: near_zero
+    tolerance: 0.15
+
+risk_reward_validation:
+  - name: "Positive risk/reward"
+    rule: "risk_reward > 0"
+  - name: "Max profit bounded"
+    rule: "max_profit <= credit_received"
+
+null_checks:
+  never_null:
+    - symbol
+    - front_exp
+    - back_exp
+    - strike

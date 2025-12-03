@@ -1,0 +1,86 @@
+# Research API Contract
+
+endpoints:
+  - path: /api/research/query
+    method: POST
+    description: Query the research knowledge base
+    request:
+      schema:
+        type: object
+        required:
+          - query
+        properties:
+          query:
+            type: string
+          include_positions:
+            type: boolean
+            default: false
+          limit:
+            type: integer
+            default: 10
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          answer:
+            type: string
+          sources:
+            type: array
+            items:
+              type: object
+              properties:
+                title:
+                  type: string
+                content:
+                  type: string
+                similarity:
+                  type: number
+                type:
+                  type: string
+          position_context:
+            type: object
+            nullable: true
+
+  - path: /api/research/documents
+    method: GET
+    description: List indexed documents
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          documents:
+            type: array
+            items:
+              type: object
+              properties:
+                id:
+                  type: string
+                title:
+                  type: string
+                type:
+                  type: string
+                indexed_at:
+                  type: string
+          total:
+            type: integer
+
+  - path: /api/research/context
+    method: GET
+    description: Get context for query
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          portfolio_summary:
+            type: object
+          recent_activity:
+            type: array
+
+error_responses:
+  400:
+    description: Invalid query
+  503:
+    description: RAG service unavailable

@@ -228,14 +228,14 @@ class DataIntegrationService:
         watchlist_opps = service.find_watchlist_opportunities("main")
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._connectors: Dict[str, DataConnector] = {}
         self._initialized = False
         self._lock = threading.Lock()
 
         logger.info("Initializing DataIntegrationService...")
 
-    def initialize(self):
+    def initialize(self) -> None:
         """
         Initialize all connectors (lazy initialization).
 
@@ -254,7 +254,7 @@ class DataIntegrationService:
             self._initialized = True
             logger.info(f"DataIntegrationService initialized with {len(self._connectors)} connectors")
 
-    def _register_all_connectors(self):
+    def _register_all_connectors(self) -> None:
         """
         Register all feature connectors.
 
@@ -910,7 +910,7 @@ class DataIntegrationService:
 
         return stats
 
-    def invalidate_all_caches(self):
+    def invalidate_all_caches(self) -> None:
         """Invalidate all caches across all connectors"""
         self.initialize()
 

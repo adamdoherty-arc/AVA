@@ -32,7 +32,7 @@ class DatabaseConnectionPool:
         return cls._instance
 
     @contextmanager
-    def get_connection(self):
+    def get_connection(self) -> None:
         if self._pool is None:
             raise Exception("Database connection pool is not initialized.")
         
@@ -47,7 +47,7 @@ class DatabaseConnectionPool:
         finally:
             self._pool.putconn(conn)
 
-    def close_all(self):
+    def close_all(self) -> None:
         if self._pool:
             self._pool.closeall()
             logger.info("Database connection pool closed.")

@@ -16,7 +16,7 @@ class ThetaForecast:
     max_profit: float
 
 class ThetaCalculator:
-    def __init__(self):
+    def __init__(self) -> None:
         self.risk_free_rate = 0.05  # 5% risk-free rate
 
     def black_scholes_theta(self, S: float, K: float, T: float, r: float, sigma: float, option_type: str = 'put') -> float:

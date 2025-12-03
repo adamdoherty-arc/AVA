@@ -55,7 +55,7 @@ class ZoneDatabaseManager:
 
                 self.connection_string = f'postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}'
 
-    def get_connection(self):
+    def get_connection(self) -> None:
         """Get database connection"""
         return psycopg2.connect(self.connection_string)
 

@@ -347,13 +347,13 @@ function BetCard({
                 <div className="flex items-center gap-6">
                     <div className="text-center">
                         <p className="text-xs text-slate-400">Score</p>
-                        <p className={clsx("font-bold", getScoreColor(bet.overall_score))}>
-                            {bet.overall_score.toFixed(0)}
+                        <p className={clsx("font-bold", getScoreColor(bet.overall_score ?? 0))}>
+                            {(bet.overall_score ?? 0).toFixed(0)}
                         </p>
                     </div>
                     <div className="text-center">
                         <p className="text-xs text-slate-400">EV</p>
-                        <p className="font-bold text-emerald-400">+{bet.ev_percentage.toFixed(1)}%</p>
+                        <p className="font-bold text-emerald-400">+{(bet.ev_percentage ?? 0).toFixed(1)}%</p>
                     </div>
                     <div className="text-center">
                         <p className="text-xs text-slate-400">Odds</p>
@@ -370,15 +370,15 @@ function BetCard({
                 <div className="px-4 pb-4 pt-2 border-t border-slate-700/50 grid grid-cols-2 md:grid-cols-5 gap-4">
                     <div>
                         <p className="text-xs text-slate-400 mb-1">Confidence</p>
-                        <p className="font-medium">{bet.confidence.toFixed(0)}%</p>
+                        <p className="font-medium">{(bet.confidence ?? 0).toFixed(0)}%</p>
                     </div>
                     <div>
                         <p className="text-xs text-slate-400 mb-1">Implied Prob</p>
-                        <p className="font-mono">{(bet.implied_probability * 100).toFixed(1)}%</p>
+                        <p className="font-mono">{((bet.implied_probability ?? 0) * 100).toFixed(1)}%</p>
                     </div>
                     <div>
                         <p className="text-xs text-slate-400 mb-1">Model Prob</p>
-                        <p className="font-mono text-emerald-400">{(bet.model_probability * 100).toFixed(1)}%</p>
+                        <p className="font-mono text-emerald-400">{((bet.model_probability ?? 0) * 100).toFixed(1)}%</p>
                     </div>
                     <div>
                         <p className="text-xs text-slate-400 mb-1">Book</p>

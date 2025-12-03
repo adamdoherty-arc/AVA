@@ -95,10 +95,9 @@ class RAGService:
         logger.info("Initializing Production RAG Service...")
 
         # ChromaDB setup with persistence
-        self.chroma_client = chromadb.Client(Settings(
-            persist_directory="./chroma_db",
-            anonymized_telemetry=False
-        ))
+        chroma_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "chroma_db")
+        os.makedirs(chroma_path, exist_ok=True)
+        self.chroma_client = chromadb.PersistentClient(path=chroma_path)
 
         self.collection_name = collection_name
         try:
@@ -591,7 +590,7 @@ Keep answers concise, professional, and actionable."""
 
         logger.info(f"Added {len(documents)} documents to knowledge base")
 
-    def clear_cache(self):
+    def clear_cache(self) -> None:
         """Clear query cache"""
         self.cache = {}
         logger.info("Cache cleared")

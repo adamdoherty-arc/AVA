@@ -45,7 +45,7 @@ class RiskAnalytics:
     and professional traders.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize risk analytics"""
         self.risk_free_rate = 0.05  # 5% annual (adjust based on current rates)
 

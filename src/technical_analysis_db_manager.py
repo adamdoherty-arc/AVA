@@ -61,7 +61,7 @@ class TechnicalAnalysisDBManager:
             'confluence': 3600      # 1 hour
         }
 
-    def get_connection(self):
+    def get_connection(self) -> None:
         """Get database connection"""
         return psycopg2.connect(**self.db_config)
 
@@ -599,7 +599,7 @@ class TechnicalAnalysisDBManager:
         except Exception as e:
             logger.error(f"Error recording cache miss: {e}")
 
-    def cleanup_expired_cache(self):
+    def cleanup_expired_cache(self) -> None:
         """Run cleanup function to mark expired entries as inactive"""
         try:
             conn = self.get_connection()

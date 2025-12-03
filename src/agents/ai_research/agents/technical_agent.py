@@ -27,7 +27,7 @@ class TechnicalAgent:
     - Chart patterns
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.api_calls = 0
 
     async def analyze(self, symbol: str) -> TechnicalAnalysis:

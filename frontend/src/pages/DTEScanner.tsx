@@ -272,8 +272,8 @@ export default function DTEScanner() {
                                             <p className="text-xs text-slate-400">{opp.company_name}</p>
                                         </div>
                                     </td>
-                                    <td className="p-4 text-right font-mono">${opp.current_price.toFixed(2)}</td>
-                                    <td className="p-4 text-right font-mono">${opp.strike.toFixed(0)}</td>
+                                    <td className="p-4 text-right font-mono">${(opp.current_price ?? 0).toFixed(2)}</td>
+                                    <td className="p-4 text-right font-mono">${(opp.strike ?? 0).toFixed(0)}</td>
                                     <td className="p-4 text-center">
                                         <span className={clsx(
                                             "px-2 py-1 rounded text-xs font-bold",
@@ -285,20 +285,20 @@ export default function DTEScanner() {
                                         </span>
                                     </td>
                                     <td className="p-4 text-right">
-                                        <div className="font-mono">${((opp.bid + opp.ask) / 2).toFixed(2)}</div>
-                                        <div className="text-xs text-amber-400">{opp.premium_pct.toFixed(2)}%</div>
+                                        <div className="font-mono">${(((opp.bid ?? 0) + (opp.ask ?? 0)) / 2).toFixed(2)}</div>
+                                        <div className="text-xs text-amber-400">{(opp.premium_pct ?? 0).toFixed(2)}%</div>
                                     </td>
                                     <td className="p-4 text-right font-mono text-emerald-400 font-bold">
-                                        {opp.annual_return.toFixed(0)}%
+                                        {(opp.annual_return ?? 0).toFixed(0)}%
                                     </td>
                                     <td className="p-4 text-right font-mono text-sm">
-                                        {opp.delta.toFixed(2)}
+                                        {(opp.delta ?? 0).toFixed(2)}
                                     </td>
                                     <td className="p-4 text-right font-mono text-sm text-rose-400">
-                                        {opp.theta.toFixed(3)}
+                                        {(opp.theta ?? 0).toFixed(3)}
                                     </td>
                                     <td className="p-4 text-right font-mono text-sm">
-                                        {(opp.iv * 100).toFixed(0)}%
+                                        {((opp.iv ?? 0) * 100).toFixed(0)}%
                                     </td>
                                 </tr>
                             ))}

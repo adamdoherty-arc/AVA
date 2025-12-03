@@ -1,0 +1,82 @@
+# Best Bets API Contract
+
+endpoints:
+  - path: /api/sports/best-bets
+    method: GET
+    description: Get top betting opportunities
+    parameters:
+      sport:
+        type: string
+        enum: [all, nfl, nba, mlb, ncaaf, ncaab]
+      min_confidence:
+        type: integer
+        default: 60
+      limit:
+        type: integer
+        default: 20
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          bets:
+            type: array
+            items:
+              type: object
+              required:
+                - game_id
+                - bet_type
+                - pick
+                - confidence
+              properties:
+                game_id:
+                  type: string
+                sport:
+                  type: string
+                teams:
+                  type: string
+                bet_type:
+                  type: string
+                  enum: [spread, moneyline, total, prop]
+                pick:
+                  type: string
+                odds:
+                  type: number
+                confidence:
+                  type: number
+                value_score:
+                  type: number
+                reasoning:
+                  type: string
+          updated_at:
+            type: string
+
+  - path: /api/sports/value-bets
+    method: GET
+    description: Get value-based betting opportunities
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          value_bets:
+            type: array
+
+  - path: /api/sports/{sport}/bets
+    method: GET
+    description: Get bets for specific sport
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          sport:
+            type: string
+          bets:
+            type: array
+
+error_responses:
+  400:
+    description: Invalid sport
+  503:
+    description: Sports data unavailable

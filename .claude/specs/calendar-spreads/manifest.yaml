@@ -1,0 +1,36 @@
+# Calendar Spreads Feature Manifest
+# SpecAgent: CalendarSpreadsSpecAgent
+
+name: calendar-spreads
+version: 1.0.0
+description: Calendar spread analysis with time decay optimization
+
+tier: 3  # Additional
+priority: 3
+
+dependencies:
+  - options-analysis  # Shares options chain API
+  - database
+
+endpoints:
+  - /api/spreads/calendar
+  - /api/spreads/opportunities
+  - /api/spreads/analyze
+
+frontend_routes:
+  - /calendar-spreads
+  - /spreads
+
+key_components:
+  - SpreadAnalyzer
+  - OpportunitiesTable
+  - PLChart
+  - ExpirationSelector
+
+validation_focus:
+  - Spread P&L calculations
+  - Greeks aggregation
+  - Time decay optimization
+  - Risk/reward ratios
+
+last_updated: 2025-11-26

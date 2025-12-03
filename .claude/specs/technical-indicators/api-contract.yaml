@@ -1,0 +1,90 @@
+# Technical Indicators API Contract
+
+endpoints:
+  - path: /api/technical/indicators
+    method: GET
+    description: Get technical indicators for symbol
+    parameters:
+      symbol:
+        type: string
+        required: true
+      indicators:
+        type: array
+        items:
+          type: string
+          enum: [sma, ema, rsi, macd, bollinger, vwap]
+      period:
+        type: string
+        enum: [1d, 5d, 1m, 3m, 6m, 1y]
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          symbol:
+            type: string
+          indicators:
+            type: object
+            properties:
+              sma:
+                type: array
+              ema:
+                type: array
+              rsi:
+                type: number
+              macd:
+                type: object
+              bollinger:
+                type: object
+          price_data:
+            type: array
+
+  - path: /api/technical/analysis
+    method: GET
+    description: Get technical analysis summary
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          symbol:
+            type: string
+          trend:
+            type: string
+            enum: [bullish, bearish, neutral]
+          strength:
+            type: number
+          signals:
+            type: array
+          support_levels:
+            type: array
+          resistance_levels:
+            type: array
+
+  - path: /api/technical/signals
+    method: GET
+    description: Get recent technical signals
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          signals:
+            type: array
+            items:
+              type: object
+              properties:
+                symbol:
+                  type: string
+                indicator:
+                  type: string
+                signal:
+                  type: string
+                timestamp:
+                  type: string
+
+error_responses:
+  404:
+    description: Symbol not found
+  503:
+    description: Market data unavailable

@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { API_HOST } from '@/config/api'
 
 interface FibonacciData {
   symbol: string
@@ -41,7 +42,7 @@ interface FibonacciData {
   }
 }
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8002'
+const API_BASE = API_HOST
 
 export default function FibonacciAnalysis() {
   const [symbol, setSymbol] = useState('AAPL')
@@ -135,7 +136,7 @@ export default function FibonacciAnalysis() {
             <Card className="bg-slate-900/50 border-slate-800">
               <CardContent className="p-4">
                 <span className="text-slate-400 text-sm">Current Price</span>
-                <p className="text-2xl font-bold text-white">${data.current_price.toFixed(2)}</p>
+                <p className="text-2xl font-bold text-white">${(data.current_price ?? 0).toFixed(2)}</p>
               </CardContent>
             </Card>
 
@@ -158,23 +159,23 @@ export default function FibonacciAnalysis() {
             <Card className="bg-slate-900/50 border-slate-800">
               <CardContent className="p-4">
                 <span className="text-slate-400 text-sm">Swing High</span>
-                <p className="text-2xl font-bold text-green-500">${data.swing_high.toFixed(2)}</p>
+                <p className="text-2xl font-bold text-green-500">${(data.swing_high ?? 0).toFixed(2)}</p>
               </CardContent>
             </Card>
 
             <Card className="bg-slate-900/50 border-slate-800">
               <CardContent className="p-4">
                 <span className="text-slate-400 text-sm">Swing Low</span>
-                <p className="text-2xl font-bold text-red-500">${data.swing_low.toFixed(2)}</p>
+                <p className="text-2xl font-bold text-red-500">${(data.swing_low ?? 0).toFixed(2)}</p>
               </CardContent>
             </Card>
 
             <Card className="bg-slate-900/50 border-slate-800">
               <CardContent className="p-4">
                 <span className="text-slate-400 text-sm">Range</span>
-                <p className="text-2xl font-bold text-white">${(data.swing_high - data.swing_low).toFixed(2)}</p>
+                <p className="text-2xl font-bold text-white">${((data.swing_high ?? 0) - (data.swing_low ?? 0)).toFixed(2)}</p>
                 <span className="text-xs text-slate-500">
-                  ({((data.swing_high - data.swing_low) / data.swing_low * 100).toFixed(1)}%)
+                  ({(data.swing_low ? (((data.swing_high ?? 0) - data.swing_low) / data.swing_low * 100) : 0).toFixed(1)}%)
                 </span>
               </CardContent>
             </Card>
@@ -224,11 +225,11 @@ export default function FibonacciAnalysis() {
               <div className="grid md:grid-cols-3 gap-4">
                 <div className="p-4 bg-slate-900/50 rounded-lg">
                   <span className="text-slate-400 text-sm">Zone Top (61.8%)</span>
-                  <p className="text-2xl font-bold text-amber-500">${data.golden_zone.top.toFixed(2)}</p>
+                  <p className="text-2xl font-bold text-amber-500">${(data.golden_zone?.top ?? 0).toFixed(2)}</p>
                 </div>
                 <div className="p-4 bg-slate-900/50 rounded-lg">
                   <span className="text-slate-400 text-sm">Zone Bottom (50%)</span>
-                  <p className="text-2xl font-bold text-amber-500">${data.golden_zone.bottom.toFixed(2)}</p>
+                  <p className="text-2xl font-bold text-amber-500">${(data.golden_zone?.bottom ?? 0).toFixed(2)}</p>
                 </div>
                 <div className="p-4 bg-slate-900/50 rounded-lg flex items-center">
                   <p className="text-sm text-amber-400">{data.golden_zone.description}</p>
@@ -276,11 +277,11 @@ export default function FibonacciAnalysis() {
                           )}
                         </div>
                         <div className="text-right">
-                          <span className="text-white font-bold">${level.price.toFixed(2)}</span>
+                          <span className="text-white font-bold">${(level.price ?? 0).toFixed(2)}</span>
                           <span className={`ml-2 text-sm ${
-                            level.distance_pct > 0 ? 'text-green-500' : 'text-red-500'
+                            (level.distance_pct ?? 0) > 0 ? 'text-green-500' : 'text-red-500'
                           }`}>
-                            {level.distance_pct > 0 ? '+' : ''}{level.distance_pct.toFixed(1)}%
+                            {(level.distance_pct ?? 0) > 0 ? '+' : ''}{(level.distance_pct ?? 0).toFixed(1)}%
                           </span>
                         </div>
                       </div>
@@ -309,7 +310,9 @@ export default function FibonacciAnalysis() {
                 </p>
                 <div className="space-y-2">
                   {data.extension_levels.map((level, idx) => {
-                    const distancePct = ((level.price - data.current_price) / data.current_price) * 100
+                    const levelPrice = level.price ?? 0
+                    const currentPrice = data.current_price ?? 1
+                    const distancePct = currentPrice ? ((levelPrice - currentPrice) / currentPrice) * 100 : 0
                     return (
                       <div
                         key={idx}
@@ -320,7 +323,7 @@ export default function FibonacciAnalysis() {
                           <span className="text-purple-400 font-medium">{level.level}</span>
                         </div>
                         <div className="text-right">
-                          <span className="text-white font-bold">${level.price.toFixed(2)}</span>
+                          <span className="text-white font-bold">${levelPrice.toFixed(2)}</span>
                           <span className={`ml-2 text-sm ${distancePct > 0 ? 'text-green-500' : 'text-red-500'}`}>
                             {distancePct > 0 ? '+' : ''}{distancePct.toFixed(1)}%
                           </span>

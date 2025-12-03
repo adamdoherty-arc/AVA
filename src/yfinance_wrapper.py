@@ -38,7 +38,7 @@ class YFinanceRateLimiter:
         self.total_calls = 0
         self.throttled_calls = 0
 
-    def wait_if_needed(self):
+    def wait_if_needed(self) -> None:
         """Wait if we're calling too frequently"""
         with self.lock:
             now = time.time()

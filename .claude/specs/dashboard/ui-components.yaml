@@ -1,0 +1,79 @@
+# Dashboard UI Components Specification
+
+route: /
+page_title: "Dashboard"
+
+components:
+  - name: DashboardPage
+    type: page
+    children:
+      - SummaryCards
+      - AllocationSection
+      - NavigationMenu
+
+  - name: SummaryCards
+    type: section
+    elements:
+      - name: PortfolioValueCard
+        selector: "[data-testid='portfolio-value'], .portfolio-value, .total-value"
+        displays:
+          - total_value
+          - day_change
+          - day_change_pct
+        validation:
+          - "Value must not be null"
+          - "Value must be formatted as currency"
+          - "Day change must be color-coded (green/red)"
+
+      - name: BuyingPowerCard
+        selector: "[data-testid='buying-power'], .buying-power"
+        displays:
+          - buying_power
+        validation:
+          - "Value must be formatted as currency"
+
+  - name: AllocationSection
+    type: section
+    elements:
+      - name: AllocationChart
+        selector: "[data-testid='allocation-chart'], .allocation-chart"
+        displays:
+          - stocks_pct
+          - options_pct
+          - cash_pct
+        validation:
+          - "Percentages must sum to 100%"
+          - "Chart must be interactive"
+
+  - name: NavigationMenu
+    type: navigation
+    selector: "nav, .sidebar, [role='navigation']"
+    items:
+      - Dashboard
+      - Positions
+      - Scanner
+      - Earnings
+      - Settings
+
+interactions:
+  - name: Refresh Data
+    trigger: Click refresh button
+    expected_result: "Data updates with fresh values"
+
+  - name: Navigate to Feature
+    trigger: Click navigation item
+    expected_result: "Navigate to selected feature page"
+
+accessibility:
+  - "All cards must have ARIA labels"
+  - "Color coding must have text alternative"
+  - "Navigation must be keyboard accessible"
+
+responsive:
+  - breakpoint: mobile
+    changes:
+      - "Stack summary cards vertically"
+      - "Collapse navigation to hamburger menu"
+  - breakpoint: tablet
+    changes:
+      - "2-column card layout"

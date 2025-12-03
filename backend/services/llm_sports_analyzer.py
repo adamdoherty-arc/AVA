@@ -16,7 +16,7 @@ class LLMSportsAnalyzer:
     Analyzes sports matchups and betting opportunities using Local LLM
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.llm = get_magnus_llm()
 
     def analyze_matchup(self, 

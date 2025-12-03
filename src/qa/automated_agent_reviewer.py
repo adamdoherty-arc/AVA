@@ -33,7 +33,7 @@ class AutomatedAgentReviewer:
     - Heuristic analysis
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.qa_service = MultiAgentQAService()
 
         # Agent-specific approval criteria

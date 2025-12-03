@@ -45,7 +45,7 @@ class OptionsFlowData:
 class OptionsFlowTracker:
     """Track and analyze options flow data"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize Options Flow Tracker"""
         self.db_config = {
             'host': os.getenv('DB_HOST', 'localhost'),
@@ -56,7 +56,7 @@ class OptionsFlowTracker:
         }
         self.rate_limit_delay = 0.5  # 500ms between API calls
 
-    def get_connection(self):
+    def get_connection(self) -> None:
         """Get database connection"""
         return psycopg2.connect(**self.db_config)
 

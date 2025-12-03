@@ -76,7 +76,7 @@ class ESPNKalshiMatcher:
         'Iowa Hawkeyes': ['Iowa', 'Hawkeyes']
     }
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.db = KalshiDBManager()
         # Combine all team variations
         self.all_team_variations = {**self.NFL_TEAM_VARIATIONS, **self.CFB_TEAM_VARIATIONS}

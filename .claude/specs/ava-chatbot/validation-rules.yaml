@@ -1,0 +1,82 @@
+# AVA Chatbot Validation Rules
+
+response_quality:
+  relevance:
+    rule: "Response must address user's question"
+    note: "Human evaluation required"
+
+  accuracy:
+    rule: "Data in response must match source"
+    tolerance: 0
+
+  completeness:
+    rule: "Response should fully answer the query"
+
+latency_requirements:
+  simple_query:
+    max_ms: 3000
+  complex_query:
+    max_ms: 10000
+  rag_query:
+    max_ms: 5000
+
+context_validation:
+  - name: "RAG retrieval"
+    rule: "Retrieved documents should be relevant to query"
+    min_similarity: 0.7
+
+  - name: "Feature data freshness"
+    rule: "Data from features should be current"
+    max_stale_minutes: 5
+
+  - name: "Conversation context"
+    rule: "Previous messages should inform response"
+
+data_accuracy_checks:
+  - name: "Portfolio values"
+    rule: "Values mentioned must match current portfolio"
+    source: positions
+
+  - name: "Earnings dates"
+    rule: "Earnings dates must be accurate"
+    source: earnings-calendar
+
+  - name: "Premium calculations"
+    rule: "Premium percentages must be current"
+    source: premium-scanner
+
+conversation_rules:
+  - name: "No hallucination"
+    rule: "Do not invent data not from sources"
+    severity: critical
+
+  - name: "Source attribution"
+    rule: "Should cite sources for data claims"
+
+  - name: "Graceful unknowns"
+    rule: "Acknowledge when data unavailable"
+
+null_checks:
+  never_null:
+    - response
+  warn_if_null:
+    - sources
+    - conversation_id
+
+edge_cases:
+  - name: "Empty query"
+    rule: "Handle gracefully with prompt"
+
+  - name: "Very long query"
+    rule: "Truncate or reject queries > 4000 chars"
+
+  - name: "Ambiguous query"
+    rule: "Ask clarifying questions"
+
+  - name: "Out of scope"
+    rule: "Politely decline non-trading queries"
+
+known_issues:
+  - id: "LLM_LATENCY"
+    description: "LLM responses may have variable latency"
+    workaround: "Show typing indicator"

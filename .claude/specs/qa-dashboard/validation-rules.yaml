@@ -1,0 +1,41 @@
+# QA Dashboard Validation Rules
+
+health_validation:
+  overall_health:
+    values: [healthy, degraded, critical]
+    calculation:
+      healthy: "No critical issues, < 3 high issues"
+      degraded: "< 5 critical OR < 10 high issues"
+      critical: ">= 5 critical OR >= 10 high issues"
+
+metrics_validation:
+  pass_rate:
+    range: [0, 100]
+    healthy_threshold: 90
+
+  avg_response_time:
+    range: [0, null]
+    healthy_threshold_ms: 5000
+
+consistency_checks:
+  - name: "Issue counts match"
+    rule: "Sum of issues_by_severity == total issues"
+
+  - name: "Feature status current"
+    rule: "last_check within acceptable window"
+
+data_freshness:
+  status:
+    max_stale_minutes: 5
+  issues:
+    max_stale_minutes: 1
+  metrics:
+    max_stale_minutes: 15
+
+null_checks:
+  never_null:
+    - overall_health
+    - features
+  warn_if_null:
+    - metrics
+    - history

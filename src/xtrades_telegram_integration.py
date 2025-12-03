@@ -72,7 +72,7 @@ class XtradesTelegramIntegration:
 
         logger.info("Xtrades Telegram Integration initialized")
 
-    def start(self):
+    def start(self) -> None:
         """Start the integration service."""
 
         logger.info("Starting Xtrades Telegram Integration...")
@@ -100,12 +100,12 @@ class XtradesTelegramIntegration:
         self.running = True
         self._monitoring_loop()
 
-    def stop(self):
+    def stop(self) -> None:
         """Stop the integration service."""
         logger.info("Stopping integration...")
         self.running = False
 
-    def _monitoring_loop(self):
+    def _monitoring_loop(self) -> None:
         """Main monitoring loop."""
 
         logger.info(f"Monitoring started (check interval: {self.check_interval}s)")
@@ -371,7 +371,7 @@ class XtradesTelegramIntegration:
             logger.error(f"Error sending summary: {e}", exc_info=True)
             return False
 
-    def _get_connection(self):
+    def _get_connection(self) -> None:
         """Get database connection with RealDictCursor."""
         return psycopg2.connect(
             self.db_url,

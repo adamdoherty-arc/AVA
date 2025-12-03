@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { API_HOST } from '@/config/api'
 
 interface AllIndicatorsData {
   symbol: string
@@ -35,7 +36,7 @@ interface IVRData {
   ivr: { value: number; interpretation: string; strategy: string }
 }
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8002'
+const API_BASE = API_HOST
 
 export default function SignalDashboard() {
   const [symbol, setSymbol] = useState('AAPL')
@@ -454,7 +455,7 @@ export default function SignalDashboard() {
                               )}
                               <span className="text-sm text-slate-300">{signal.indicator}</span>
                             </div>
-                            <span className="text-sm text-white">${signal.price.toFixed(2)}</span>
+                            <span className="text-sm text-white">${(signal.price ?? 0).toFixed(2)}</span>
                           </div>
                         ))}
                       </div>

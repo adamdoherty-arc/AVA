@@ -1,0 +1,47 @@
+# Technical Indicators UI Components Specification
+
+route: /technical
+page_title: "Technical Indicators"
+
+components:
+  - name: TechnicalPage
+    type: page
+    children:
+      - SymbolSearch
+      - IndicatorChart
+      - SignalsList
+
+  - name: IndicatorChart
+    type: chart
+    selector: "[data-testid='indicator-chart']"
+    chart_type: candlestick
+    overlays:
+      - moving_averages
+      - bollinger_bands
+    subcharts:
+      - rsi
+      - macd
+      - volume
+
+  - name: SignalsList
+    type: list
+    selector: "[data-testid='signals-list']"
+    items:
+      - symbol
+      - indicator
+      - signal_type
+      - timestamp
+
+interactions:
+  - name: Search Symbol
+    trigger: Enter symbol
+    expected_result: "Load chart with indicators"
+  - name: Toggle Indicator
+    trigger: Click indicator toggle
+    expected_result: "Show/hide indicator on chart"
+
+responsive:
+  - breakpoint: mobile
+    changes:
+      - "Simplified chart"
+      - "Fewer indicators visible"

@@ -185,7 +185,7 @@ export default function KalshiMarkets() {
                                     market.edge >= 5 ? "bg-amber-500/20 text-amber-400" :
                                     "bg-slate-700 text-slate-400"
                                 )}>
-                                    {market.edge > 0 ? '+' : ''}{market.edge.toFixed(1)}% edge
+                                    {(market.edge ?? 0) > 0 ? '+' : ''}{(market.edge ?? 0).toFixed(1)}% edge
                                 </div>
                             </div>
 
@@ -204,7 +204,7 @@ export default function KalshiMarkets() {
                                 </div>
                                 <div className="bg-slate-800/50 rounded-lg p-3 text-center">
                                     <p className="text-xs text-slate-400 mb-1">Volume</p>
-                                    <p className="text-xl font-bold">${market.volume.toLocaleString()}</p>
+                                    <p className="text-xl font-bold">${(market.volume ?? 0).toLocaleString()}</p>
                                 </div>
                                 <div className="bg-slate-800/50 rounded-lg p-3 text-center">
                                     <p className="text-xs text-slate-400 mb-1">Confidence</p>

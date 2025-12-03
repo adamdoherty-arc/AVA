@@ -38,7 +38,7 @@ class AdvancedBettingAIAgent:
     - Clear reasoning generation
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.min_edge_threshold = 0.05  # 5% minimum edge
         self.high_confidence_threshold = 0.75  # 75% confidence for "lightning bolt" bets
         self.kelly_fraction = 0.25  # Quarter Kelly (conservative)

@@ -70,33 +70,16 @@ class XtradesBackgroundSync:
         Returns:
             List of active profile usernames
         """
-        conn = None
-        cursor = None
         try:
-            conn = psycopg2.connect(os.getenv("DATABASE_URL"))
-            cursor = conn.cursor()
-
-            cursor.execute("""
-                SELECT username
-                FROM xtrades_profiles
-                WHERE active = TRUE
-                ORDER BY username
-            """)
-
-            profiles = [row[0] for row in cursor.fetchall()]
-            return profiles
+            # Use XtradesDBManager's get_active_profiles which handles connection properly
+            profiles = self.db_manager.get_active_profiles()
+            return [p['username'] for p in profiles]
 
         except Exception as e:
             print(f"❌ Error getting active profiles: {e}")
             return []
 
-        finally:
-            if cursor:
-                cursor.close()
-            if conn:
-                conn.close()
-
-    def sync_xtrades(self):
+    def sync_xtrades(self) -> None:
         """Perform Xtrades sync operation"""
         if self.is_running:
             print("⚠️  Sync already in progress, skipping...")
@@ -261,9 +244,9 @@ class XtradesBackgroundSync:
             status: 'success', 'partial', or 'failed'
         """
         conn = None
-        cursor = None
         try:
-            conn = psycopg2.connect(os.getenv("DATABASE_URL"))
+            # Use XtradesDBManager's connection for consistency
+            conn = self.db_manager.get_connection()
             cursor = conn.cursor()
 
             # Determine status
@@ -298,16 +281,14 @@ class XtradesBackgroundSync:
             print(f"⚠️  Warning: Could not log sync operation: {e}")
 
         finally:
-            if cursor:
-                cursor.close()
             if conn:
-                conn.close()
+                self.db_manager.release_connection(conn)
 
-    def start(self):
+    def start(self) -> None:
         """Start the background sync service"""
         print("🚀 Starting Xtrades Background Sync Service")
         print(f"⏰ Sync interval: Every {self.interval_minutes} minutes")
-        print(f"📂 Database: {os.getenv('DATABASE_URL', 'Not configured')[:50]}...")
+        print(f"📂 Database: {os.getenv('DB_HOST', 'localhost')}:{os.getenv('DB_PORT', '5432')}/{os.getenv('DB_NAME', 'magnus')}")
         print(f"🌐 Xtrades account: {os.getenv('XTRADES_USERNAME', 'Not configured')}")
         print("\nPress Ctrl+C to stop\n")
 
@@ -328,7 +309,7 @@ class XtradesBackgroundSync:
             self.cleanup()
             print("✅ Service stopped gracefully")
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         """Cleanup resources"""
         if self.scraper:
             try:
@@ -373,9 +354,9 @@ Examples:
 
     args = parser.parse_args()
 
-    # Validate environment
-    if not os.getenv('DATABASE_URL'):
-        print("❌ ERROR: DATABASE_URL not set in .env file")
+    # Validate environment (DB connection uses DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME)
+    if not os.getenv('DB_HOST') and not os.getenv('DATABASE_URL'):
+        print("❌ ERROR: Database not configured. Set either DB_HOST or DATABASE_URL in .env file")
         sys.exit(1)
 
     if not os.getenv('XTRADES_USERNAME') or not os.getenv('XTRADES_PASSWORD'):

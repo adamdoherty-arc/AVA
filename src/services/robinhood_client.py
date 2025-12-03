@@ -41,7 +41,7 @@ class RobinhoodClient:
                     cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize Robinhood client (singleton pattern)"""
         if not hasattr(self, '_initialized'):
             self.username = os.getenv('ROBINHOOD_USERNAME')
@@ -91,7 +91,7 @@ class RobinhoodClient:
 
         raise last_exception
 
-    def _ensure_logged_in(self):
+    def _ensure_logged_in(self) -> None:
         """Ensure client is logged in, login if needed"""
         if not self.logged_in:
             with self._login_lock:
@@ -171,7 +171,7 @@ class RobinhoodClient:
             self.logged_in = False
             return False
 
-    def logout(self):
+    def logout(self) -> None:
         """Logout from Robinhood"""
         try:
             rh.logout()

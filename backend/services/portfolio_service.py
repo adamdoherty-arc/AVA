@@ -8,11 +8,11 @@ from backend.config import get_settings
 logger = logging.getLogger(__name__)
 
 class PortfolioService:
-    def __init__(self):
+    def __init__(self) -> None:
         self.settings = get_settings()
         self._logged_in = False
 
-    def _ensure_login(self):
+    def _ensure_login(self) -> None:
         """Ensure Robinhood is logged in."""
         if self._logged_in:
             return

@@ -278,7 +278,7 @@ class KalshiAIEvaluator:
         except Exception:
             return 50
 
-    def _get_sentiment_analyzer(self):
+    def _get_sentiment_analyzer(self) -> None:
         """Lazy load sentiment analyzer"""
         if self.sentiment_analyzer is None and self.use_advanced_features:
             try:
@@ -289,7 +289,7 @@ class KalshiAIEvaluator:
                 logger.warning(f"Could not load sentiment analyzer: {e}")
         return self.sentiment_analyzer
 
-    def _get_nfl_data_fetcher(self):
+    def _get_nfl_data_fetcher(self) -> None:
         """Lazy load NFL data fetcher"""
         if self.nfl_data_fetcher is None and self.use_advanced_features:
             try:

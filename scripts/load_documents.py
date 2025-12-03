@@ -1,18 +1,39 @@
 """
 Document Loader for Magnus RAG System
-Loads documents from various formats into the knowledge base
+======================================
+
+Loads documents from various formats into the knowledge base using UnifiedRAG.
+
+Usage:
+    python scripts/load_documents.py                    # Load all documents
+    python scripts/load_documents.py --clear            # Clear and reload
+    python scripts/load_documents.py --pdf              # Include PDF files
+    python scripts/load_documents.py --sample           # Load sample data only
+
+Categories automatically detected from directory structure:
+    data/documents/options/    -> options_education
+    data/documents/risk/       -> risk_management
+    data/documents/technical/  -> technical_analysis
+    data/documents/platform/   -> platform_docs
+    data/documents/sports/     -> sports_betting
 """
 
 import os
 import sys
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.rag.simple_rag import get_rag, DEPENDENCIES_AVAILABLE
+# Import the new UnifiedRAG interface
+try:
+    from src.rag import get_unified_rag, UnifiedRAG
+    DEPENDENCIES_AVAILABLE = True
+except ImportError as e:
+    DEPENDENCIES_AVAILABLE = False
+    print(f"Warning: RAG dependencies not available: {e}")
 
 # Configure logging
 logging.basicConfig(
@@ -37,7 +58,7 @@ def load_text_files(directory: str = "data/documents", recursive: bool = True):
     logger.info(f"Loading documents from: {directory}")
 
     # Get RAG instance
-    rag = get_rag()
+    rag = get_unified_rag()
     if not rag:
         logger.error("Failed to initialize RAG system")
         return
@@ -50,28 +71,17 @@ def load_text_files(directory: str = "data/documents", recursive: bool = True):
         logger.info(f"Please add your documents to {directory} and run this script again")
         return
 
-    # Load text files
-    logger.info("Loading .txt files...")
-    txt_results = rag.add_documents_from_directory(
+    # Load text and markdown files
+    logger.info("Loading .txt and .md files...")
+    all_results = rag.add_documents_from_directory(
         directory=directory,
-        file_pattern="*.txt",
+        file_patterns=["*.txt", "*.md"],
         recursive=recursive
     )
-
-    # Load markdown files
-    logger.info("Loading .md files...")
-    md_results = rag.add_documents_from_directory(
-        directory=directory,
-        file_pattern="*.md",
-        recursive=recursive
-    )
-
-    # Combine results
-    all_results = {**txt_results, **md_results}
 
     # Report results
     total_files = len(all_results)
-    total_chunks = sum(len(chunks) for chunks in all_results.values())
+    total_chunks = sum(all_results.values())
 
     logger.info(f"\n{'='*60}")
     logger.info(f"Document Loading Complete")
@@ -81,8 +91,8 @@ def load_text_files(directory: str = "data/documents", recursive: bool = True):
 
     if all_results:
         logger.info(f"\nLoaded files:")
-        for file_path, chunks in all_results.items():
-            logger.info(f"  - {Path(file_path).name}: {len(chunks)} chunks")
+        for filename, chunk_count in all_results.items():
+            logger.info(f"  - {filename}: {chunk_count} chunks")
 
     # Get stats
     stats = rag.get_stats()
@@ -116,7 +126,7 @@ def load_pdf_files(directory: str = "data/documents", recursive: bool = True):
     logger.info(f"Loading PDF files from: {directory}")
 
     # Get RAG instance
-    rag = get_rag()
+    rag = get_unified_rag()
     if not rag:
         logger.error("Failed to initialize RAG system")
         return
@@ -191,7 +201,7 @@ def load_sample_data():
     """Load sample financial documents for testing."""
     logger.info("Loading sample financial data...")
 
-    rag = get_rag()
+    rag = get_unified_rag()
     if not rag:
         logger.error("Failed to initialize RAG system")
         return
@@ -359,7 +369,7 @@ def clear_knowledge_base():
     """Clear all documents from knowledge base."""
     logger.warning("Clearing knowledge base...")
 
-    rag = get_rag()
+    rag = get_unified_rag()
     if not rag:
         logger.error("Failed to initialize RAG system")
         return

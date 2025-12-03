@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 class TradingViewAccountSync:
     """Sync actual TradingView watchlists to PostgreSQL database"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.username = os.getenv('TRADINGVIEW_USERNAME')
         self.password = os.getenv('TRADINGVIEW_PASSWORD')
         self.db_config = {
@@ -39,11 +39,11 @@ class TradingViewAccountSync:
         self.driver = None
         self.logged_in = False
 
-    def get_connection(self):
+    def get_connection(self) -> None:
         """Get database connection"""
         return psycopg2.connect(**self.db_config)
 
-    def init_driver(self):
+    def init_driver(self) -> None:
         """Initialize Chrome driver in headless mode"""
         if self.driver:
             return
@@ -353,7 +353,7 @@ class TradingViewAccountSync:
             cur.close()
             conn.close()
 
-    def close(self):
+    def close(self) -> None:
         """Close the driver"""
         if self.driver:
             self.driver.quit()

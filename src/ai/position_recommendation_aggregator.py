@@ -67,7 +67,7 @@ class PositionRecommendationAggregator:
     - If critical position (big loss) → always use LLM
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.quant_analyzer = PositionQuantitativeAnalyzer()
         self.llm_analyzer = PositionLLMAnalyzer()
 

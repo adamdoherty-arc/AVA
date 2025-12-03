@@ -389,7 +389,7 @@ class PriceMonitor:
         """Mark zone+type as alerted"""
         self.alerted_zones.add((zone_id, alert_type))
 
-    def reset_alert_tracking(self):
+    def reset_alert_tracking(self) -> None:
         """Reset alert tracking (call periodically to allow re-alerts)"""
         self.alerted_zones.clear()
         logger.info("Reset alert tracking")

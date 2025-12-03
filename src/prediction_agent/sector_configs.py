@@ -51,7 +51,7 @@ class SectorConfig:
     # Market-specific keywords for detection
     keywords: List[str] = field(default_factory=list)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate configuration"""
         if not 0 <= self.min_confidence_threshold <= 1:
             raise ValueError("min_confidence_threshold must be between 0 and 1")

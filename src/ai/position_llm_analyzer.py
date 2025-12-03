@@ -52,7 +52,7 @@ class PositionLLMAnalyzer:
         }
     }
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize LLM analyzer with existing LLM service"""
         self.llm_service = LLMService()
 

@@ -18,7 +18,7 @@ class ESPNNCAALiveData:
     # ESPN College Football API endpoint
     BASE_URL = "https://site.api.espn.com/apis/site/v2/sports/football/college-football"
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.session = requests.Session()
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'

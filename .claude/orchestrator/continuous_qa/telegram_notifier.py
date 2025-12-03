@@ -7,9 +7,11 @@ Wraps the existing TelegramNotifier from src/telegram_notifier.py
 
 import os
 import sys
+import hashlib
+import json
 from pathlib import Path
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 
 # Add src to path to import existing notifier
@@ -34,11 +36,25 @@ class QATelegramNotifier:
     - Critical failure alerts (immediate)
     - Daily enhancement summaries
     - Health score warnings
+
+    Features:
+    - Alert deduplication (suppresses repeated alerts within cooldown period)
+    - Persistent alert tracking across restarts
     """
+
+    # Cooldown period for duplicate alerts (in hours)
+    ALERT_COOLDOWN_HOURS = 2
 
     def __init__(self, enabled: bool = True):
         """Initialize the QA Telegram notifier."""
         self.enabled = enabled
+
+        # Alert deduplication tracking
+        self._sent_alerts: Dict[str, datetime] = {}
+        self._alert_history_file = Path(__file__).parent / "data" / "alert_history.json"
+
+        # Load previous alert history
+        self._load_alert_history()
 
         if not TELEGRAM_AVAILABLE:
             logger.warning(
@@ -58,12 +74,105 @@ class QATelegramNotifier:
             logger.error(f"Failed to initialize Telegram notifier: {e}")
             self._notifier = None
 
+    def _load_alert_history(self) -> None:
+        """Load alert history from persistent storage."""
+        try:
+            if self._alert_history_file.exists():
+                with open(self._alert_history_file, 'r') as f:
+                    data = json.load(f)
+                    for key, timestamp_str in data.items():
+                        self._sent_alerts[key] = datetime.fromisoformat(timestamp_str)
+                logger.info(f"Loaded {len(self._sent_alerts)} alert records from history")
+        except Exception as e:
+            logger.warning(f"Could not load alert history: {e}")
+            self._sent_alerts = {}
+
+    def _save_alert_history(self) -> None:
+        """Save alert history to persistent storage."""
+        try:
+            # Ensure directory exists
+            self._alert_history_file.parent.mkdir(parents=True, exist_ok=True)
+
+            # Clean up old alerts before saving
+            self._cleanup_old_alerts()
+
+            # Convert datetimes to strings for JSON
+            data = {key: ts.isoformat() for key, ts in self._sent_alerts.items()}
+            with open(self._alert_history_file, 'w') as f:
+                json.dump(data, f, indent=2)
+        except Exception as e:
+            logger.warning(f"Could not save alert history: {e}")
+
+    def _cleanup_old_alerts(self) -> None:
+        """Remove alerts older than 24 hours from tracking."""
+        cutoff = datetime.now() - timedelta(hours=24)
+        self._sent_alerts = {
+            key: ts for key, ts in self._sent_alerts.items()
+            if ts > cutoff
+        }
+
+    def _get_alert_key(self, message: str, module: str = "") -> str:
+        """Generate a unique key for an alert based on content."""
+        # Create a hash of the message content (normalized)
+        content = f"{module}:{message}".lower().strip()
+        return hashlib.md5(content.encode()).hexdigest()[:16]
+
+    def _is_duplicate_alert(self, message: str, module: str = "") -> bool:
+        """
+        Check if this alert was recently sent.
+
+        Returns True if the same alert was sent within ALERT_COOLDOWN_HOURS.
+        """
+        key = self._get_alert_key(message, module)
+
+        if key in self._sent_alerts:
+            last_sent = self._sent_alerts[key]
+            cooldown = timedelta(hours=self.ALERT_COOLDOWN_HOURS)
+
+            if datetime.now() - last_sent < cooldown:
+                logger.info(f"Suppressing duplicate alert (sent {datetime.now() - last_sent} ago): {message[:50]}...")
+                return True
+
+        return False
+
+    def _record_alert_sent(self, message: str, module: str = "") -> None:
+        """Record that an alert was sent."""
+        key = self._get_alert_key(message, module)
+        self._sent_alerts[key] = datetime.now()
+        self._save_alert_history()
+
+    def mark_issue_resolved(self, message: str, module: str = "") -> None:
+        """
+        Mark an issue as resolved, allowing new alerts for this issue.
+
+        Call this when an issue is fixed to reset the deduplication cooldown.
+        """
+        key = self._get_alert_key(message, module)
+        if key in self._sent_alerts:
+            del self._sent_alerts[key]
+            self._save_alert_history()
+            logger.info(f"Marked issue as resolved: {message[:50]}...")
+
+    def get_suppressed_alerts_count(self) -> int:
+        """Get the count of alerts currently being suppressed."""
+        self._cleanup_old_alerts()
+        return len(self._sent_alerts)
+
+    def get_alert_status(self) -> Dict[str, Any]:
+        """Get status of alert deduplication system."""
+        self._cleanup_old_alerts()
+        return {
+            'active_suppressions': len(self._sent_alerts),
+            'cooldown_hours': self.ALERT_COOLDOWN_HOURS,
+            'history_file': str(self._alert_history_file),
+        }
+
     def is_available(self) -> bool:
         """Check if Telegram notifications are available."""
         return self.enabled and self._notifier is not None and self._notifier.enabled
 
     def send_critical_alert(self, message: str, module: str = "",
-                            details: Dict = None) -> Optional[str]:
+                            details: Dict = None, force: bool = False) -> Optional[str]:
         """
         Send a critical alert via Telegram.
 
@@ -71,6 +180,7 @@ class QATelegramNotifier:
             message: The alert message
             module: Which QA module generated the alert
             details: Additional details
+            force: If True, bypass deduplication and send anyway
 
         Returns:
             Message ID if successful, None otherwise
@@ -79,8 +189,19 @@ class QATelegramNotifier:
             logger.warning(f"Critical alert (not sent): {message}")
             return None
 
+        # Check for duplicate alerts (unless forced)
+        if not force and self._is_duplicate_alert(message, module):
+            logger.info(f"Skipping duplicate critical alert: {message[:50]}...")
+            return None
+
         formatted_message = self._format_critical_alert(message, module, details)
-        return self._notifier.send_custom_message(formatted_message)
+        result = self._notifier.send_custom_message(formatted_message)
+
+        # Record that we sent this alert
+        if result:
+            self._record_alert_sent(message, module)
+
+        return result
 
     def send_qa_cycle_summary(self, summary: Dict[str, Any]) -> Optional[str]:
         """
@@ -124,7 +245,7 @@ class QATelegramNotifier:
         return self._notifier.send_custom_message(formatted_message)
 
     def send_health_warning(self, current_score: float, previous_score: float,
-                            threshold: float = 70.0) -> Optional[str]:
+                            threshold: float = 70.0, force: bool = False) -> Optional[str]:
         """
         Send warning if health score drops below threshold.
 
@@ -132,6 +253,7 @@ class QATelegramNotifier:
             current_score: Current health score
             previous_score: Previous health score
             threshold: Warning threshold
+            force: If True, bypass deduplication
 
         Returns:
             Message ID if successful, None otherwise
@@ -142,10 +264,24 @@ class QATelegramNotifier:
         if current_score >= threshold:
             return None  # No warning needed
 
+        # Create a message key based on score range (within 5 points = same alert)
+        score_bucket = int(current_score / 5) * 5
+        message = f"Health score below threshold: {score_bucket}-{score_bucket+5}"
+
+        # Check for duplicate (unless forced)
+        if not force and self._is_duplicate_alert(message, "health_warning"):
+            logger.info(f"Skipping duplicate health warning for score {current_score}")
+            return None
+
         formatted_message = self._format_health_warning(
             current_score, previous_score, threshold
         )
-        return self._notifier.send_custom_message(formatted_message)
+        result = self._notifier.send_custom_message(formatted_message)
+
+        if result:
+            self._record_alert_sent(message, "health_warning")
+
+        return result
 
     def send_enhancement_notification(self, enhancement: Dict) -> Optional[str]:
         """

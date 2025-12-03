@@ -29,10 +29,10 @@ SECTOR_MAPPING = {
 }
 
 class SectorClassifier:
-    def __init__(self):
+    def __init__(self) -> None:
         self.conn = None
 
-    def connect(self):
+    def connect(self) -> None:
         self.conn = psycopg2.connect(
             host=os.getenv('DB_HOST', 'localhost'),
             port=os.getenv('DB_PORT', '5432'),

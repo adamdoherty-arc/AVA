@@ -1,0 +1,47 @@
+# Signal Dashboard UI Components Specification
+
+route: /signals
+page_title: "Signal Dashboard"
+
+components:
+  - name: SignalDashboardPage
+    type: page
+    children:
+      - ActiveSignalsPanel
+      - SignalFilters
+      - SignalsTable
+
+  - name: ActiveSignalsPanel
+    type: panel
+    selector: "[data-testid='active-signals']"
+    shows:
+      - count of active signals
+      - urgent signals highlighted
+
+  - name: SignalFilters
+    type: filter-section
+    selector: "[data-testid='signal-filters']"
+    filters:
+      - type (buy/sell/etc)
+      - confidence threshold
+      - status
+
+  - name: SignalsTable
+    type: table
+    selector: "[data-testid='signals-list']"
+    columns:
+      - header: Symbol
+      - header: Type
+        color_coded: true
+      - header: Confidence
+      - header: Source
+      - header: Time
+      - header: Status
+
+interactions:
+  - name: Filter Signals
+    trigger: Apply filters
+    expected_result: "Table filtered"
+  - name: View History
+    trigger: Click history tab
+    expected_result: "Show signal history"

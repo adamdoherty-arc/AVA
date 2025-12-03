@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 class LegionTaskCreator:
     """Creates Legion tasks from AVA feedback and unanswered questions"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize task creator with memory and Legion sync"""
         self.memory = ConversationMemoryManager()
         self.legion_sync = LegionTaskSyncService()

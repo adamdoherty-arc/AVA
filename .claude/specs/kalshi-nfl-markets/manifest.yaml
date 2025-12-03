@@ -1,0 +1,48 @@
+# Kalshi NFL Markets Feature Manifest
+# SpecAgent: KalshiMarketsSpecAgent
+
+name: kalshi-markets
+version: 1.0.0
+description: Kalshi prediction markets integration for NFL and sports betting
+
+tier: 2  # Important
+priority: 2
+
+dependencies:
+  - database
+  - kalshi-api
+
+endpoints:
+  - /api/kalshi/markets
+  - /api/kalshi/positions
+  - /api/kalshi/nfl
+  - /api/kalshi/portfolio
+
+frontend_routes:
+  - /kalshi
+  - /prediction-markets
+
+key_components:
+  - MarketsGrid
+  - MarketCard
+  - PositionsPanel
+  - ProbabilityChart
+  - OrderForm
+
+data_sources:
+  - kalshi_api
+  - nfl_schedule
+  - market_history
+
+validation_focus:
+  - Market data accuracy
+  - Probability displays
+  - Position tracking
+  - Order execution
+  - Price updates
+
+owners:
+  - team: sports
+  - critical: false
+
+last_updated: 2025-11-26

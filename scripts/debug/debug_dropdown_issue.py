@@ -93,7 +93,7 @@ try:
     print("[OK] StockDropdown initialized")
 
     # Call _get_stock_list directly
-    stocks_df = dropdown._get_stock_list()
+    stocks_df = dropdown._get_stock_data()
     print(f"[OK] _get_stock_list() returned {len(stocks_df)} records")
 
     # Test format function

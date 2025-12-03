@@ -59,7 +59,7 @@ class PageMetadata:
     required_env_vars: List[str] = None  # Required environment variables
     required_services: List[str] = None  # Required external services
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Initialize default values"""
         if self.required_env_vars is None:
             self.required_env_vars = []
@@ -74,11 +74,11 @@ class PageMetadata:
 class PageRegistry:
     """Central registry of all pages in the application"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._pages: Dict[str, PageMetadata] = {}
         self._initialize_pages()
 
-    def _initialize_pages(self):
+    def _initialize_pages(self) -> None:
         """Initialize all page registrations"""
 
         # ====================================================================

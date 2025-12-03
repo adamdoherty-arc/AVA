@@ -14,7 +14,7 @@ from datetime import datetime
 class SignalVectorSearch:
     """Vector search for trading signals using ChromaDB"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.db_password = os.getenv('DB_PASSWORD')
 
         # Initialize ChromaDB
@@ -29,7 +29,7 @@ class SignalVectorSearch:
             metadata={"description": "Discord trading signals with outcomes"}
         )
 
-    def get_connection(self):
+    def get_connection(self) -> None:
         """Get PostgreSQL connection"""
         return psycopg2.connect(
             host='localhost',
@@ -76,7 +76,7 @@ class SignalVectorSearch:
 
         return " | ".join(parts)
 
-    def index_all_signals(self):
+    def index_all_signals(self) -> None:
         """Index all signals from database into ChromaDB"""
         conn = self.get_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)

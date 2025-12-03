@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 class CSPRecoveryAnalyzer:
     """Analyzes losing CSP positions and finds recovery opportunities"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.risk_free_rate = 0.045  # Current risk-free rate
         self.trading_days = 252
 

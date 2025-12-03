@@ -59,7 +59,7 @@ class DataServiceRegistry:
     _initialized_at: Optional[datetime] = None
     _access_count: Dict[str, int] = {}
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Private constructor. Use get_instance() instead."""
         if DataServiceRegistry._instance is not None:
             raise RuntimeError(
@@ -112,7 +112,7 @@ class DataServiceRegistry:
     # DATABASE MANAGER ACCESSORS
     # =========================================================================
 
-    def get_tradingview_manager(self):
+    def get_tradingview_manager(self) -> None:
         """
         Get the singleton TradingViewDBManager instance.
 
@@ -129,7 +129,7 @@ class DataServiceRegistry:
         self._track_access("tradingview")
         return self._tradingview_manager
 
-    def get_kalshi_manager(self):
+    def get_kalshi_manager(self) -> None:
         """
         Get the singleton KalshiDBManager instance.
 
@@ -146,7 +146,7 @@ class DataServiceRegistry:
         self._track_access("kalshi")
         return self._kalshi_manager
 
-    def get_xtrades_manager(self):
+    def get_xtrades_manager(self) -> None:
         """
         Get the singleton XtradesDBManager instance.
 
@@ -163,7 +163,7 @@ class DataServiceRegistry:
         self._track_access("xtrades")
         return self._xtrades_manager
 
-    def get_zone_manager(self):
+    def get_zone_manager(self) -> None:
         """
         Get the singleton ZoneDatabaseManager instance.
 
@@ -180,7 +180,7 @@ class DataServiceRegistry:
         self._track_access("zones")
         return self._zone_manager
 
-    def get_nfl_manager(self):
+    def get_nfl_manager(self) -> None:
         """
         Get the singleton NFLDBManager instance.
 
@@ -197,7 +197,7 @@ class DataServiceRegistry:
         self._track_access("nfl")
         return self._nfl_manager
 
-    def get_technical_analysis_manager(self):
+    def get_technical_analysis_manager(self) -> None:
         """
         Get the singleton TechnicalAnalysisDBManager instance.
 
@@ -214,7 +214,7 @@ class DataServiceRegistry:
         self._track_access("technical_analysis")
         return self._technical_analysis_manager
 
-    def get_database_scanner(self):
+    def get_database_scanner(self) -> None:
         """
         Get the singleton DatabaseScanner instance.
 
@@ -304,7 +304,7 @@ class DataServiceRegistry:
 
         return stats
 
-    def _cleanup_all(self):
+    def _cleanup_all(self) -> None:
         """Clean up all database connections and resources"""
         managers_to_cleanup = [
             ("TradingView", self._tradingview_manager),

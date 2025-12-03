@@ -27,7 +27,7 @@ class StandardIndicators:
     - CCI (Commodity Channel Index)
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         try:
             import pandas_ta as ta
             self.ta = ta
@@ -53,9 +53,10 @@ class StandardIndicators:
         """
         bbands = self.ta.bbands(df['close'], length=length, std=std)
 
-        upper_col = f'BBU_{length}_{std}'
-        middle_col = f'BBM_{length}_{std}'
-        lower_col = f'BBL_{length}_{std}'
+        # Dynamically find column names (pandas-ta may format floats differently)
+        upper_col = [col for col in bbands.columns if col.startswith('BBU_')][0]
+        middle_col = [col for col in bbands.columns if col.startswith('BBM_')][0]
+        lower_col = [col for col in bbands.columns if col.startswith('BBL_')][0]
 
         bandwidth = (bbands[upper_col] - bbands[lower_col]) / bbands[middle_col]
 
@@ -220,8 +221,8 @@ class StandardIndicators:
             'strength': strength,
             'k': float(k_current),
             'd': float(d_current),
-            'bullish_cross': bullish_cross,
-            'bearish_cross': bearish_cross,
+            'bullish_cross': bool(bullish_cross),
+            'bearish_cross': bool(bearish_cross),
             'recommendation': recommendation
         }
 
@@ -442,9 +443,9 @@ class StandardIndicators:
             'strength': strength,
             'cloud_position': cloud_position,
             'cloud_bias': cloud_bias,
-            'cloud_thick': cloud_thick,
-            'tk_bullish_cross': tk_bullish_cross,
-            'tk_bearish_cross': tk_bearish_cross,
+            'cloud_thick': bool(cloud_thick),
+            'tk_bullish_cross': bool(tk_bullish_cross),
+            'tk_bearish_cross': bool(tk_bearish_cross),
             'recommendation': recommendation
         }
 
@@ -576,8 +577,8 @@ class StandardIndicators:
             'signal': signal,
             'zone': zone,
             'cci': float(cci_current),
-            'zero_cross_bullish': zero_cross_bullish,
-            'zero_cross_bearish': zero_cross_bearish,
+            'zero_cross_bullish': bool(zero_cross_bullish),
+            'zero_cross_bearish': bool(zero_cross_bearish),
             'recommendation': recommendation
         }
 

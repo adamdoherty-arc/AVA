@@ -1,0 +1,47 @@
+# Xtrades Modern Module Dependencies
+# ====================================
+# Latest versions as of November 2025
+
+# Core async and validation
+pydantic>=2.5.0
+asyncpg>=0.29.0
+asyncio>=3.4.3
+
+# Web scraping (modern async)
+playwright>=1.40.0
+
+# AI/LLM integration
+langchain>=0.1.0
+langchain-core>=0.1.0
+langchain-openai>=0.0.5
+langchain-anthropic>=0.1.0
+langchain-ollama>=0.1.0
+
+# HTTP client (async)
+httpx>=0.26.0
+aiohttp>=3.9.0
+
+# Retry logic
+tenacity>=8.2.3
+
+# Structured logging
+structlog>=24.1.0
+
+# Environment and config
+python-dotenv>=1.0.0
+
+# Type checking
+typing-extensions>=4.9.0
+
+# Date/time handling
+python-dateutil>=2.8.2
+
+# Database utilities
+psycopg2-binary>=2.9.9  # Fallback for legacy code
+
+# Development dependencies (optional)
+# pytest>=7.4.0
+# pytest-asyncio>=0.23.0
+# black>=24.1.0
+# ruff>=0.1.0
+# mypy>=1.8.0

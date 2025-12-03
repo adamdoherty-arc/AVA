@@ -1,0 +1,46 @@
+# XTrades Watchlists Feature Manifest
+# SpecAgent: XTradesWatchlistsSpecAgent
+
+name: xtrades-watchlists
+version: 1.0.0
+description: XTrades watchlist synchronization and premium analysis
+
+tier: 2  # Important
+priority: 4
+
+dependencies:
+  - database
+  - xtrades-api
+
+endpoints:
+  - /api/watchlist/database
+  - /api/watchlist/alerts
+  - /api/watchlist/symbols
+  - /api/watchlist/sync-status
+
+frontend_routes:
+  - /watchlists
+  - /xtrades
+
+key_components:
+  - WatchlistSelector
+  - SymbolsTable
+  - SyncButton
+  - AlertsPanel
+
+data_sources:
+  - xtrades_api
+  - synced_watchlists
+  - alert_history
+
+validation_focus:
+  - Sync accuracy
+  - Alert processing
+  - Symbol data quality
+  - Watchlist management
+
+owners:
+  - team: trading
+  - critical: false
+
+last_updated: 2025-11-26

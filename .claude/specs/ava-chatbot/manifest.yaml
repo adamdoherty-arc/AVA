@@ -1,0 +1,54 @@
+# AVA Chatbot Feature Manifest
+# SpecAgent: AvaChatbotSpecAgent
+
+name: ava-chatbot
+version: 1.0.0
+description: AI-powered trading assistant with RAG and multi-feature query capability
+
+tier: 2  # Important
+priority: 1
+
+dependencies:
+  - positions  # Queries position data
+  - dashboard  # Queries portfolio summary
+  - premium-scanner  # Queries premium opportunities
+  - earnings-calendar  # Queries earnings data
+  - kalshi-markets  # Queries prediction markets
+  - llm-api
+  - rag-system
+  - database
+
+endpoints:
+  - /api/ava/chat
+  - /api/ava/query
+  - /api/ava/history
+  - /api/ava/context
+
+frontend_routes:
+  - /ava
+  - /chat
+
+key_components:
+  - ChatInterface
+  - MessageList
+  - InputField
+  - ContextDisplay
+  - QuerySuggestions
+
+data_sources:
+  - rag_knowledge_base
+  - feature_data_apis
+  - conversation_history
+
+validation_focus:
+  - Response relevance
+  - Data accuracy in responses
+  - Context retrieval
+  - Response latency
+  - Query understanding
+
+owners:
+  - team: ai
+  - critical: false
+
+last_updated: 2025-11-26

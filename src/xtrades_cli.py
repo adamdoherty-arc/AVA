@@ -42,7 +42,7 @@ from xtrades_scraper import (
 class XtradesCLI:
     """Command-line interface for Xtrades scraper"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.scraper = None
 
     def scrape_command(self, args):

@@ -197,7 +197,7 @@ export default function CalendarSpreads() {
                                     <div>
                                         <span className="font-mono font-bold text-lg text-primary">{spread.symbol}</span>
                                         <p className="text-sm text-slate-400">{spread.company_name}</p>
-                                        <p className="text-xs text-slate-500">Stock: ${spread.current_price.toFixed(2)}</p>
+                                        <p className="text-xs text-slate-500">Stock: ${(spread.current_price ?? 0).toFixed(2)}</p>
                                     </div>
                                     <div className="flex items-center gap-2 text-slate-400">
                                         <div className="text-center p-2 bg-slate-800/50 rounded-lg">
@@ -228,23 +228,23 @@ export default function CalendarSpreads() {
                             <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
                                 <div>
                                     <p className="text-slate-400">Net Debit</p>
-                                    <p className="font-mono font-bold">${spread.net_debit.toFixed(2)}</p>
+                                    <p className="font-mono font-bold">${(spread.net_debit ?? 0).toFixed(2)}</p>
                                 </div>
                                 <div>
                                     <p className="text-slate-400">Max Profit</p>
-                                    <p className="font-mono font-bold text-emerald-400">${spread.max_profit.toFixed(2)}</p>
+                                    <p className="font-mono font-bold text-emerald-400">${(spread.max_profit ?? 0).toFixed(2)}</p>
                                 </div>
                                 <div>
                                     <p className="text-slate-400">Return %</p>
-                                    <p className="font-mono font-bold text-emerald-400">{spread.max_profit_pct.toFixed(0)}%</p>
+                                    <p className="font-mono font-bold text-emerald-400">{(spread.max_profit_pct ?? 0).toFixed(0)}%</p>
                                 </div>
                                 <div>
                                     <p className="text-slate-400">IV Skew</p>
-                                    <p className="font-mono font-bold text-amber-400">{spread.iv_skew.toFixed(1)}%</p>
+                                    <p className="font-mono font-bold text-amber-400">{(spread.iv_skew ?? 0).toFixed(1)}%</p>
                                 </div>
                                 <div>
                                     <p className="text-slate-400">Risk/Reward</p>
-                                    <p className="font-mono font-bold">1:{spread.risk_reward.toFixed(1)}</p>
+                                    <p className="font-mono font-bold">1:{(spread.risk_reward ?? 0).toFixed(1)}</p>
                                 </div>
                             </div>
                             <div className="mt-3 p-2 bg-slate-800/30 rounded-lg">

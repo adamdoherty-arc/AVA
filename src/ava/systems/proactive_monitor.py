@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 class ProactiveMonitor:
     """Proactive monitoring - AVA watches for you!"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize proactive monitor"""
         self.alert_thresholds = {
             'concentration_max': 0.25,  # 25% in one position

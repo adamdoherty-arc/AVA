@@ -1,0 +1,47 @@
+# Seven Day DTE Scanner Feature Manifest
+# SpecAgent: DTEScannerSpecAgent
+
+name: dte-scanner
+version: 1.0.0
+description: Scanner for short-term options with 0-7 DTE for rapid theta capture
+
+tier: 2  # Important
+priority: 5
+
+dependencies:
+  - positions
+  - earnings-calendar  # Avoid earnings in DTE range
+  - robinhood-api
+  - database
+
+endpoints:
+  - /api/dte-scanner/scan
+  - /api/dte-scanner/opportunities
+  - /api/dte-scanner/settings
+
+frontend_routes:
+  - /dte-scanner
+  - /short-term
+
+key_components:
+  - DTEResultsTable
+  - RiskFilter
+  - ThetaDisplay
+  - QuickScanButton
+
+data_sources:
+  - options_chain
+  - theta_calculations
+  - earnings_dates
+
+validation_focus:
+  - DTE accuracy (0-7 days)
+  - Theta decay calculations
+  - Risk metrics
+  - Earnings avoidance
+
+owners:
+  - team: trading
+  - critical: false
+
+last_updated: 2025-11-26

@@ -356,7 +356,7 @@ def get_stock_price(ticker: str) -> str:
 class OmnipresentAVA:
     """AVA assistant that appears on every Magnus page"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize AVA with LangChain agent"""
         self.memory_manager = ConversationMemoryManager()
 
@@ -370,7 +370,7 @@ class OmnipresentAVA:
         # Fallback LLM service
         self.llm_service = LLMService()
 
-    def _initialize_langchain_agent(self):
+    def _initialize_langchain_agent(self) -> None:
         """Initialize LangChain agent with tools"""
         try:
             # Tools available to AVA

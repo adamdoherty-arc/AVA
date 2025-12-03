@@ -31,7 +31,7 @@ class OptionsAgent:
     - Earnings-related volatility
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.api_calls = 0
 
     async def analyze(self, symbol: str) -> OptionsAnalysis:
@@ -121,7 +121,7 @@ class OptionsAgent:
                 return 0.0
 
             # Get ATM call IV
-            atm_calls = calls[calls['inTheMoney'] == False].head(3)
+            atm_calls = calls[calls['inTheMoney'] is False].head(3)
             if not atm_calls.empty and 'impliedVolatility' in atm_calls.columns:
                 return float(atm_calls['impliedVolatility'].mean())
 

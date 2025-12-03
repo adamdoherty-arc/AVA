@@ -28,8 +28,8 @@ _scan_progress = {}
 class ScanRequest(BaseModel):
     """Request body for scanning premiums"""
     symbols: List[str]
-    max_price: float = 50
-    min_premium_pct: float = 1.0
+    max_price: float = 250  # Increased to include more stocks like NVDA, TSLA
+    min_premium_pct: float = 0.5  # Lowered to show more opportunities
     dte: int = 30
     save_to_db: bool = True
 
@@ -37,8 +37,8 @@ class ScanRequest(BaseModel):
 class MultiDTEScanRequest(BaseModel):
     """Request body for multi-DTE scanning"""
     symbols: List[str]
-    max_price: float = 50
-    min_premium_pct: float = 1.0
+    max_price: float = 250  # Increased to include more stocks
+    min_premium_pct: float = 0.5  # Lowered to show more opportunities
     dte_targets: List[int] = [7, 14, 30, 45]
 
 
@@ -88,6 +88,47 @@ def save_scan_results_to_db(scan_id: str, request: ScanRequest, results: List[di
     except Exception as e:
         logger.error(f"Error saving scan results: {e}")
 
+
+
+
+@router.get("/opportunities")
+async def get_scanner_opportunities(
+    limit: int = Query(50, description="Maximum results"),
+    service: ScannerService = Depends(get_scanner_service)
+):
+    """
+    Get recent premium opportunities from scanner history.
+    """
+    try:
+        # Get recent scan results from database
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT scan_id, symbols, dte, result_count, results, created_at
+                FROM premium_scan_history
+                ORDER BY created_at DESC
+                LIMIT 1
+            """)
+            row = cursor.fetchone()
+            
+            if row:
+                return {
+                    "scan_id": row[0],
+                    "symbols": row[1],
+                    "dte": row[2],
+                    "result_count": row[3],
+                    "opportunities": row[4] if row[4] else [],
+                    "generated_at": row[5].isoformat() if row[5] else None
+                }
+            else:
+                return {
+                    "opportunities": [],
+                    "result_count": 0,
+                    "message": "No scan results found. Run a scan first."
+                }
+    except Exception as e:
+        logger.error(f"Error getting opportunities: {e}")
+        return {"opportunities": [], "error": str(e)}
 
 @router.post("/scan")
 async def scan_premiums(
@@ -323,8 +364,8 @@ async def quick_scan(
 async def dte_scanner(
     symbols: str = Query("TSLA,NVDA,AMD,PLTR,SOFI,SNAP", description="Comma-separated symbols"),
     max_dte: int = Query(7, description="Maximum days to expiration"),
-    min_premium_pct: float = Query(0.5, description="Minimum premium percentage"),
-    max_strike: float = Query(100, description="Maximum strike price"),
+    min_premium_pct: float = Query(0.3, description="Minimum premium percentage"),
+    max_strike: float = Query(250, description="Maximum strike price"),
     service: ScannerService = Depends(get_scanner_service)
 ):
     """
@@ -390,7 +431,7 @@ async def dte_comparison(
     try:
         results = service.scan_multiple_dte(
             symbols=default_symbols,
-            max_price=200,
+            max_price=250,
             min_premium_pct=0.5,
             dte_targets=[7, 14, 30, 45]
         )
@@ -648,10 +689,61 @@ async def get_aggregated_symbols():
 async def get_scanner_watchlists():
     """
     Get all available watchlists for the premium scanner.
-    Sources: All Stocks (stock_data), Database watchlists (tv_watchlists_api), TradingView watchlists, Robinhood.
+    Sources: Predefined popular lists, All Stocks (stock_data), Database watchlists (tv_watchlists_api), TradingView watchlists, Robinhood.
     NO MOCK DATA - Real database queries only.
     """
     watchlists = []
+
+    # Predefined popular watchlists for wheel strategy
+    predefined_watchlists = [
+        {
+            "source": "predefined",
+            "id": "popular",
+            "name": "Popular Wheel Stocks",
+            "symbols": [
+                'AAPL', 'AMD', 'AMZN', 'BAC', 'C', 'CCL', 'CSCO', 'F', 'GE', 'GOOG',
+                'INTC', 'META', 'MSFT', 'NVDA', 'PLTR', 'PYPL', 'SNAP', 'SOFI', 'T',
+                'TSLA', 'UAL', 'UBER', 'WFC', 'XOM'
+            ]
+        },
+        {
+            "source": "predefined",
+            "id": "high_iv",
+            "name": "High IV Stocks",
+            "symbols": [
+                'MARA', 'RIOT', 'COIN', 'GME', 'AMC', 'RIVN', 'LCID', 'NIO', 'PLUG',
+                'SPCE', 'BBBY', 'HOOD', 'SOFI', 'PLTR', 'SNAP', 'PINS'
+            ]
+        },
+        {
+            "source": "predefined",
+            "id": "blue_chip",
+            "name": "Blue Chip Stocks",
+            "symbols": [
+                'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'NVDA', 'JPM', 'V', 'MA',
+                'JNJ', 'UNH', 'PG', 'HD', 'DIS', 'VZ', 'KO', 'PEP', 'MRK', 'WMT'
+            ]
+        },
+        {
+            "source": "predefined",
+            "id": "under_25",
+            "name": "Under $25 (Low Capital)",
+            "symbols": [
+                'F', 'SOFI', 'PLTR', 'NIO', 'SNAP', 'T', 'CCL', 'AAL', 'PLUG', 'RIOT',
+                'SIRI', 'NOK', 'HOOD', 'GRAB', 'OPEN', 'WISH', 'CLOV', 'BB'
+            ]
+        },
+        {
+            "source": "predefined",
+            "id": "tech_focused",
+            "name": "Tech Focused",
+            "symbols": [
+                'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'NVDA', 'AMD', 'INTC', 'CRM',
+                'ORCL', 'ADBE', 'NOW', 'SHOP', 'SQ', 'PYPL', 'UBER', 'ABNB', 'SNOW'
+            ]
+        }
+    ]
+    watchlists.extend(predefined_watchlists)
 
     # All Stocks from stock_data table (comprehensive database of stocks)
     try:
@@ -764,3 +856,333 @@ async def get_scanner_watchlists():
         "total": len(watchlists),
         "generated_at": datetime.now().isoformat()
     }
+
+
+# =============================================================================
+# AI-POWERED ENDPOINTS
+# =============================================================================
+
+class AIScanRequest(BaseModel):
+    """Request body for AI-powered scanning"""
+    symbols: List[str]
+    max_price: float = 250
+    min_premium_pct: float = 0.5
+    dte: int = 30
+    min_ai_score: int = 0  # Minimum AI score to include (0-100)
+    top_n: Optional[int] = None  # Return only top N results
+    save_to_db: bool = True
+
+
+@router.post("/scan-ai")
+async def scan_with_ai(
+    request: AIScanRequest,
+    background_tasks: BackgroundTasks
+):
+    """
+    AI-Powered Premium Scanner
+
+    Scans for premium opportunities with multi-criteria AI scoring.
+    Each opportunity is scored on:
+    - Fundamental factors (P/E, market cap, sector)
+    - Technical factors (volume, OI, bid-ask spread)
+    - Greeks analysis (delta, IV, premium ratio)
+    - Risk assessment (max loss, probability, breakeven)
+    - Sentiment analysis
+
+    Returns opportunities sorted by AI score with insights.
+    """
+    try:
+        from src.ai_premium_scanner import get_ai_scanner
+
+        scanner = get_ai_scanner()
+        results = scanner.scan_with_ai(
+            symbols=request.symbols,
+            max_price=request.max_price,
+            min_premium_pct=request.min_premium_pct,
+            dte=request.dte,
+            min_ai_score=request.min_ai_score,
+            top_n=request.top_n
+        )
+
+        # Save to database in background if requested
+        if request.save_to_db and results.get('opportunities'):
+            scan_id = f"ai_{str(uuid.uuid4())[:8]}"
+            save_request = ScanRequest(
+                symbols=request.symbols,
+                max_price=request.max_price,
+                min_premium_pct=request.min_premium_pct,
+                dte=request.dte,
+                save_to_db=True
+            )
+            background_tasks.add_task(
+                save_scan_results_to_db,
+                scan_id,
+                save_request,
+                results['opportunities']
+            )
+            results['scan_id'] = scan_id
+            results['saved'] = True
+
+        return results
+
+    except Exception as e:
+        logger.error(f"Error in AI scan: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/scan-ai-stream")
+async def scan_with_ai_stream(request: AIScanRequest):
+    """
+    AI-Powered Premium Scanner with streaming progress.
+    Uses Server-Sent Events to report progress and AI scoring.
+    """
+    async def generate():
+        try:
+            from src.ai_premium_scanner import get_ai_scanner
+
+            scanner = get_ai_scanner()
+            scan_id = f"ai_{str(uuid.uuid4())[:8]}"
+            total_symbols = len(request.symbols)
+
+            # Send start event
+            yield f"data: {json.dumps({'type': 'start', 'scan_id': scan_id, 'total': total_symbols, 'ai_enabled': True})}\n\n"
+
+            all_results = []
+            batch_size = 3  # Smaller batches for AI processing
+
+            for i in range(0, total_symbols, batch_size):
+                batch = request.symbols[i:i + batch_size]
+                completed = min(i + batch_size, total_symbols)
+                progress = round((completed / total_symbols) * 100)
+
+                # Send progress update
+                yield f"data: {json.dumps({'type': 'progress', 'current': completed, 'total': total_symbols, 'percent': progress, 'symbols': batch, 'phase': 'scanning'})}\n\n"
+
+                try:
+                    # Scan batch with AI scoring
+                    batch_results = scanner.scan_with_ai(
+                        symbols=batch,
+                        max_price=request.max_price,
+                        min_premium_pct=request.min_premium_pct,
+                        dte=request.dte,
+                        min_ai_score=request.min_ai_score
+                    )
+
+                    batch_opps = batch_results.get('opportunities', [])
+                    all_results.extend(batch_opps)
+
+                    # Send batch results with AI info
+                    yield f"data: {json.dumps({'type': 'batch', 'count': len(batch_opps), 'total_so_far': len(all_results), 'ai_scored': True})}\n\n"
+
+                except Exception as e:
+                    yield f"data: {json.dumps({'type': 'error', 'batch': batch, 'error': str(e)})}\n\n"
+
+                await asyncio.sleep(0.1)
+
+            # Sort by AI score
+            all_results.sort(key=lambda x: x.get('ai_score', 0), reverse=True)
+
+            # Apply top_n limit
+            if request.top_n and request.top_n > 0:
+                all_results = all_results[:request.top_n]
+
+            # Generate final insights
+            yield f"data: {json.dumps({'type': 'progress', 'phase': 'generating_insights'})}\n\n"
+
+            final_results = scanner.scan_with_ai(
+                symbols=[],  # Empty - we'll use cached results
+                dte=request.dte
+            )
+            final_results['opportunities'] = all_results
+            final_results['total_found'] = len(all_results)
+
+            # Recalculate insights for all results
+            if all_results:
+                final_results['ai_insights'] = scanner._generate_insights(all_results[:10])
+                final_results['stats'] = scanner._calculate_stats(all_results)
+
+            # Save to database
+            if request.save_to_db and all_results:
+                save_request = ScanRequest(
+                    symbols=request.symbols,
+                    max_price=request.max_price,
+                    min_premium_pct=request.min_premium_pct,
+                    dte=request.dte,
+                    save_to_db=True
+                )
+                save_scan_results_to_db(scan_id, save_request, all_results)
+
+            # Send complete event
+            yield f"data: {json.dumps({'type': 'complete', 'scan_id': scan_id, 'count': len(all_results), 'results': all_results, 'stats': final_results.get('stats'), 'ai_insights': final_results.get('ai_insights'), 'saved': request.save_to_db})}\n\n"
+
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Access-Control-Allow-Origin": "*"
+        }
+    )
+
+
+@router.post("/analyze-opportunity")
+async def analyze_opportunity(opportunity: dict):
+    """
+    Get detailed AI analysis for a specific opportunity.
+
+    Provides:
+    - Multi-criteria scoring breakdown
+    - Risk/reward assessment
+    - LLM-generated analysis (if available)
+    - Trade recommendation
+    """
+    try:
+        from src.ai_premium_scanner import get_ai_scanner
+
+        scanner = get_ai_scanner()
+
+        # Score the opportunity
+        scored = scanner.score_opportunity(opportunity)
+
+        # Try to get LLM analysis
+        llm_analysis = None
+        try:
+            import asyncio
+            llm_analysis = await scanner.generate_llm_analysis(scored)
+        except Exception as e:
+            logger.debug(f"LLM analysis not available: {e}")
+
+        return {
+            "opportunity": scored,
+            "scores": {
+                "ai_score": scored.get('ai_score'),
+                "fundamental": scored.get('fundamental_score'),
+                "technical": scored.get('technical_score'),
+                "greeks": scored.get('greeks_score'),
+                "risk": scored.get('risk_score'),
+                "sentiment": scored.get('sentiment_score'),
+            },
+            "recommendation": scored.get('ai_recommendation'),
+            "confidence": scored.get('ai_confidence'),
+            "llm_analysis": llm_analysis,
+            "generated_at": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Error analyzing opportunity: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/ai-insights")
+async def get_ai_insights(
+    symbols: str = Query("AAPL,AMD,TSLA,NVDA,SOFI,PLTR", description="Comma-separated symbols"),
+    dte: int = Query(30, description="Days to expiration"),
+    top_n: int = Query(20, description="Number of top opportunities to analyze")
+):
+    """
+    Get AI-generated insights for specified symbols.
+
+    Returns:
+    - Market conditions analysis
+    - Top opportunity picks
+    - Sector analysis
+    - Risk assessment
+    - Trade recommendations
+    """
+    try:
+        from src.ai_premium_scanner import get_ai_scanner
+
+        scanner = get_ai_scanner()
+        symbol_list = [s.strip().upper() for s in symbols.split(',')]
+
+        results = scanner.scan_with_ai(
+            symbols=symbol_list,
+            max_price=250,
+            min_premium_pct=0.5,
+            dte=dte,
+            top_n=top_n
+        )
+
+        return {
+            "insights": results.get('ai_insights'),
+            "stats": results.get('stats'),
+            "top_opportunities": results.get('opportunities', [])[:5],
+            "symbols_analyzed": len(symbol_list),
+            "total_found": results.get('total_found', 0),
+            "generated_at": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Error generating AI insights: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/recommendation-summary")
+async def get_recommendation_summary():
+    """
+    Get a summary of AI recommendations from recent scans.
+    Groups opportunities by recommendation level.
+    """
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+
+            # Get most recent scan results
+            cursor.execute("""
+                SELECT results
+                FROM premium_scan_history
+                ORDER BY created_at DESC
+                LIMIT 1
+            """)
+            row = cursor.fetchone()
+
+            if not row or not row[0]:
+                return {
+                    "summary": {},
+                    "message": "No scan results available. Run an AI scan first."
+                }
+
+            results = row[0]
+
+            # Group by recommendation
+            summary = {
+                'STRONG_BUY': [],
+                'BUY': [],
+                'HOLD': [],
+                'CAUTION': [],
+                'AVOID': []
+            }
+
+            for opp in results:
+                rec = opp.get('ai_recommendation', 'HOLD')
+                if rec in summary:
+                    summary[rec].append({
+                        'symbol': opp.get('symbol'),
+                        'strike': opp.get('strike'),
+                        'expiration': opp.get('expiration'),
+                        'ai_score': opp.get('ai_score'),
+                        'monthly_return': opp.get('monthly_return'),
+                        'premium': opp.get('premium')
+                    })
+
+            # Sort each group by AI score
+            for rec in summary:
+                summary[rec] = sorted(
+                    summary[rec],
+                    key=lambda x: x.get('ai_score', 0),
+                    reverse=True
+                )[:10]  # Top 10 per category
+
+            return {
+                "summary": summary,
+                "counts": {rec: len(opps) for rec, opps in summary.items()},
+                "generated_at": datetime.now().isoformat()
+            }
+
+    except Exception as e:
+        logger.error(f"Error getting recommendation summary: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

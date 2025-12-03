@@ -30,7 +30,7 @@ class AVAMCPServer:
         
         logger.info("AVA MCP Server initialized")
 
-    def _register_handlers(self):
+    def _register_handlers(self) -> None:
         """Register MCP handlers"""
         self.server.list_tools()(self._list_tools)
         self.server.call_tool()(self._call_tool)
@@ -157,7 +157,7 @@ class AVAMCPServer:
                 text=f"Error: {str(e)}"
             )]
 
-    async def run(self):
+    async def run(self) -> None:
         """Run MCP server"""
         from mcp.server.stdio import stdio_server
         

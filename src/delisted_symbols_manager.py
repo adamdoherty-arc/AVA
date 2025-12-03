@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class DelistedSymbolsManager:
     """Manages delisted symbols in the database"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.db_config = {
             'host': os.getenv('DB_HOST', 'localhost'),
             'port': os.getenv('DB_PORT', '5432'),
@@ -31,7 +31,7 @@ class DelistedSymbolsManager:
         }
         self.conn = None
 
-    def connect(self):
+    def connect(self) -> None:
         """Connect to PostgreSQL database"""
         try:
             self.conn = psycopg2.connect(**self.db_config)
@@ -41,7 +41,7 @@ class DelistedSymbolsManager:
             logger.error(f"Database connection error: {e}")
             return False
 
-    def disconnect(self):
+    def disconnect(self) -> None:
         """Disconnect from database"""
         if self.conn:
             self.conn.close()

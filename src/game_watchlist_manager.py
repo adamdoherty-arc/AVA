@@ -36,7 +36,7 @@ class GameWatchlistManager:
         self.telegram = TelegramNotifier()
         self._create_watchlist_tables()
 
-    def _create_watchlist_tables(self):
+    def _create_watchlist_tables(self) -> None:
         """Create tables to track watched games"""
         conn = None
         cur = None

@@ -170,17 +170,17 @@ export default function DividendTracker() {
                                                         <p className="text-xs text-slate-400">{stock.name}</p>
                                                     </div>
                                                 </td>
-                                                <td className="p-3 text-right font-mono">${stock.price.toFixed(2)}</td>
+                                                <td className="p-3 text-right font-mono">${(stock.price ?? 0).toFixed(2)}</td>
                                                 <td className="p-3 text-right">
                                                     <span className={clsx(
                                                         "font-bold",
-                                                        stock.dividend_yield >= 4 ? "text-emerald-400" :
-                                                        stock.dividend_yield >= 2 ? "text-amber-400" : "text-slate-400"
+                                                        (stock.dividend_yield ?? 0) >= 4 ? "text-emerald-400" :
+                                                        (stock.dividend_yield ?? 0) >= 2 ? "text-amber-400" : "text-slate-400"
                                                     )}>
-                                                        {stock.dividend_yield.toFixed(2)}%
+                                                        {(stock.dividend_yield ?? 0).toFixed(2)}%
                                                     </span>
                                                 </td>
-                                                <td className="p-3 text-right font-mono">${stock.annual_dividend.toFixed(2)}</td>
+                                                <td className="p-3 text-right font-mono">${(stock.annual_dividend ?? 0).toFixed(2)}</td>
                                                 <td className="p-3 text-center text-xs">{stock.ex_date}</td>
                                                 <td className="p-3 text-center">
                                                     <span className="px-2 py-0.5 bg-slate-700 rounded text-xs">
@@ -209,7 +209,7 @@ export default function DividendTracker() {
                                     <div className="flex items-center justify-between mb-2">
                                         <span className="font-medium">{month.month}</span>
                                         <span className="font-mono font-bold text-emerald-400">
-                                            ${month.amount.toFixed(0)}
+                                            ${(month.amount ?? 0).toFixed(0)}
                                         </span>
                                     </div>
                                     <div className="flex flex-wrap gap-1">

@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class OptionsDataFetcher:
     """Fetches options data from multiple sources"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.polygon_key = os.getenv('POLYGON_API_KEY')
         self.tradier_key = os.getenv('TRADIER_API_KEY')  # If you have one
 

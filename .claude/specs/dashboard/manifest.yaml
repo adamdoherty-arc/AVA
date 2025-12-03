@@ -1,0 +1,47 @@
+# Dashboard Feature Manifest
+# SpecAgent: DashboardSpecAgent
+
+name: dashboard
+version: 1.0.0
+description: Main dashboard with portfolio overview and summary cards
+
+tier: 1  # Critical
+priority: 2
+
+dependencies:
+  - positions  # Dashboard displays position summary
+  - premium-scanner  # Shows premium opportunities
+  - robinhood-api
+  - database
+
+endpoints:
+  - /api/dashboard/summary
+  - /api/health
+
+frontend_routes:
+  - /
+
+key_components:
+  - PortfolioValueCard
+  - BuyingPowerCard
+  - DayChangeCard
+  - AllocationChart
+  - NavigationMenu
+
+data_sources:
+  - portfolio_summary
+  - allocation_breakdown
+  - day_change_metrics
+
+validation_focus:
+  - Portfolio value accuracy
+  - Day change calculations
+  - Allocation percentages sum to 100%
+  - Consistency with positions total
+  - Data freshness
+
+owners:
+  - team: trading
+  - critical: true
+
+last_updated: 2025-11-26

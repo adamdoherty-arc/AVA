@@ -335,7 +335,7 @@ class EmbeddingsManager:
         except Exception as e:
             logger.warning(f"Error saving to cache: {e}")
 
-    def clear_cache(self):
+    def clear_cache(self) -> None:
         """Clear the embedding cache"""
         if not self.enable_cache:
             logger.warning("Cache is not enabled")

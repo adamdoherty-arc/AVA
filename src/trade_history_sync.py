@@ -13,7 +13,7 @@ import robin_stocks.robinhood as rh
 load_dotenv()
 
 class TradeHistorySyncService:
-    def __init__(self):
+    def __init__(self) -> None:
         self.db_params = {
             'dbname': os.getenv('DB_NAME'),
             'user': os.getenv('DB_USER'),
@@ -22,7 +22,7 @@ class TradeHistorySyncService:
             'port': os.getenv('DB_PORT', '5432')
         }
 
-    def get_db_connection(self):
+    def get_db_connection(self) -> None:
         """Create database connection"""
         return psycopg2.connect(**self.db_params)
 
@@ -228,7 +228,7 @@ class TradeHistorySyncService:
             cursor.close()
             conn.close()
 
-    def get_last_sync_time(self):
+    def get_last_sync_time(self) -> None:
         """Check when trades were last synced"""
         conn = self.get_db_connection()
         cursor = conn.cursor()

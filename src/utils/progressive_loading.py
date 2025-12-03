@@ -62,7 +62,7 @@ class ProgressiveLoader:
     """
     Class-based progressive loader with better control
     """
-    def __init__(self):
+    def __init__(self) -> None:
         self.sections = []
         self.results = {}
 
@@ -71,7 +71,7 @@ class ProgressiveLoader:
         self.sections.append((name, loader, critical))
         return self
 
-    def load_all(self):
+    def load_all(self) -> None:
         """Load all sections progressively"""
         load_progressively(self.sections)
         return self.results

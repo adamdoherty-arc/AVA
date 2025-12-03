@@ -40,7 +40,7 @@ class OptionsAgent:
     - Greeks calculation using mibian
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the Options Agent."""
         self.risk_free_rate = 0.05  # 5% annual risk-free rate (adjust as needed)
         logger.info("OptionsAgent initialized")

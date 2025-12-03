@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 class DiscordMessageSync:
     """Sync Discord messages using DiscordChatExporter"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.token = os.getenv('DISCORD_USER_TOKEN')
         self.exporter_path = os.getenv('DISCORD_EXPORTER_PATH', 'DiscordChatExporter.Cli.exe')
         self.export_dir = Path('data/discord_exports')
@@ -31,7 +31,7 @@ class DiscordMessageSync:
         self.db_user = os.getenv('DB_USER', 'postgres')
         self.db_password = os.getenv('DB_PASSWORD', '')
 
-    def get_connection(self):
+    def get_connection(self) -> None:
         """Get database connection"""
         return psycopg2.connect(
             host=self.db_host,

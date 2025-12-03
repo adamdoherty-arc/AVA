@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 @shared_task(name='src.services.tasks.sync_kalshi_markets', bind=True, max_retries=3)
-def sync_kalshi_markets(self):
+def sync_kalshi_markets(self) -> None:
     """
     Sync Kalshi prediction markets
 
@@ -49,7 +49,7 @@ def sync_kalshi_markets(self):
 
 
 @shared_task(name='src.services.tasks.update_stock_prices', bind=True)
-def update_stock_prices(self):
+def update_stock_prices(self) -> None:
     """
     Update stock prices for watchlist
 
@@ -70,7 +70,7 @@ def update_stock_prices(self):
 
 
 @shared_task(name='src.services.tasks.sync_discord_messages', bind=True)
-def sync_discord_messages(self):
+def sync_discord_messages(self) -> None:
     """
     Sync Discord messages with premium alert prioritization
 
@@ -106,7 +106,7 @@ def sync_discord_messages(self):
 
 
 @shared_task(name='src.services.tasks.update_earnings_calendar', bind=True)
-def update_earnings_calendar(self):
+def update_earnings_calendar(self) -> None:
     """
     Update earnings calendar for next 30 days
 
@@ -132,7 +132,7 @@ def update_earnings_calendar(self):
 # ============================================================================
 
 @shared_task(name='src.services.tasks.generate_predictions', bind=True)
-def generate_predictions(self):
+def generate_predictions(self) -> None:
     """
     Generate AI predictions for upcoming games
 
@@ -179,7 +179,7 @@ def generate_predictions(self):
 # ============================================================================
 
 @shared_task(name='src.services.tasks.send_alerts', bind=True)
-def send_alerts(self):
+def send_alerts(self) -> None:
     """
     Send scheduled alerts (high-confidence predictions, opportunities)
 
@@ -298,7 +298,7 @@ def cleanup_old_data(self, days_to_keep: int = 90):
 
 
 @shared_task(name='src.services.tasks.warm_caches', bind=True)
-def warm_caches(self):
+def warm_caches(self) -> None:
     """
     Warm frequently accessed caches
 
@@ -334,7 +334,7 @@ def warm_caches(self):
 
 
 @shared_task(name='src.services.tasks.optimize_database', bind=True)
-def optimize_database(self):
+def optimize_database(self) -> None:
     """
     Run database optimization (VACUUM ANALYZE)
 
@@ -419,7 +419,7 @@ def generate_daily_report():
 # ============================================================================
 
 @shared_task(name='src.services.tasks.sync_xtrades_to_rag', bind=True)
-def sync_xtrades_to_rag(self):
+def sync_xtrades_to_rag(self) -> None:
     """
     Sync XTrades messages to RAG knowledge base
 
@@ -448,7 +448,7 @@ def sync_xtrades_to_rag(self):
 
 
 @shared_task(name='src.services.tasks.sync_discord_to_rag', bind=True)
-def sync_discord_to_rag(self):
+def sync_discord_to_rag(self) -> None:
     """
     Sync Discord messages to RAG knowledge base
 

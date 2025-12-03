@@ -226,7 +226,7 @@ class XtradesMonitoringService:
             cycle_results['errors'].append(f"Critical error: {str(e)}")
             return cycle_results
 
-    def run_continuous(self):
+    def run_continuous(self) -> None:
         """
         Run monitoring service continuously.
 
@@ -308,7 +308,7 @@ class XtradesMonitoringService:
             logger.error(f"Error scraping profile {profile_username}: {e}")
             return []
 
-    def _print_cumulative_stats(self):
+    def _print_cumulative_stats(self) -> None:
         """Print cumulative statistics"""
         uptime = (datetime.now() - self.stats['started_at']).total_seconds()
         uptime_hours = uptime / 3600
@@ -323,7 +323,7 @@ class XtradesMonitoringService:
         logger.info(f"   Notifications sent: {self.stats['notifications_sent']}")
         logger.info(f"")
 
-    def _print_final_stats(self):
+    def _print_final_stats(self) -> None:
         """Print final statistics on shutdown"""
         logger.info(f"\n{'='*80}")
         logger.info(f"📊 Final Statistics")

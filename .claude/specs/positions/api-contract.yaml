@@ -1,0 +1,155 @@
+# Positions API Contract
+# Defines expected API endpoints and responses
+
+endpoints:
+  - path: /api/portfolio/positions
+    method: GET
+    description: Get all portfolio positions
+    response:
+      status: 200
+      content_type: application/json
+      schema:
+        type: object
+        required:
+          - summary
+          - stocks
+          - options
+        properties:
+          summary:
+            type: object
+            required:
+              - total_equity
+              - buying_power
+              - total_positions
+            properties:
+              total_equity:
+                type: number
+                description: Total portfolio equity value
+              buying_power:
+                type: number
+                description: Available buying power
+              total_positions:
+                type: integer
+                description: Number of open positions
+          stocks:
+            type: array
+            items:
+              type: object
+              required:
+                - symbol
+                - quantity
+                - avg_buy_price
+                - current_price
+                - pl
+              properties:
+                symbol:
+                  type: string
+                quantity:
+                  type: number
+                avg_buy_price:
+                  type: number
+                current_price:
+                  type: number
+                cost_basis:
+                  type: number
+                current_value:
+                  type: number
+                pl:
+                  type: number
+                  description: Profit/Loss in dollars
+                pl_pct:
+                  type: number
+                  description: Profit/Loss percentage
+          options:
+            type: array
+            items:
+              type: object
+              required:
+                - symbol
+                - option_type
+                - strike
+                - expiration
+                - quantity
+              properties:
+                symbol:
+                  type: string
+                strategy:
+                  type: string
+                option_type:
+                  type: string
+                  enum: [call, put]
+                strike:
+                  type: number
+                expiration:
+                  type: string
+                  format: date
+                quantity:
+                  type: integer
+                avg_price:
+                  type: number
+                current_price:
+                  type: number
+                dte:
+                  type: integer
+                  description: Days to expiration
+                greeks:
+                  type: object
+                  properties:
+                    delta:
+                      type: number
+                    gamma:
+                      type: number
+                    theta:
+                      type: number
+                    vega:
+                      type: number
+                pl:
+                  type: number
+                pl_pct:
+                  type: number
+
+  - path: /api/portfolio/summary
+    method: GET
+    description: Get portfolio summary
+    response:
+      status: 200
+      schema:
+        type: object
+        required:
+          - total_value
+          - buying_power
+        properties:
+          total_value:
+            type: number
+          buying_power:
+            type: number
+          day_change:
+            type: number
+          day_change_pct:
+            type: number
+          positions_count:
+            type: integer
+          last_updated:
+            type: string
+            format: datetime
+
+  - path: /api/portfolio/sync
+    method: POST
+    description: Sync portfolio from Robinhood
+    response:
+      status: 200
+      schema:
+        type: object
+        properties:
+          success:
+            type: boolean
+          message:
+            type: string
+          positions_synced:
+            type: integer
+
+error_responses:
+  401:
+    description: Not authenticated with Robinhood
+  503:
+    description: Robinhood API unavailable

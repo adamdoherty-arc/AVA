@@ -441,13 +441,13 @@ class BatchAPIManager:
             )
         }
 
-    def clear_cache(self):
+    def clear_cache(self) -> None:
         """Clear the request cache."""
         with self.lock:
             self.request_cache.clear()
             logger.info("Request cache cleared")
 
-    def shutdown(self):
+    def shutdown(self) -> None:
         """Shutdown the executor."""
         self.executor.shutdown(wait=True)
 

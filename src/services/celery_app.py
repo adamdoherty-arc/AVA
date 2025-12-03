@@ -146,7 +146,7 @@ app.autodiscover_tasks([
 
 # Task decorator shortcuts
 @app.task(bind=True, name='test_celery')
-def test_celery(self):
+def test_celery(self) -> None:
     """Test task to verify Celery is working"""
     return f"Celery is working! Task ID: {self.request.id}"
 

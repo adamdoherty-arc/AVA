@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 class EmailGameReportService:
     """Service for generating and emailing game reports"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.db = KalshiDBManager()
         self.ai_agent = AdvancedBettingAIAgent()
         self.espn_nfl = get_espn_client()

@@ -1,0 +1,98 @@
+# Options Analysis Validation Rules
+
+calculations:
+  delta:
+    call_range: [0, 1]
+    put_range: [-1, 0]
+    atm_expected: 0.5  # ATM options have ~0.5 delta
+    tolerance: 0.05
+
+  gamma:
+    range: [0, null]
+    highest_at: "ATM"
+    note: "Gamma highest for ATM options"
+
+  theta:
+    expected_sign: negative
+    accelerates_near: "expiration"
+    tolerance: 0.10
+
+  vega:
+    range: [0, null]
+    highest_at: "ATM"
+    decreases_near: "expiration"
+
+  iv:
+    range: [0, 500]
+    typical_range: [15, 100]
+    note: "Expressed as percentage"
+
+  iv_rank:
+    range: [0, 100]
+    description: "Current IV relative to 52-week range"
+
+greeks_sum_validation:
+  - name: "Portfolio delta"
+    rule: "sum(position.delta * quantity) = net_delta"
+
+  - name: "Portfolio theta"
+    rule: "sum(position.theta * quantity * 100) = daily_decay"
+
+consistency_checks:
+  - name: "Put-call parity"
+    rule: "Call - Put = Stock - Strike * e^(-rT)"
+    tolerance: 0.05
+    note: "For same strike and expiration"
+
+  - name: "Delta-gamma relationship"
+    rule: "As stock moves, delta changes by gamma"
+
+  - name: "Theta increases near expiration"
+    rule: "DTE < 7: theta magnitude increases"
+
+scenario_validation:
+  - name: "Break-even calculation"
+    rule: "For puts: strike - premium = break_even"
+    rule_call: "For calls: strike + premium = break_even"
+
+  - name: "Max loss bounded"
+    rule: "For long options: max_loss <= premium_paid"
+
+  - name: "Max profit"
+    rule: "For short puts: max_profit = premium_received"
+
+data_freshness:
+  options_chain:
+    max_stale_minutes: 5
+    during_market_hours: true
+  greeks:
+    max_stale_minutes: 5
+  iv:
+    max_stale_minutes: 15
+
+null_checks:
+  never_null:
+    - symbol
+    - strike
+    - expiration
+    - bid
+    - ask
+  warn_if_null:
+    - delta
+    - gamma
+    - theta
+    - vega
+    - iv
+
+edge_cases:
+  - name: "Deep ITM options"
+    rule: "Delta approaches 1 (calls) or -1 (puts)"
+
+  - name: "Deep OTM options"
+    rule: "Delta approaches 0"
+
+  - name: "Expiration day"
+    rule: "Greeks become extreme, handle gracefully"
+
+  - name: "Zero liquidity"
+    rule: "Flag options with no bid"

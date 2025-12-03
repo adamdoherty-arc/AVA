@@ -20,7 +20,7 @@ class SelfHealer:
     - Retries with different strategies
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.fix_patterns = self._load_fix_patterns()
         self.max_retries = 3
         logger.info("Self-healer initialized")

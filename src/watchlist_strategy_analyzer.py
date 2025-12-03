@@ -59,7 +59,7 @@ class StrategyAnalysis:
 class WatchlistStrategyAnalyzer:
     """Analyze all stocks in watchlist for best trading strategies"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize analyzer with required services"""
         self.tv_sync = TradingViewAPISync()
         self.csp_finder = CSPOpportunitiesFinder()
