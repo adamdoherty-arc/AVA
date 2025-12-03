@@ -1,23 +1,15 @@
 import { useState } from 'react'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { axiosInstance } from '../lib/axios'
 import {
     LineChart, RefreshCw, Search, TrendingUp, TrendingDown,
-    Activity, BarChart3, Target, Zap, ArrowUpRight, ArrowDownRight,
-    AlertCircle, Loader2, ChevronDown, Filter
+    Activity, BarChart3, Zap, ArrowUpRight, ArrowDownRight,
+    Loader2
 } from 'lucide-react'
 import {
     ResponsiveContainer, ComposedChart, Line, Bar, XAxis, YAxis,
     CartesianGrid, Tooltip, Legend, ReferenceLine
 } from 'recharts'
-
-const INDICATOR_CATEGORIES = [
-    { id: 'momentum', name: 'Momentum', indicators: ['RSI', 'MACD', 'Stochastic'] },
-    { id: 'volatility', name: 'Volatility', indicators: ['Bollinger Bands', 'ATR', 'IV Rank'] },
-    { id: 'volume', name: 'Volume', indicators: ['OBV', 'VWAP', 'Volume Profile'] },
-    { id: 'trend', name: 'Trend', indicators: ['EMA', 'SMA', 'ADX', 'Ichimoku'] },
-    { id: 'options', name: 'Options', indicators: ['IVR', 'Expected Move', 'Put/Call Ratio'] }
-]
 
 const TIMEFRAMES = ['1D', '1W', '1M', '3M', '6M', '1Y']
 
@@ -49,7 +41,6 @@ export default function TechnicalIndicators() {
     const [symbol, setSymbol] = useState('AAPL')
     const [searchInput, setSearchInput] = useState('AAPL')
     const [timeframe, setTimeframe] = useState('1M')
-    const [selectedCategory, setSelectedCategory] = useState('all')
 
     const { data: technicals, isLoading, refetch } = useQuery<TechnicalData>({
         queryKey: ['technicals', symbol, timeframe],

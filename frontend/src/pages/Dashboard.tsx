@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import { useDashboardSummary, usePositions, useLiveGames, useUpcomingGames, usePerformanceHistory } from '../hooks/useMagnusApi'
 import { AlertCircle, TrendingUp, TrendingDown, DollarSign, Briefcase, Activity, RefreshCw, Zap, ArrowUpRight, ArrowDownRight, Clock, Target } from 'lucide-react'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
@@ -131,8 +131,8 @@ export function Dashboard() {
                             ))}
                         </div>
                     </div>
-                    <div className="h-72 min-h-[288px] w-full">
-                        <ResponsiveContainer width="100%" height="100%" minWidth={0} debounce={1}>
+                    <div className="h-72 w-full" style={{ minHeight: 288, minWidth: 200 }}>
+                        <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={chartData}>
                                 <defs>
                                     <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
@@ -183,8 +183,8 @@ export function Dashboard() {
                         <h3 className="text-lg font-semibold text-white">Allocation</h3>
                         <p className="text-sm text-slate-400">Portfolio breakdown</p>
                     </div>
-                    <div className="h-52 min-h-[208px] w-full">
-                        <ResponsiveContainer width="100%" height="100%" minWidth={0} debounce={1}>
+                    <div className="h-52 w-full" style={{ minHeight: 208, minWidth: 200 }}>
+                        <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
                                 <Pie
                                     data={allocationData}
@@ -400,7 +400,7 @@ interface StatCardProps {
     iconBg: string
 }
 
-function StatCard({ title, value, change, subtitle, icon: Icon, iconColor, iconBg }: StatCardProps) {
+const StatCard = memo(function StatCard({ title, value, change, subtitle, icon: Icon, iconColor, iconBg }: StatCardProps) {
     return (
         <div className="stat-card group">
             <div className="flex items-start justify-between">
@@ -423,31 +423,31 @@ function StatCard({ title, value, change, subtitle, icon: Icon, iconColor, iconB
             </div>
         </div>
     )
-}
+})
 
-// Quick Action Component
+// Quick Action Component - colorMap moved outside for performance
+const QUICK_ACTION_COLORS = {
+    emerald: 'from-emerald-500/10 to-emerald-500/5 border-emerald-500/20 hover:border-emerald-500/40 text-emerald-400',
+    blue: 'from-blue-500/10 to-blue-500/5 border-blue-500/20 hover:border-blue-500/40 text-blue-400',
+    purple: 'from-purple-500/10 to-purple-500/5 border-purple-500/20 hover:border-purple-500/40 text-purple-400',
+    amber: 'from-amber-500/10 to-amber-500/5 border-amber-500/20 hover:border-amber-500/40 text-amber-400',
+} as const
+
 interface QuickActionProps {
     to: string
     icon: React.ComponentType<{ className?: string }>
     label: string
-    color: 'emerald' | 'blue' | 'purple' | 'amber'
+    color: keyof typeof QUICK_ACTION_COLORS
 }
 
-function QuickAction({ to, icon: Icon, label, color }: QuickActionProps) {
-    const colorMap = {
-        emerald: 'from-emerald-500/10 to-emerald-500/5 border-emerald-500/20 hover:border-emerald-500/40 text-emerald-400',
-        blue: 'from-blue-500/10 to-blue-500/5 border-blue-500/20 hover:border-blue-500/40 text-blue-400',
-        purple: 'from-purple-500/10 to-purple-500/5 border-purple-500/20 hover:border-purple-500/40 text-purple-400',
-        amber: 'from-amber-500/10 to-amber-500/5 border-amber-500/20 hover:border-amber-500/40 text-amber-400',
-    }
-
+const QuickAction = memo(function QuickAction({ to, icon: Icon, label, color }: QuickActionProps) {
     return (
         <Link
             to={to}
-            className={`flex items-center gap-3 p-4 rounded-xl bg-gradient-to-br border transition-all duration-200 hover:scale-[1.02] ${colorMap[color]}`}
+            className={`flex items-center gap-3 p-4 rounded-xl bg-gradient-to-br border transition-all duration-200 hover:scale-[1.02] ${QUICK_ACTION_COLORS[color]}`}
         >
             <Icon className="w-5 h-5" />
             <span className="font-medium text-sm text-white">{label}</span>
         </Link>
     )
-}
+})

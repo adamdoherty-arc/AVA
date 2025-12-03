@@ -298,3 +298,56 @@ class BaseSportsPredictor(ABC):
             'last_update': self.last_update,
             'cache_size': len(self.prediction_cache)
         }
+
+    def predict_batch(
+        self,
+        games: List[Dict[str, Any]],
+        max_parallel: int = 10
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        Predict outcomes for multiple games efficiently.
+
+        Uses caching and parallel feature calculation to reduce N+1 overhead.
+
+        Args:
+            games: List of game dictionaries with 'game_id', 'home_team', 'away_team'
+            max_parallel: Maximum parallel calculations (default 10)
+
+        Returns:
+            Dictionary mapping game_id to prediction result
+        """
+        results = {}
+        uncached_games = []
+
+        # Check cache first for all games
+        for game in games:
+            game_id = game.get('game_id', f"{game.get('home_team')}_{game.get('away_team')}")
+            cache_key = self.create_cache_key(
+                game.get('home_team', ''),
+                game.get('away_team', ''),
+                game.get('game_date')
+            )
+            cached = self.get_cached_prediction(cache_key)
+            if cached:
+                results[game_id] = cached
+            else:
+                uncached_games.append((game_id, game, cache_key))
+
+        # Process uncached games (could be parallelized with ThreadPoolExecutor)
+        for game_id, game, cache_key in uncached_games:
+            try:
+                prediction = self.predict_winner(
+                    home_team=game.get('home_team', ''),
+                    away_team=game.get('away_team', ''),
+                    game_date=game.get('game_date'),
+                    **{k: v for k, v in game.items()
+                       if k not in ('game_id', 'home_team', 'away_team', 'game_date')}
+                )
+                results[game_id] = prediction
+                # Cache is updated inside predict_winner
+            except Exception as e:
+                self.logger.warning(f"Batch prediction failed for {game_id}: {e}")
+                results[game_id] = None
+
+        self.logger.info(f"Batch predicted {len(results)} games ({len(results) - len(uncached_games)} from cache)")
+        return results

@@ -88,8 +88,8 @@ export function Chat() {
                 <div className="px-6 py-4 border-b border-slate-800/50 bg-slate-900/30">
                     <div className="flex items-center gap-4">
                         <div className="relative">
-                            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg shadow-primary/20">
-                                <Brain className="w-6 h-6 text-white" />
+                            <div className="w-12 h-12 rounded-xl overflow-hidden shadow-lg shadow-primary/20 ring-2 ring-primary/30">
+                                <img src="/ava/NancyFace.jpg" alt="AVA" className="w-full h-full object-cover" />
                             </div>
                             <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-slate-900" />
                         </div>
@@ -111,8 +111,8 @@ export function Chat() {
                             msg.role === 'user' ? "justify-end" : "justify-start"
                         )}>
                             {msg.role === 'assistant' && (
-                                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center flex-shrink-0 shadow-lg">
-                                    <Bot className="w-5 h-5 text-white" />
+                                <div className="w-9 h-9 rounded-xl overflow-hidden flex-shrink-0 shadow-lg ring-2 ring-primary/30">
+                                    <img src="/ava/NancyFace.jpg" alt="AVA" className="w-full h-full object-cover" />
                                 </div>
                             )}
 
@@ -172,8 +172,8 @@ export function Chat() {
 
                     {loading && (
                         <div className="flex gap-4 justify-start">
-                            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center flex-shrink-0 shadow-lg">
-                                <Bot className="w-5 h-5 text-white" />
+                            <div className="w-9 h-9 rounded-xl overflow-hidden flex-shrink-0 shadow-lg ring-2 ring-primary/30">
+                                <img src="/ava/NancyFace.jpg" alt="AVA" className="w-full h-full object-cover" />
                             </div>
                             <div className="bg-slate-800/60 p-4 rounded-2xl rounded-bl-md border border-slate-700/50 flex items-center gap-3">
                                 <div className="flex gap-1">
@@ -218,8 +218,8 @@ export function Chat() {
                 <div className="glass-card p-6 text-center">
                     <div className="relative w-24 h-24 mx-auto mb-4">
                         <div className="w-full h-full rounded-2xl bg-gradient-to-br from-primary to-secondary p-0.5 shadow-xl shadow-primary/20">
-                            <div className="w-full h-full rounded-2xl bg-slate-900 flex items-center justify-center">
-                                <Brain className="w-10 h-10 text-primary" />
+                            <div className="w-full h-full rounded-2xl overflow-hidden">
+                                <img src="/ava/NancyFace.jpg" alt="AVA" className="w-full h-full object-cover" />
                             </div>
                         </div>
                         <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-emerald-500 rounded-full border-4 border-slate-900 flex items-center justify-center">

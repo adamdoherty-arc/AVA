@@ -102,7 +102,7 @@ export default function AgentManagement() {
 
     const totalAgents = agents?.length || 0
     const activeAgents = agents?.filter(a => a.status === 'active').length || 0
-    const avgSuccessRate = agents?.reduce((acc, a) => acc + a.success_rate, 0) / (totalAgents || 1)
+    const avgSuccessRate = (agents?.reduce((acc, a) => acc + a.success_rate, 0) ?? 0) / (totalAgents || 1)
 
     return (
         <div className="space-y-6">

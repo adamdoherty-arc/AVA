@@ -7,15 +7,70 @@ Public endpoints available:
 - GET /markets/{ticker} - Specific market details
 - GET /markets/{ticker}/orderbook - Current orderbook
 - GET /series - Series information
+
+Performance: Circuit breaker pattern for resilience
 """
 
 import requests
 import logging
 import time
 from typing import List, Dict, Optional
+from enum import Enum
+from dataclasses import dataclass, field
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+class CircuitState(Enum):
+    """Circuit breaker states"""
+    CLOSED = "closed"      # Normal operation
+    OPEN = "open"          # Blocking requests
+    HALF_OPEN = "half_open"  # Testing recovery
+
+
+@dataclass
+class CircuitBreaker:
+    """
+    Circuit breaker pattern for API resilience.
+    Prevents cascading failures by temporarily blocking requests to a failing service.
+    """
+    failure_threshold: int = 5
+    recovery_timeout: float = 60.0
+    _failure_count: int = field(default=0, init=False, repr=False)
+    _last_failure_time: Optional[float] = field(default=None, init=False, repr=False)
+    _state: CircuitState = field(default=CircuitState.CLOSED, init=False, repr=False)
+
+    def record_success(self) -> None:
+        """Record a successful request - reset circuit"""
+        self._failure_count = 0
+        self._state = CircuitState.CLOSED
+
+    def record_failure(self) -> None:
+        """Record a failed request - may trip circuit"""
+        self._failure_count += 1
+        self._last_failure_time = time.time()
+        if self._failure_count >= self.failure_threshold:
+            self._state = CircuitState.OPEN
+            logger.warning(f"Kalshi circuit breaker OPEN after {self._failure_count} failures")
+
+    def can_execute(self) -> bool:
+        """Check if request can proceed"""
+        if self._state == CircuitState.CLOSED:
+            return True
+        if self._state == CircuitState.OPEN:
+            if self._last_failure_time:
+                elapsed = time.time() - self._last_failure_time
+                if elapsed >= self.recovery_timeout:
+                    self._state = CircuitState.HALF_OPEN
+                    logger.info("Kalshi circuit breaker HALF_OPEN - testing recovery")
+                    return True
+            return False
+        return True  # HALF_OPEN allows one test request
+
+    @property
+    def state(self) -> CircuitState:
+        return self._state
 
 
 class KalshiPublicClient:
@@ -24,20 +79,52 @@ class KalshiPublicClient:
 
     No credentials, API keys, or login required!
     Perfect for reading market data, prices, and orderbooks.
+
+    Features:
+    - Circuit breaker for resilience (trips after 5 failures, 60s recovery)
+    - Automatic retry on transient failures
     """
 
     # Public API base URL
     BASE_URL = "https://api.elections.kalshi.com/trade-api/v2"
 
-    def __init__(self):
-        """Initialize public client - no credentials needed!"""
-        logger.info("Initialized Kalshi Public Client (no auth required)")
+    def __init__(self, failure_threshold: int = 5, recovery_timeout: float = 60.0):
+        """Initialize public client with circuit breaker - no credentials needed!"""
+        self._circuit_breaker = CircuitBreaker(
+            failure_threshold=failure_threshold,
+            recovery_timeout=recovery_timeout
+        )
+        logger.info("Initialized Kalshi Public Client with circuit breaker (no auth required)")
+
+    def _make_request(self, method: str, url: str, **kwargs) -> Optional[requests.Response]:
+        """Make HTTP request with circuit breaker protection"""
+        if not self._circuit_breaker.can_execute():
+            logger.warning(f"Kalshi circuit breaker OPEN - request blocked: {url}")
+            return None
+
+        try:
+            kwargs.setdefault('timeout', 30)
+            kwargs.setdefault('headers', {'accept': 'application/json'})
+            response = requests.request(method, url, **kwargs)
+            response.raise_for_status()
+            self._circuit_breaker.record_success()
+            return response
+        except requests.exceptions.RequestException as e:
+            self._circuit_breaker.record_failure()
+            logger.error(f"Kalshi API error ({self._circuit_breaker.state.value}): {e}")
+            raise
+
+    @property
+    def circuit_state(self) -> str:
+        """Get current circuit breaker state"""
+        return self._circuit_breaker.state.value
 
     def get_all_markets(self, status: str = "open", limit: int = 1000,
                         event_ticker: Optional[str] = None,
                         series_ticker: Optional[str] = None) -> List[Dict]:
         """
         Get all markets from Kalshi (PUBLIC - no auth required)
+        Protected by circuit breaker pattern.
 
         Args:
             status: Market status filter ('open', 'closed', 'settled', 'all')
@@ -54,10 +141,7 @@ class KalshiPublicClient:
         try:
             while True:
                 url = f"{self.BASE_URL}/markets"
-                params = {
-                    "limit": limit,
-                    "status": status
-                }
+                params = {"limit": limit, "status": status}
 
                 if event_ticker:
                     params['event_ticker'] = event_ticker
@@ -66,35 +150,31 @@ class KalshiPublicClient:
                 if cursor:
                     params['cursor'] = cursor
 
-                headers = {
-                    "accept": "application/json"
-                }
-
-                response = requests.get(url, headers=headers, params=params, timeout=30)
-                response.raise_for_status()
+                response = self._make_request('GET', url, params=params)
+                if response is None:
+                    return all_markets  # Circuit open - return what we have
 
                 data = response.json()
                 markets = data.get('markets', [])
                 all_markets.extend(markets)
 
-                # Check for next page
                 cursor = data.get('cursor')
                 if not cursor:
                     break
 
-                # Small delay to avoid rate limits
-                time.sleep(0.3)
+                time.sleep(0.3)  # Rate limit protection
 
             logger.info(f"Retrieved {len(all_markets)} markets from Kalshi (public API)")
             return all_markets
 
         except requests.exceptions.RequestException as e:
             logger.error(f"Error fetching public markets: {e}")
-            return []
+            return all_markets
 
     def get_market(self, market_ticker: str) -> Optional[Dict]:
         """
         Get detailed information for a specific market (PUBLIC)
+        Protected by circuit breaker pattern.
 
         Args:
             market_ticker: Market ticker symbol (e.g., 'KXNFL-CHIEFS-WIN')
@@ -104,19 +184,12 @@ class KalshiPublicClient:
         """
         try:
             url = f"{self.BASE_URL}/markets/{market_ticker}"
-            headers = {
-                "accept": "application/json"
-            }
-
-            response = requests.get(url, headers=headers, timeout=30)
-            response.raise_for_status()
+            response = self._make_request('GET', url)
+            if response is None:
+                return None  # Circuit open
 
             market_data = response.json()
-
-            # Extract market from response if nested
-            if 'market' in market_data:
-                return market_data['market']
-            return market_data
+            return market_data.get('market', market_data)
 
         except requests.exceptions.RequestException as e:
             logger.error(f"Error fetching market {market_ticker}: {e}")
@@ -125,6 +198,7 @@ class KalshiPublicClient:
     def get_market_orderbook(self, market_ticker: str) -> Optional[Dict]:
         """
         Get current orderbook (bids/asks) for a market (PUBLIC)
+        Protected by circuit breaker pattern.
 
         Args:
             market_ticker: Market ticker symbol
@@ -134,12 +208,9 @@ class KalshiPublicClient:
         """
         try:
             url = f"{self.BASE_URL}/markets/{market_ticker}/orderbook"
-            headers = {
-                "accept": "application/json"
-            }
-
-            response = requests.get(url, headers=headers, timeout=30)
-            response.raise_for_status()
+            response = self._make_request('GET', url)
+            if response is None:
+                return None  # Circuit open
 
             return response.json()
 
@@ -150,6 +221,7 @@ class KalshiPublicClient:
     def get_series(self, series_ticker: Optional[str] = None) -> List[Dict]:
         """
         Get series information (PUBLIC)
+        Protected by circuit breaker pattern.
 
         Args:
             series_ticker: Optional specific series to fetch
@@ -159,16 +231,11 @@ class KalshiPublicClient:
         """
         try:
             url = f"{self.BASE_URL}/series"
-            params = {}
-            if series_ticker:
-                params['series_ticker'] = series_ticker
+            params = {'series_ticker': series_ticker} if series_ticker else {}
 
-            headers = {
-                "accept": "application/json"
-            }
-
-            response = requests.get(url, headers=headers, params=params, timeout=30)
-            response.raise_for_status()
+            response = self._make_request('GET', url, params=params)
+            if response is None:
+                return []  # Circuit open
 
             data = response.json()
             return data.get('series', [])

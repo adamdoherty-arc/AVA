@@ -16,6 +16,7 @@ const navSections = [
         items: [
             { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
             { to: '/positions', icon: Wallet, label: 'Positions' },
+            { to: '/stocks-hub', icon: Brain, label: 'Stocks Hub', highlight: true },
             { to: '/scanner', icon: Search, label: 'Premium Scanner' },
             { to: '/earnings', icon: Calendar, label: 'Earnings Calendar' },
             { to: '/xtrades', icon: Smartphone, label: 'XTrades Watchlists' },
@@ -99,6 +100,7 @@ const navSections = [
             { to: '/enhancements', icon: Sparkles, label: 'Enhancements' },
             { to: '/enhancements/agent', icon: Bot, label: 'Enhancement Agent' },
             { to: '/enhancements/qa', icon: TestTube, label: 'QA Testing' },
+            { to: '/automations', icon: Cpu, label: 'Automations' },
         ]
     },
     {
@@ -134,8 +136,8 @@ export function Sidebar() {
                     !isOpen && "opacity-0"
                 )}>
                     <div className="relative">
-                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg shadow-primary/20">
-                            <Sparkles className="w-5 h-5 text-white" />
+                        <div className="w-9 h-9 rounded-xl overflow-hidden shadow-lg shadow-primary/20 ring-2 ring-primary/30">
+                            <img src="/ava/NancyFace.jpg" alt="AVA" className="w-full h-full object-cover" />
                         </div>
                         <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-slate-900" />
                     </div>

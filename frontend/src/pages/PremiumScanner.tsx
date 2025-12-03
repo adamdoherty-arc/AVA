@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
+import { useState, useMemo, useCallback, useRef, useEffect, memo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { axiosInstance } from '../lib/axios'
 import {
@@ -135,15 +135,26 @@ export default function PremiumScanner() {
     // Resizing refs
     const resizingRef = useRef<{ column: string; startX: number; startWidth: number } | null>(null)
     const eventSourceRef = useRef<EventSource | null>(null)
+    const abortControllerRef = useRef<AbortController | null>(null)
 
-    // Fetch watchlists
+    // Fetch watchlists - uses prefetched data from react-query.ts
+    // Data is loaded from localStorage on app start, so this is usually instant
     const { data: watchlistsData, isLoading: watchlistsLoading } = useQuery<WatchlistsResponse>({
         queryKey: ['scanner-watchlists'],
         queryFn: async () => {
             const { data } = await axiosInstance.get('/scanner/watchlists')
             return data
         },
-        staleTime: 60000,
+        staleTime: 1000 * 60 * 30,  // 30 minutes - watchlists rarely change
+        gcTime: 1000 * 60 * 60,     // Keep in cache for 1 hour
+        // Show fallback immediately if no cached data
+        placeholderData: {
+            watchlists: [
+                { id: 'popular', name: 'Popular Stocks', source: 'predefined' as const, symbols: ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMD'] }
+            ],
+            total: 1,
+            generated_at: new Date().toISOString()
+        },
     })
 
     // Fetch scan history
@@ -165,22 +176,33 @@ export default function PremiumScanner() {
         staleTime: 300000,
     })
 
-    // Cleanup EventSource on unmount
+    // Cleanup EventSource and AbortController on unmount
     useEffect(() => {
         return () => {
             if (eventSourceRef.current) {
                 eventSourceRef.current.close()
             }
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort()
+            }
         }
     }, [])
 
-    // Auto-load most recent scan on mount
+    // Auto-load most recent scan on mount (loadPreviousScan defined below with useCallback)
     useEffect(() => {
         if (historyData?.history?.length && scanResults.length === 0 && !isScanning) {
             const mostRecent = historyData.history[0]
             loadPreviousScan(mostRecent.scan_id)
         }
-    }, [historyData, scanResults.length, isScanning, loadPreviousScan])
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [historyData, scanResults.length, isScanning])
+
+    // Auto-select first watchlist if default 'popular' doesn't exist
+    useEffect(() => {
+        if (watchlistsData?.watchlists?.length && !watchlistsData.watchlists.find(wl => wl.id === selectedWatchlistId)) {
+            setSelectedWatchlistId(watchlistsData.watchlists[0].id)
+        }
+    }, [watchlistsData, selectedWatchlistId])
 
     // Group watchlists by source
     const watchlistsBySource = useMemo(() => {
@@ -217,6 +239,14 @@ export default function PremiumScanner() {
         if (eventSourceRef.current) {
             eventSourceRef.current.close()
         }
+        // Abort any existing fetch
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort()
+        }
+
+        // Create new AbortController for this scan
+        const controller = new AbortController()
+        abortControllerRef.current = controller
 
         // Use fetch with streaming for SSE (EventSource doesn't support POST)
         const baseUrl = axiosInstance.defaults.baseURL || ''
@@ -232,7 +262,8 @@ export default function PremiumScanner() {
                 min_premium_pct: minPremium,
                 dte: selectedDTE,
                 save_to_db: true
-            })
+            }),
+            signal: controller.signal
         }).then(async response => {
             const reader = response.body?.getReader()
             const decoder = new TextDecoder()
@@ -273,6 +304,12 @@ export default function PremiumScanner() {
                 }
             }
         }).catch(error => {
+            // Don't show error if scan was intentionally aborted
+            if (error.name === 'AbortError') {
+                console.log('Scan aborted')
+                setIsScanning(false)
+                return
+            }
             console.error('Scan error:', error)
             setScanError(error.message || 'Failed to connect')
             setIsScanning(false)
@@ -595,8 +632,8 @@ export default function PremiumScanner() {
                         </div>
                         <h3 className="font-semibold text-white">Returns by DTE</h3>
                     </div>
-                    <div className="h-64 min-h-[256px] w-full">
-                        <ResponsiveContainer width="100%" height="100%" minWidth={0} debounce={1}>
+                    <div className="h-64 min-h-[256px] w-full" style={{ minHeight: 256 }}>
+                        <ResponsiveContainer width="100%" height={256} minWidth={0} minHeight={0} debounce={50}>
                             <BarChart data={chartData}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(51, 65, 85, 0.5)" />
                                 <XAxis dataKey="dte" stroke="#94a3b8" fontSize={12} />
@@ -980,7 +1017,7 @@ interface QuickStatCardProps {
     onSymbolClick?: () => void
 }
 
-function QuickStatCard({ title, value, subtitle, icon, iconColor = 'text-primary', iconBg = 'bg-primary/20', onSymbolClick }: QuickStatCardProps) {
+const QuickStatCard = memo(function QuickStatCard({ title, value, subtitle, icon, iconColor = 'text-primary', iconBg = 'bg-primary/20', onSymbolClick }: QuickStatCardProps) {
     return (
         <div className="stat-card group">
             <div className="flex items-start justify-between">
@@ -1005,4 +1042,4 @@ function QuickStatCard({ title, value, subtitle, icon, iconColor = 'text-primary
             </div>
         </div>
     )
-}
+})

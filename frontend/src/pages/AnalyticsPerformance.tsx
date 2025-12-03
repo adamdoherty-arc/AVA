@@ -90,7 +90,7 @@ export default function AnalyticsPerformance() {
                     <div className={`text-sm ${
                         (performance?.total_pnl_pct ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
                     }`}>
-                        {performance?.total_pnl_pct >= 0 ? '+' : ''}{performance?.total_pnl_pct.toFixed(2) ?? 0}%
+                        {(performance?.total_pnl_pct ?? 0) >= 0 ? '+' : ''}{(performance?.total_pnl_pct ?? 0).toFixed(2)}%
                     </div>
                 </div>
 

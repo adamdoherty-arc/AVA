@@ -1,12 +1,15 @@
 """
 Watchlist Router - API endpoints for database and TradingView watchlists
 NO MOCK DATA - All endpoints use real database queries
+
+Performance: Uses asyncio.to_thread() for non-blocking DB calls
 """
 
 from fastapi import APIRouter, HTTPException, Query
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 import logging
+import asyncio
 from pydantic import BaseModel
 
 from src.database.connection_pool import get_db_connection
@@ -31,6 +34,48 @@ class AddSymbolsRequest(BaseModel):
     symbols: List[str]
 
 
+# ============ Sync Helper Functions (run via asyncio.to_thread) ============
+
+def _fetch_database_watchlists_sync() -> Dict[str, Any]:
+    """Sync function to fetch watchlists - called via asyncio.to_thread()"""
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT w.watchlist_id, w.name, w.symbol_count, w.created_at, w.updated_at
+                FROM tv_watchlists_api w
+                ORDER BY w.symbol_count DESC, w.name
+            """)
+            rows = cursor.fetchall()
+            watchlists = [{
+                "id": row[0],
+                "name": row[1],
+                "symbol_count": row[2] or 0,
+                "created_at": row[3].isoformat() if row[3] else None,
+                "updated_at": row[4].isoformat() if row[4] else None
+            } for row in rows]
+            return {"watchlists": watchlists, "total": len(watchlists), "source": "database"}
+    except Exception as e:
+        logger.warning(f"Primary table failed: {e}, trying alternate")
+        # Fallback to alternate table
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, name, symbol_count, created_at, updated_at
+                FROM tv_watchlists WHERE is_active = TRUE
+                ORDER BY symbol_count DESC, name
+            """)
+            rows = cursor.fetchall()
+            watchlists = [{
+                "id": row[0],
+                "name": row[1],
+                "symbol_count": row[2] or 0,
+                "created_at": row[3].isoformat() if row[3] else None,
+                "updated_at": row[4].isoformat() if row[4] else None
+            } for row in rows]
+            return {"watchlists": watchlists, "total": len(watchlists), "source": "database_alt"}
+
+
 # ============ Database Watchlist Endpoints ============
 
 @router.get("/database")
@@ -38,85 +83,46 @@ async def get_database_watchlists():
     """
     Get all watchlists from tv_watchlists_api table (TradingView synced data).
     Returns watchlists with symbol counts and metadata.
+    Uses asyncio.to_thread() for non-blocking database access.
     """
     try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-
-            # Get watchlists from tv_watchlists_api (primary TradingView sync table)
-            cursor.execute("""
-                SELECT
-                    w.watchlist_id,
-                    w.name,
-                    w.symbol_count,
-                    w.created_at,
-                    w.updated_at
-                FROM tv_watchlists_api w
-                ORDER BY w.symbol_count DESC, w.name
-            """)
-
-            rows = cursor.fetchall()
-
-            watchlists = []
-            for row in rows:
-                watchlists.append({
-                    "id": row[0],
-                    "name": row[1],
-                    "symbol_count": row[2] or 0,
-                    "created_at": row[3].isoformat() if row[3] else None,
-                    "updated_at": row[4].isoformat() if row[4] else None
-                })
-
-            return {
-                "watchlists": watchlists,
-                "total": len(watchlists),
-                "source": "database",
-                "generated_at": datetime.now().isoformat()
-            }
-
+        result = await asyncio.to_thread(_fetch_database_watchlists_sync)
+        result["generated_at"] = datetime.now().isoformat()
+        return result
     except Exception as e:
         logger.error(f"Error fetching database watchlists: {e}")
-        # Try alternate table structure
-        try:
-            with get_db_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute("""
-                    SELECT
-                        id,
-                        name,
-                        symbol_count,
-                        created_at,
-                        updated_at
-                    FROM tv_watchlists
-                    WHERE is_active = TRUE
-                    ORDER BY symbol_count DESC, name
-                """)
+        raise HTTPException(status_code=500, detail=str(e))
 
-                rows = cursor.fetchall()
-                watchlists = []
-                for row in rows:
-                    watchlists.append({
-                        "id": row[0],
-                        "name": row[1],
-                        "symbol_count": row[2] or 0,
-                        "created_at": row[3].isoformat() if row[3] else None,
-                        "updated_at": row[4].isoformat() if row[4] else None
-                    })
 
-                return {
-                    "watchlists": watchlists,
-                    "total": len(watchlists),
-                    "source": "database_alt",
-                    "generated_at": datetime.now().isoformat()
-                }
-        except Exception as e2:
-            logger.error(f"Error fetching from alternate table: {e2}")
-            return {
-                "watchlists": [],
-                "total": 0,
-                "error": str(e),
-                "generated_at": datetime.now().isoformat()
-            }
+def _fetch_watchlist_symbols_sync(watchlist_name: str, limit: int, stocks_only: bool) -> Dict[str, Any]:
+    """Sync function to fetch watchlist symbols - called via asyncio.to_thread()"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        if stocks_only:
+            cursor.execute("""
+                SELECT s.symbol, s.exchange, s.full_symbol, s.added_at
+                FROM tv_symbols_api s
+                JOIN tv_watchlists_api w ON s.watchlist_id = w.watchlist_id
+                WHERE w.name = %s AND s.exchange IN ('NYSE', 'NASDAQ', 'AMEX', 'ARCA', 'BATS')
+                ORDER BY s.symbol LIMIT %s
+            """, (watchlist_name, limit))
+        else:
+            cursor.execute("""
+                SELECT s.symbol, s.exchange, s.full_symbol, s.added_at
+                FROM tv_symbols_api s
+                JOIN tv_watchlists_api w ON s.watchlist_id = w.watchlist_id
+                WHERE w.name = %s
+                ORDER BY s.symbol LIMIT %s
+            """, (watchlist_name, limit))
+
+        rows = cursor.fetchall()
+        symbols = [{
+            "symbol": row[0],
+            "exchange": row[1],
+            "full_symbol": row[2],
+            "added_at": row[3].isoformat() if row[3] else None
+        } for row in rows]
+        return {"symbols": symbols, "count": len(symbols), "watchlist_name": watchlist_name}
 
 
 @router.get("/database/{watchlist_name}/symbols")

@@ -3,9 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { axiosInstance } from '../lib/axios'
 import {
     Smartphone, RefreshCw, Users, Activity, TrendingUp, TrendingDown,
-    DollarSign, Percent, Clock, AlertCircle, CheckCircle, XCircle,
-    Plus, Settings, History, BarChart3, Filter, Search, Play, Pause,
-    Bell, Send, Trash2, RotateCcw, ChevronDown
+    DollarSign, Percent, CheckCircle, XCircle,
+    Plus, Settings, History, BarChart3, Play, Pause,
+    Bell, Send, Trash2, RotateCcw
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -91,7 +91,6 @@ const TABS = [
 ]
 
 const STRATEGIES = ['All', 'CSP', 'CC', 'Long Call', 'Long Put', 'Put Credit Spread', 'Call Credit Spread']
-const DATE_RANGES = ['All Time', 'Last 7 Days', 'Last 30 Days', 'Last 3 Months', 'Last Year']
 const SORT_OPTIONS = ['Date (Newest)', 'Date (Oldest)', 'Ticker', 'P/L']
 
 export default function XTradesWatchlists() {
@@ -102,7 +101,6 @@ export default function XTradesWatchlists() {
     const [profileFilter, setProfileFilter] = useState('All')
     const [strategyFilter, setStrategyFilter] = useState('All')
     const [tickerFilter, setTickerFilter] = useState('All')
-    const [dateRange, setDateRange] = useState('All Time')
     const [sortBy, setSortBy] = useState('Date (Newest)')
 
     // Add profile form

@@ -15,10 +15,106 @@ Created: 2025-11-21
 """
 
 import logging
+import traceback
 from datetime import datetime, timedelta
+from functools import wraps
 from celery import shared_task
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# Controlled Task Decorator
+# ============================================================================
+
+def controlled_task(automation_name: str):
+    """
+    Decorator that adds enable/disable control to a Celery task.
+
+    Features:
+    - Checks enabled state before execution (skips if disabled)
+    - Registers task start/complete for tracking
+    - Captures execution metrics and errors
+
+    Usage:
+        @shared_task(name='src.services.tasks.sync_kalshi_markets', bind=True)
+        @controlled_task('sync-kalshi-markets')
+        def sync_kalshi_markets(self):
+            ...
+
+    Args:
+        automation_name: The automation identifier matching the database name
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(self, *args, **kwargs):
+            # Import here to avoid circular imports
+            from src.services.automation_control_service import (
+                get_automation_control_service,
+                ExecutionStatus
+            )
+
+            control = get_automation_control_service()
+            task_id = self.request.id if hasattr(self, 'request') else 'unknown'
+
+            # Check if task is enabled
+            if not control.is_enabled(automation_name):
+                logger.info(f"Task '{automation_name}' is disabled, skipping execution")
+
+                # Record skipped execution
+                control.register_task_start(automation_name, task_id, triggered_by='scheduler')
+                control.register_task_complete(
+                    automation_name,
+                    task_id,
+                    ExecutionStatus.SKIPPED
+                )
+                return {'status': 'skipped', 'reason': 'Task is disabled'}
+
+            # Register task start
+            control.register_task_start(automation_name, task_id, triggered_by='scheduler')
+
+            try:
+                # Execute the actual task
+                result = func(self, *args, **kwargs)
+
+                # Extract record count from result if available
+                records = None
+                if isinstance(result, dict):
+                    records = (
+                        result.get('markets_synced') or
+                        result.get('tickers_updated') or
+                        result.get('records_processed') or
+                        result.get('messages_added') or
+                        result.get('predictions_generated') or
+                        result.get('alerts_sent') or
+                        result.get('earnings_updated') or
+                        result.get('caches_warmed')
+                    )
+
+                # Register success
+                control.register_task_complete(
+                    automation_name,
+                    task_id,
+                    ExecutionStatus.SUCCESS,
+                    result=result,
+                    records_processed=records
+                )
+
+                return result
+
+            except Exception as e:
+                # Register failure
+                control.register_task_complete(
+                    automation_name,
+                    task_id,
+                    ExecutionStatus.FAILED,
+                    error_message=str(e),
+                    error_traceback=traceback.format_exc()
+                )
+                raise
+
+        return wrapper
+    return decorator
 
 
 # ============================================================================
@@ -26,6 +122,7 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 @shared_task(name='src.services.tasks.sync_kalshi_markets', bind=True, max_retries=3)
+@controlled_task('sync-kalshi-markets')
 def sync_kalshi_markets(self):
     """
     Sync Kalshi prediction markets
@@ -49,6 +146,7 @@ def sync_kalshi_markets(self):
 
 
 @shared_task(name='src.services.tasks.update_stock_prices', bind=True)
+@controlled_task('update-stock-prices')
 def update_stock_prices(self):
     """
     Update stock prices for watchlist
@@ -70,6 +168,7 @@ def update_stock_prices(self):
 
 
 @shared_task(name='src.services.tasks.sync_discord_messages', bind=True)
+@controlled_task('sync-discord-messages')
 def sync_discord_messages(self):
     """
     Sync Discord messages with premium alert prioritization
@@ -106,6 +205,7 @@ def sync_discord_messages(self):
 
 
 @shared_task(name='src.services.tasks.update_earnings_calendar', bind=True)
+@controlled_task('update-earnings-calendar')
 def update_earnings_calendar(self):
     """
     Update earnings calendar for next 30 days
@@ -132,6 +232,7 @@ def update_earnings_calendar(self):
 # ============================================================================
 
 @shared_task(name='src.services.tasks.generate_predictions', bind=True)
+@controlled_task('generate-predictions')
 def generate_predictions(self):
     """
     Generate AI predictions for upcoming games
@@ -179,6 +280,7 @@ def generate_predictions(self):
 # ============================================================================
 
 @shared_task(name='src.services.tasks.send_alerts', bind=True)
+@controlled_task('send-hourly-alerts')
 def send_alerts(self):
     """
     Send scheduled alerts (high-confidence predictions, opportunities)
@@ -242,6 +344,7 @@ def send_discord_alert(message: str, channel: str = 'general'):
 # ============================================================================
 
 @shared_task(name='src.services.tasks.cleanup_old_data', bind=True)
+@controlled_task('cleanup-old-data')
 def cleanup_old_data(self, days_to_keep: int = 90):
     """
     Cleanup old data from database
@@ -298,6 +401,7 @@ def cleanup_old_data(self, days_to_keep: int = 90):
 
 
 @shared_task(name='src.services.tasks.warm_caches', bind=True)
+@controlled_task('warm-caches')
 def warm_caches(self):
     """
     Warm frequently accessed caches
@@ -419,6 +523,7 @@ def generate_daily_report():
 # ============================================================================
 
 @shared_task(name='src.services.tasks.sync_xtrades_to_rag', bind=True)
+@controlled_task('sync-xtrades-to-rag')
 def sync_xtrades_to_rag(self):
     """
     Sync XTrades messages to RAG knowledge base
@@ -448,6 +553,7 @@ def sync_xtrades_to_rag(self):
 
 
 @shared_task(name='src.services.tasks.sync_discord_to_rag', bind=True)
+@controlled_task('sync-discord-to-rag')
 def sync_discord_to_rag(self):
     """
     Sync Discord messages to RAG knowledge base
@@ -522,6 +628,312 @@ def ingest_documents_batch(
     except Exception as e:
         logger.error(f"❌ Batch ingestion failed: {e}")
         return {'status': 'error', 'error': str(e)}
+
+
+# ============================================================================
+# Sports Betting Tasks
+# ============================================================================
+
+@shared_task(name='src.services.tasks.sync_live_sports_games', bind=True)
+@controlled_task('sync-live-sports')
+def sync_live_sports_games(self):
+    """
+    Sync live sports games from ESPN (runs every 30 seconds during game windows).
+
+    This task:
+    - Fetches live game data from ESPN for all sports
+    - Updates database with current scores/status
+    - Broadcasts updates via WebSocket
+    - Adjusts AI predictions based on live game state
+    """
+    try:
+        import requests
+        from datetime import datetime
+
+        # Import ESPN clients
+        from src.espn_nfl_live_data import ESPNNFLLiveData
+        from src.espn_nba_live_data import ESPNNBALiveData
+        from src.espn_ncaa_live_data import ESPNNCAALiveData
+
+        # Import WebSocket broadcaster
+        from src.websocket.sports_broadcaster import push_live_games_sync
+
+        # Import prediction adjuster
+        from src.prediction_agents.live_adjuster import get_live_adjuster, GameState
+
+        games_synced = 0
+        live_games = []
+
+        # Sync NFL
+        try:
+            nfl_client = ESPNNFLLiveData()
+            nfl_games = nfl_client.get_live_games()
+            for game in nfl_games:
+                if game.get('is_live'):
+                    live_games.append({**game, 'sport': 'NFL'})
+                    games_synced += 1
+            push_live_games_sync(nfl_games, 'NFL')
+        except Exception as e:
+            logger.warning(f"NFL sync error: {e}")
+
+        # Sync NBA
+        try:
+            nba_client = ESPNNBALiveData()
+            nba_games = nba_client.get_live_games()
+            for game in nba_games:
+                if game.get('is_live'):
+                    live_games.append({**game, 'sport': 'NBA'})
+                    games_synced += 1
+            push_live_games_sync(nba_games, 'NBA')
+        except Exception as e:
+            logger.warning(f"NBA sync error: {e}")
+
+        # Sync NCAA Football
+        try:
+            ncaa_client = ESPNNCAALiveData()
+            ncaa_games = ncaa_client.get_live_games()
+            for game in ncaa_games:
+                if game.get('is_live'):
+                    live_games.append({**game, 'sport': 'NCAAF'})
+                    games_synced += 1
+            push_live_games_sync(ncaa_games, 'NCAAF')
+        except Exception as e:
+            logger.warning(f"NCAAF sync error: {e}")
+
+        # Adjust predictions for live games
+        adjuster = get_live_adjuster()
+        predictions_adjusted = 0
+
+        for game in live_games:
+            try:
+                # Create GameState from live data
+                state = GameState(
+                    home_score=game.get('home_score', 0),
+                    away_score=game.get('away_score', 0),
+                    period=game.get('quarter', game.get('period', 1)),
+                    time_remaining_seconds=_parse_clock(game.get('clock', '0:00')),
+                    sport=game.get('sport', 'NFL'),
+                    possession=game.get('possession'),
+                    is_red_zone=game.get('is_red_zone', False)
+                )
+
+                # Get pregame probability (would come from database in production)
+                pregame_prob = 0.5  # Default, should be fetched from predictions table
+
+                # Adjust prediction
+                adjusted = adjuster.adjust_prediction(pregame_prob, state)
+                predictions_adjusted += 1
+
+            except Exception as e:
+                logger.warning(f"Prediction adjustment error: {e}")
+
+        logger.info(f"✅ Synced {games_synced} live games, adjusted {predictions_adjusted} predictions")
+
+        return {
+            'status': 'success',
+            'games_synced': games_synced,
+            'predictions_adjusted': predictions_adjusted,
+            'live_games': len(live_games),
+            'timestamp': datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"❌ Failed to sync live sports: {e}")
+        traceback.print_exc()
+        return {'status': 'error', 'error': str(e)}
+
+
+@shared_task(name='src.services.tasks.sync_sports_odds', bind=True)
+@controlled_task('sync-sports-odds')
+def sync_sports_odds(self):
+    """
+    Sync odds from Kalshi prediction markets (runs every 60 seconds during game windows).
+
+    This task:
+    - Fetches current odds from Kalshi
+    - Matches odds to games in database
+    - Records odds history for movement tracking
+    - Broadcasts significant odds movements via WebSocket
+    """
+    try:
+        from datetime import datetime
+        from src.kalshi_public_client import KalshiPublicClient
+        from src.espn_kalshi_matcher import ESPNKalshiMatcher
+        from src.services.prediction_tracker import get_prediction_tracker
+        from src.websocket.sports_broadcaster import push_odds_sync
+
+        client = KalshiPublicClient()
+        tracker = get_prediction_tracker()
+        odds_updated = 0
+        significant_moves = 0
+
+        # Get football markets from Kalshi
+        football_markets = client.get_football_markets()
+
+        # Process NFL markets
+        for market in football_markets.get('nfl', []):
+            try:
+                ticker = market.get('ticker', '')
+                yes_price = market.get('yes_price', 50) / 100  # Convert cents to decimal
+
+                # Record odds snapshot
+                tracker.record_odds_snapshot(
+                    game_id=ticker,
+                    sport='NFL',
+                    source='kalshi',
+                    home_odds=_prob_to_american(yes_price),
+                    away_odds=_prob_to_american(1 - yes_price)
+                )
+                odds_updated += 1
+
+                # Check for significant movement (broadcast if > 5%)
+                history = tracker.get_odds_movement(ticker, hours=1)
+                if len(history) >= 2:
+                    prev_prob = history[-2].get('home_implied_prob', 0.5)
+                    curr_prob = yes_price
+                    if abs(curr_prob - prev_prob) > 0.05:
+                        significant_moves += 1
+                        push_odds_sync(ticker, 'NFL', {
+                            'home_prob': curr_prob,
+                            'away_prob': 1 - curr_prob,
+                            'movement': curr_prob - prev_prob
+                        })
+
+            except Exception as e:
+                logger.warning(f"Error processing market {market.get('ticker')}: {e}")
+
+        logger.info(f"✅ Synced {odds_updated} odds snapshots, {significant_moves} significant moves")
+
+        return {
+            'status': 'success',
+            'odds_updated': odds_updated,
+            'significant_moves': significant_moves,
+            'timestamp': datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"❌ Failed to sync sports odds: {e}")
+        return {'status': 'error', 'error': str(e)}
+
+
+@shared_task(name='src.services.tasks.settle_completed_predictions', bind=True)
+@controlled_task('settle-predictions')
+def settle_completed_predictions(self):
+    """
+    Settle predictions for completed games (runs hourly).
+
+    This task:
+    - Checks for newly completed games
+    - Settles predictions and calculates accuracy
+    - Updates model performance metrics
+    """
+    try:
+        import psycopg2
+        from psycopg2.extras import RealDictCursor
+        import os
+        from datetime import datetime
+        from src.services.prediction_tracker import get_prediction_tracker
+
+        db_url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/magnus")
+        tracker = get_prediction_tracker()
+        predictions_settled = 0
+
+        # Find completed games with unsettled predictions
+        conn = psycopg2.connect(db_url, cursor_factory=RealDictCursor)
+
+        try:
+            with conn.cursor() as cur:
+                # Get completed games from each sport table
+                for table, sport in [
+                    ('nfl_games', 'NFL'),
+                    ('nba_games', 'NBA'),
+                    ('ncaa_football_games', 'NCAAF'),
+                    ('ncaa_basketball_games', 'NCAAB')
+                ]:
+                    try:
+                        cur.execute(f"""
+                            SELECT g.game_id, g.home_team, g.away_team,
+                                   g.home_score, g.away_score, g.status
+                            FROM {table} g
+                            WHERE g.status IN ('STATUS_FINAL', 'Completed', 'Final')
+                            AND g.game_id IN (
+                                SELECT pr.game_id FROM prediction_results pr
+                                WHERE pr.was_correct IS NULL
+                                AND pr.sport = %s
+                            )
+                        """, (sport,))
+
+                        completed_games = cur.fetchall()
+
+                        for game in completed_games:
+                            # Determine winner
+                            if game['home_score'] > game['away_score']:
+                                winner = game['home_team']
+                            elif game['away_score'] > game['home_score']:
+                                winner = game['away_team']
+                            else:
+                                winner = 'TIE'
+
+                            # Settle the prediction
+                            result = tracker.settle_prediction(
+                                game_id=game['game_id'],
+                                actual_winner=winner,
+                                home_score=game['home_score'],
+                                away_score=game['away_score']
+                            )
+
+                            if result.get('prediction_id'):
+                                predictions_settled += 1
+                                logger.info(
+                                    f"Settled {result['prediction_id']}: "
+                                    f"{'CORRECT' if result['was_correct'] else 'WRONG'}"
+                                )
+
+                    except Exception as e:
+                        logger.warning(f"Error settling {sport} predictions: {e}")
+
+        finally:
+            conn.close()
+
+        # Log performance metrics
+        metrics = tracker.get_accuracy_metrics(days=30)
+        logger.info(
+            f"✅ Settled {predictions_settled} predictions. "
+            f"30-day accuracy: {metrics.get('overall', {}).get('accuracy', 0):.1%}"
+        )
+
+        return {
+            'status': 'success',
+            'predictions_settled': predictions_settled,
+            'accuracy_30d': metrics.get('overall', {}).get('accuracy', 0),
+            'timestamp': datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"❌ Failed to settle predictions: {e}")
+        traceback.print_exc()
+        return {'status': 'error', 'error': str(e)}
+
+
+def _parse_clock(clock_str: str) -> int:
+    """Parse game clock string to seconds remaining"""
+    try:
+        if ':' in clock_str:
+            parts = clock_str.split(':')
+            minutes = int(parts[0])
+            seconds = int(parts[1]) if len(parts) > 1 else 0
+            return minutes * 60 + seconds
+        return 0
+    except:
+        return 0
+
+
+def _prob_to_american(prob: float) -> int:
+    """Convert probability to American odds"""
+    if prob >= 0.5:
+        return int(-100 * prob / (1 - prob))
+    else:
+        return int(100 * (1 - prob) / prob)
 
 
 # ============================================================================

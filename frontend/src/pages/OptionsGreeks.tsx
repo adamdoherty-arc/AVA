@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import {
   Calculator, TrendingUp, TrendingDown, Search, RefreshCw, Target, Gauge,
-  ArrowUpRight, ArrowDownRight, AlertCircle, Lightbulb
+  ArrowUpRight, ArrowDownRight, AlertCircle, Lightbulb, BarChart3
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'

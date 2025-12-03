@@ -659,31 +659,29 @@ class NCAAPredictor(BaseSportsPredictor):
 
         # Generate base template explanation
         template_explanation = explanation
-        
+
         # Enhance with LLM if available
         try:
             enhancer = get_llm_enhancer()
-            loser = away_team if winner == home_team else home_team
-            
-            # Prepare context for LLM
-            context = {
-                'home_team': home_team,
-                'away_team': away_team,
+
+            # Prepare adjustments dict for LLM (correct signature)
+            adjustments = {
+                'home_field': True,
                 'is_rivalry': is_rivalry,
-                'home_conf_power': features.get('home_conf_power'),
-                'away_conf_power': features.get('away_conf_power'),
-                'recruiting_diff': features.get('recruiting_diff'),
+                'conference_power_diff': features.get('home_conf_power', 0.5) - features.get('away_conf_power', 0.5),
+                'recruiting_diff': features.get('recruiting_diff', 0),
                 'home_field_advantage': self.HOME_FIELD_ADVANTAGE
             }
-            
+
             return enhancer.enhance_explanation(
                 sport="NCAA Football",
+                home_team=home_team,
+                away_team=away_team,
                 winner=winner,
-                loser=loser,
                 probability=probability,
                 features=features,
-                context=context,
-                template_explanation=template_explanation
+                adjustments=adjustments,
+                template_fallback=template_explanation
             )
         except Exception as e:
             self.logger.warning(f"Failed to enhance explanation with LLM: {e}")
@@ -816,3 +814,12 @@ class NCAAPredictor(BaseSportsPredictor):
             return 0.25  # Below average
         else:
             return 0.10  # Struggling team
+
+    def predict_game(self, *args, **kwargs) -> Dict[str, Any]:
+        """
+        Alias for predict_winner for API compatibility.
+
+        The router calls predict_game() but this class uses predict_winner().
+        This alias ensures compatibility with the standardized API interface.
+        """
+        return self.predict_winner(*args, **kwargs)

@@ -71,7 +71,7 @@ export default function CacheMetrics() {
                 </div>
                 <div className="flex items-center gap-2">
                     <button
-                        onClick={() => clearCacheMutation.mutate()}
+                        onClick={() => clearCacheMutation.mutate(undefined)}
                         disabled={clearCacheMutation.isPending}
                         className="btn-secondary flex items-center gap-2"
                     >

@@ -643,16 +643,19 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS update_nfl_games_timestamp ON nfl_games;
 CREATE TRIGGER update_nfl_games_timestamp
     BEFORE UPDATE ON nfl_games
     FOR EACH ROW
     EXECUTE FUNCTION update_last_updated_timestamp();
 
+DROP TRIGGER IF EXISTS update_nfl_player_stats_timestamp ON nfl_player_stats;
 CREATE TRIGGER update_nfl_player_stats_timestamp
     BEFORE UPDATE ON nfl_player_stats
     FOR EACH ROW
     EXECUTE FUNCTION update_last_updated_timestamp();
 
+DROP TRIGGER IF EXISTS update_nfl_injuries_timestamp ON nfl_injuries;
 CREATE TRIGGER update_nfl_injuries_timestamp
     BEFORE UPDATE ON nfl_injuries
     FOR EACH ROW

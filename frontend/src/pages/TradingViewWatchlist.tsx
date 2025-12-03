@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { axiosInstance } from '../lib/axios'
 import {
-    LineChart, RefreshCw, List, ChevronDown, ChevronRight,
-    Search, Plus, Trash2, Clock, Globe, ExternalLink,
+    LineChart, RefreshCw, List,
+    Search, Plus, Clock, Globe, ExternalLink,
     TrendingUp
 } from 'lucide-react'
 import clsx from 'clsx'
