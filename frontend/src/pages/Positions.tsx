@@ -1,18 +1,19 @@
 import { useState, useEffect, memo } from 'react'
-import { usePositions, useSyncPortfolio, useResearch, useRefreshResearch, useSymbolMetadata, useSymbolRecommendation } from '../hooks/useMagnusApi'
+import { usePositions, useResearch, useRefreshResearch, useSymbolMetadata, useSymbolRecommendation } from '../hooks/useMagnusApi'
+import { toast } from 'sonner'
 import {
     AlertCircle, RefreshCw, TrendingUp, TrendingDown, DollarSign,
     Briefcase, Target, Clock, Activity, ExternalLink, ChevronDown, ChevronUp,
-    Zap, PieChart, ArrowUpRight, ArrowDownRight, Brain, Calendar,
+    PieChart, ArrowUpRight, ArrowDownRight, Brain, Calendar,
     Building2, BarChart3, Lightbulb, AlertTriangle
 } from 'lucide-react'
+import { SyncStatusPanel } from '../components/SyncStatusPanel'
 import { PieChart as RechartsPie, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 
 const COLORS = ['#10B981', '#3B82F6', '#8B5CF6']
 
 export default function Positions() {
-    const { data: positions, isLoading, error, refetch } = usePositions()
-    const syncMutation = useSyncPortfolio()
+    const { data: positions, isLoading, error } = usePositions()
     const [activeTab, setActiveTab] = useState<'stocks' | 'options'>('stocks')
     const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null)
     const [expandedOptions, setExpandedOptions] = useState<Set<string>>(new Set())
@@ -96,22 +97,7 @@ export default function Positions() {
                     </h1>
                     <p className="page-subtitle">Portfolio & Options Management</p>
                 </div>
-                <div className="flex gap-3">
-                    <button
-                        onClick={() => syncMutation.mutate()}
-                        disabled={syncMutation.isPending}
-                        className="btn-secondary flex items-center gap-2"
-                    >
-                        <Zap className={`w-4 h-4 ${syncMutation.isPending ? 'animate-pulse' : ''}`} />
-                        {syncMutation.isPending ? 'Syncing...' : 'Sync Robinhood'}
-                    </button>
-                    <button
-                        onClick={() => refetch()}
-                        className="btn-icon"
-                    >
-                        <RefreshCw className="w-5 h-5" />
-                    </button>
-                </div>
+                <SyncStatusPanel variant="expanded" />
             </header>
 
             {/* Stats Grid */}
