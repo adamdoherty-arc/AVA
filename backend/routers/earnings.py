@@ -10,6 +10,7 @@ import logging
 import math
 
 from src.earnings_manager import EarningsManager
+from backend.infrastructure.errors import safe_internal_error
 
 logger = logging.getLogger(__name__)
 
@@ -46,10 +47,10 @@ def get_earnings_manager():
 
 @router.get("/upcoming")
 async def get_upcoming_earnings(
-    days: int = Query(7, alias="days_ahead", description="Number of days to look ahead"),
+    days: int = Query(7, alias="days_ahead", ge=1, le=90, description="Number of days to look ahead (1-90)"),
     time_filter: Optional[str] = Query(None, description="Filter by time: Before Market, After Hours"),
-    min_quality: Optional[int] = Query(None, description="Minimum quality score (0-100)"),
-    limit: int = Query(100, description="Maximum results")
+    min_quality: Optional[int] = Query(None, ge=0, le=100, description="Minimum quality score (0-100)"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum results (1-500)")
 ):
     """
     Get upcoming earnings announcements with wheel strategy analysis.
@@ -256,7 +257,7 @@ async def sync_earnings_data(
 
     except Exception as e:
         logger.error(f"Error syncing earnings: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "sync earnings data")
 
 
 @router.get("/sync/status")

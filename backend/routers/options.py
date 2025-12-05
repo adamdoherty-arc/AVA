@@ -5,14 +5,15 @@ NO MOCK DATA - All endpoints use real data from yfinance or database
 from fastapi import APIRouter, Query, HTTPException
 from typing import Optional, List, Any
 from datetime import datetime, timedelta
-import logging
 import math
 import numpy as np
 import yfinance as yf
-from src.database.connection_pool import get_db_connection
-from src.premium_scanner import PremiumScanner
+import structlog
 
-logger = logging.getLogger(__name__)
+from backend.infrastructure.database import get_database, AsyncDatabaseManager
+from backend.infrastructure.errors import safe_internal_error
+
+logger = structlog.get_logger(__name__)
 
 
 def to_native(value: Any, default: float = 0.0) -> Any:
@@ -71,10 +72,9 @@ async def get_options_analysis_default(symbol: str = Query("SPY", description="S
 @router.get("/analysis/{symbol}")
 async def get_options_analysis(symbol: str):
     """Get comprehensive options analysis for a symbol using real data"""
-    import sys
-    print(f"[OPTIONS DEBUG] Starting analysis for symbol: {symbol}", file=sys.stderr, flush=True)
+    logger.debug(f"Starting options analysis for symbol: {symbol}")
     try:
-        print(f"[OPTIONS DEBUG] Creating yfinance ticker for {symbol.upper()}", file=sys.stderr, flush=True)
+        logger.debug(f"Creating yfinance ticker for {symbol.upper()}")
         ticker = yf.Ticker(symbol.upper())
         info = ticker.info
 
@@ -197,7 +197,7 @@ async def get_options_analysis(symbol: str):
         raise
     except Exception as e:
         logger.error(f"Error getting options analysis for {symbol}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "get options analysis")
 
 
 @router.get("/chain/{symbol}")
@@ -273,7 +273,7 @@ async def get_options_chain(symbol: str, expiration: Optional[str] = None):
         raise
     except Exception as e:
         logger.error(f"Error getting options chain for {symbol}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "get options chain")
 
 
 @router.get("/supply-demand/{symbol}")
@@ -340,56 +340,54 @@ async def get_supply_demand_zones(symbol: str):
         raise
     except Exception as e:
         logger.error(f"Error getting supply/demand zones for {symbol}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "get supply/demand zones")
 
 
 @router.get("/flow")
 async def get_options_flow(min_premium: Optional[int] = None, type: Optional[str] = None):
     """Get unusual options flow from database"""
     try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
+        db = await get_database()
 
-            query = """
-                SELECT timestamp, symbol, option_type, strike, expiry,
-                       premium, volume, open_interest, sentiment, side
-                FROM options_flow
-                WHERE 1=1
-            """
-            params = []
+        query = """
+            SELECT timestamp, symbol, option_type, strike, expiry,
+                   premium, volume, open_interest, sentiment, side
+            FROM options_flow
+            WHERE 1=1
+        """
+        params = []
 
-            if min_premium:
-                query += " AND premium >= %s"
-                params.append(min_premium)
+        if min_premium:
+            query += " AND premium >= $" + str(len(params) + 1)
+            params.append(min_premium)
 
-            if type:
-                query += " AND option_type = %s"
-                params.append(type)
+        if type:
+            query += " AND option_type = $" + str(len(params) + 1)
+            params.append(type)
 
-            query += " ORDER BY timestamp DESC LIMIT 50"
+        query += " ORDER BY timestamp DESC LIMIT 50"
 
-            cursor.execute(query, params)
-            rows = cursor.fetchall()
+        rows = await db.fetch(query, *params)
 
-            flow = []
-            for row in rows:
-                flow.append({
-                    "time": row[0].strftime("%H:%M:%S") if row[0] else "",
-                    "symbol": row[1],
-                    "type": row[2],
-                    "strike": float(row[3]) if row[3] else 0,
-                    "expiration": str(row[4]) if row[4] else "",
-                    "premium": float(row[5]) if row[5] else 0,
-                    "volume": int(row[6]) if row[6] else 0,
-                    "oi": int(row[7]) if row[7] else 0,
-                    "sentiment": row[8],
-                    "side": row[9]
-                })
+        flow = []
+        for row in rows:
+            flow.append({
+                "time": row["timestamp"].strftime("%H:%M:%S") if row["timestamp"] else "",
+                "symbol": row["symbol"],
+                "type": row["option_type"],
+                "strike": float(row["strike"]) if row["strike"] else 0,
+                "expiration": str(row["expiry"]) if row["expiry"] else "",
+                "premium": float(row["premium"]) if row["premium"] else 0,
+                "volume": int(row["volume"]) if row["volume"] else 0,
+                "oi": int(row["open_interest"]) if row["open_interest"] else 0,
+                "sentiment": row["sentiment"],
+                "side": row["side"]
+            })
 
-            return {"flow": flow, "total": len(flow), "generated_at": datetime.now().isoformat()}
+        return {"flow": flow, "total": len(flow), "generated_at": datetime.now().isoformat()}
 
     except Exception as e:
-        logger.error(f"Error fetching options flow: {e}")
+        logger.error("options_flow_error", error=str(e))
         return {
             "flow": [],
             "total": 0,
@@ -478,7 +476,7 @@ async def get_calendar_spread_analysis(symbol: str):
 
     except Exception as e:
         logger.error(f"Error getting calendar spreads for {symbol}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "get calendar spreads")
 
 
 @router.get("/position-sizing")

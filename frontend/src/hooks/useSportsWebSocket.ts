@@ -4,6 +4,7 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { WS_URL } from '@/config/api';
 
 // WebSocket message types
 export type SportsUpdateType =
@@ -88,6 +89,8 @@ export function useSportsWebSocket(options: UseSportsWebSocketOptions = {}) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Use ref for reconnect attempts to avoid stale closure in connect callback
+  const reconnectAttemptsRef = useRef<number>(0);
 
   // State
   const [connectionState, setConnectionState] = useState<ConnectionState>({
@@ -100,12 +103,10 @@ export function useSportsWebSocket(options: UseSportsWebSocketOptions = {}) {
   const [liveGames, setLiveGames] = useState<Map<string, any>>(new Map());
   const [latestUpdates, setLatestUpdates] = useState<SportsUpdate[]>([]);
 
-  // Get WebSocket URL based on current host
+  // Get WebSocket URL from centralized config
   const getWebSocketUrl = useCallback(() => {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.hostname;
-    // Use backend port for WebSocket
-    return `${protocol}//${host}:8002/ws/sports`;
+    // Uses WS_URL from centralized config (port 8002)
+    return `${WS_URL}/ws/sports`;
   }, []);
 
   // Generate unique client ID
@@ -230,6 +231,7 @@ export function useSportsWebSocket(options: UseSportsWebSocketOptions = {}) {
 
       wsRef.current.onopen = () => {
         console.log('Sports WebSocket connected');
+        reconnectAttemptsRef.current = 0;
         setConnectionState({
           isConnected: true,
           isReconnecting: false,
@@ -264,14 +266,16 @@ export function useSportsWebSocket(options: UseSportsWebSocketOptions = {}) {
         // Clear heartbeat
         if (pingIntervalRef.current) {
           clearInterval(pingIntervalRef.current);
+          pingIntervalRef.current = null;
         }
 
-        // Auto-reconnect
-        if (autoReconnect && connectionState.reconnectAttempts < maxReconnectAttempts) {
+        // Auto-reconnect using ref to avoid stale closure
+        if (autoReconnect && reconnectAttemptsRef.current < maxReconnectAttempts) {
+          reconnectAttemptsRef.current += 1;
           setConnectionState(prev => ({
             ...prev,
             isReconnecting: true,
-            reconnectAttempts: prev.reconnectAttempts + 1,
+            reconnectAttempts: reconnectAttemptsRef.current,
           }));
 
           reconnectTimeoutRef.current = setTimeout(() => {
@@ -301,21 +305,24 @@ export function useSportsWebSocket(options: UseSportsWebSocketOptions = {}) {
     autoReconnect,
     maxReconnectAttempts,
     reconnectInterval,
-    connectionState.reconnectAttempts,
+    // Removed connectionState.reconnectAttempts - using reconnectAttemptsRef to avoid stale closure
   ]);
 
   // Disconnect from WebSocket
   const disconnect = useCallback(() => {
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
     }
     if (pingIntervalRef.current) {
       clearInterval(pingIntervalRef.current);
+      pingIntervalRef.current = null;
     }
     if (wsRef.current) {
       wsRef.current.close();
       wsRef.current = null;
     }
+    reconnectAttemptsRef.current = 0;
     setConnectionState({
       isConnected: false,
       isReconnecting: false,

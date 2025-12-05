@@ -19,7 +19,7 @@ import {
     ChevronDown, ChevronUp, Activity, Sparkles, AlertTriangle,
     Timer, ArrowRight, Info, X, Loader2, Signal, CircleDot
 } from 'lucide-react';
-import { useSyncStore, SYNC_STAGES, SyncStage, ConnectionHealth } from '../store/syncStore';
+import { useSyncStore, SYNC_STAGES, type SyncStage, type ConnectionHealth } from '../store/syncStore';
 import { useSyncPortfolio, usePositions } from '../hooks/useMagnusApi';
 
 // Stage icons mapping
@@ -177,9 +177,7 @@ export const SyncStatusPanel = memo(function SyncStatusPanel({
             completeSync({
                 duration_ms: duration,
                 stocks_count: result?.positions_count || 0,
-                options_count: 0, // Would come from detailed response
-                total_value: 0,
-                changes: [],
+                options_count: 0,
                 success: true,
             });
 

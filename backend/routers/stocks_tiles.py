@@ -25,6 +25,7 @@ from backend.services.stock_score_service import (
 from backend.infrastructure.async_yfinance import get_async_yfinance
 from backend.infrastructure.cache import get_cache
 from backend.services.advanced_risk_models import get_prediction_engine
+from backend.infrastructure.errors import safe_internal_error
 
 # Circuit breaker for external API resilience
 try:
@@ -297,7 +298,7 @@ async def get_all_data(
 
     except Exception as e:
         logger.error(f"Error fetching all data: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "fetch stock tile data")
 
 
 @router.get("/score/{symbol}")
@@ -335,10 +336,10 @@ async def get_stock_score(symbol: str) -> StockTileResponse:
         )
 
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=f"Stock not found: {symbol}")
     except Exception as e:
         logger.error(f"Error getting score for {symbol}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "get stock score")
 
 
 @router.post("/batch")
@@ -379,7 +380,7 @@ async def batch_score(request: BatchScoreRequest) -> Dict[str, StockTileResponse
 
     except Exception as e:
         logger.error(f"Error in batch score: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "batch score stocks")
 
 
 @router.get("/stream/analyze/{symbol}")
@@ -562,7 +563,7 @@ async def get_prices(symbols: str = Query(..., description="Comma-separated symb
         return prices
     except Exception as e:
         logger.error(f"Error fetching prices: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "fetch stock prices")
 
 
 @router.get("/health")

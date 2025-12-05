@@ -9,6 +9,12 @@ export { Sidebar } from './Sidebar'
 
 // Error Handling
 export { ErrorBoundary, withErrorBoundary } from './ErrorBoundary'
+export {
+    AIErrorBoundary,
+    ErrorReportProvider,
+    useErrorReports
+} from './AIErrorBoundary'
+export { APIErrorDisplay, InlineAPIError } from './APIErrorDisplay'
 
 // Loading States
 export {
@@ -27,12 +33,23 @@ export {
 
 // AI Components
 export { AIAnalysisWidget, QuickAnalysisButton } from './AIAnalysisWidget'
-export { default as AIResearchWidget } from './AIResearchWidget'
-export { default as AvaChatWidget } from './AvaChatWidget'
+export { AIResearchWidget } from './AIResearchWidget'
+export { AvaChatWidget } from './AvaChatWidget'
+
+// AI Notifications
+export {
+    NotificationProvider,
+    useNotifications,
+    createAIInsightNotification,
+    createMarketAlertNotification
+} from './AINotifications'
+
+// Sync Status
+export { default as SyncStatusPanel } from './SyncStatusPanel'
 
 // Trading Components
-export { default as PositionsTable } from './PositionsTable'
-export { default as StrategyCard } from './StrategyCard'
+export { PositionsTable } from './PositionsTable'
+export { StrategyCard } from './StrategyCard'
 
 // Optimized/Memoized Components
 export {

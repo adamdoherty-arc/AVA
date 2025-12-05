@@ -209,12 +209,12 @@ class WebSocketManager:
         if conn_info:
             conn_info.last_heartbeat = datetime.now()
 
-    async def start_heartbeat_monitor(self):
+    async def start_heartbeat_monitor(self) -> None:
         """Start background task to monitor connection health."""
         if self._heartbeat_task is None:
             self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
 
-    async def _heartbeat_loop(self):
+    async def _heartbeat_loop(self) -> None:
         """Background loop to check connection health."""
         while True:
             await asyncio.sleep(self._heartbeat_interval)
@@ -278,14 +278,14 @@ class PositionUpdateBroadcaster:
         """Set the function to call to get positions."""
         self._position_fetcher = fetcher
 
-    async def start(self):
+    async def start(self) -> None:
         """Start the update broadcaster."""
         if not self._running:
             self._running = True
             self._task = asyncio.create_task(self._broadcast_loop())
             logger.info(f"Position broadcaster started (interval={self._update_interval}s)")
 
-    async def stop(self):
+    async def stop(self) -> None:
         """Stop the update broadcaster."""
         self._running = False
         if self._task:
@@ -297,7 +297,7 @@ class PositionUpdateBroadcaster:
             self._task = None
         logger.info("Position broadcaster stopped")
 
-    async def _broadcast_loop(self):
+    async def _broadcast_loop(self) -> None:
         """Background loop to broadcast position updates."""
         while self._running:
             try:

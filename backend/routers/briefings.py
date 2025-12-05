@@ -6,67 +6,69 @@ Provides endpoints for:
 - Sending briefings via alerts
 - Viewing briefing history
 
-Performance: Uses asyncio.to_thread() for non-blocking DB calls
+Performance: Uses async database manager for non-blocking DB calls
 """
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from typing import Optional, Dict, Any, List
-import logging
-import asyncio
+import structlog
 
 from src.ava.services.morning_briefing_service import (
     MorningBriefingService,
     get_morning_briefing,
     send_morning_briefing
 )
-from src.database.connection_pool import get_db_connection
+from backend.infrastructure.database import get_database, AsyncDatabaseManager
+from backend.infrastructure.errors import safe_internal_error
 
-logger = logging.getLogger(__name__)
-
-
-# ============ Sync Helper Functions (run via asyncio.to_thread) ============
-
-def _fetch_briefing_history_sync(user_id: str, limit: int) -> Dict[str, Any]:
-    """Sync function to fetch briefing history - called via asyncio.to_thread()"""
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT id, report_type, title, content, generated_at
-            FROM ava_generated_reports
-            WHERE user_id = %s AND report_type = 'morning_briefing'
-            ORDER BY generated_at DESC
-            LIMIT %s
-        """, (user_id, limit))
-        rows = cursor.fetchall()
-        return {"briefings": [{
-            "id": row[0],
-            "report_type": row[1],
-            "title": row[2],
-            "content": row[3],
-            "generated_at": row[4].isoformat() if row[4] else None
-        } for row in rows]}
+logger = structlog.get_logger(__name__)
 
 
-def _fetch_briefing_preview_sync(user_id: str) -> Dict[str, Any]:
-    """Sync function to fetch briefing preview counts - called via asyncio.to_thread()"""
+# ============ Async Helper Functions ============
+
+async def _fetch_briefing_history_async(user_id: str, limit: int) -> Dict[str, Any]:
+    """Async function to fetch briefing history"""
+    db = await get_database()
+    rows = await db.fetch("""
+        SELECT id, report_type, title, content, generated_at
+        FROM ava_generated_reports
+        WHERE user_id = $1 AND report_type = 'morning_briefing'
+        ORDER BY generated_at DESC
+        LIMIT $2
+    """, user_id, limit)
+
+    return {"briefings": [{
+        "id": row["id"],
+        "report_type": row["report_type"],
+        "title": row["title"],
+        "content": row["content"],
+        "generated_at": row["generated_at"].isoformat() if row["generated_at"] else None
+    } for row in rows]}
+
+
+async def _fetch_briefing_preview_async(user_id: str) -> Dict[str, Any]:
+    """Async function to fetch briefing preview counts"""
     from src.ava.services.goal_tracking_service import GoalTrackingService
 
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM trade_history WHERE status = 'open'")
-        open_positions = cursor.fetchone()[0] or 0
+    db = await get_database()
 
-        cursor.execute("""
-            SELECT COUNT(*) FROM earnings_calendar
-            WHERE report_date >= CURRENT_DATE
-              AND report_date <= CURRENT_DATE + INTERVAL '7 days'
-        """)
-        upcoming_earnings = cursor.fetchone()[0] or 0
+    # Get open positions count
+    open_positions_row = await db.fetchrow("SELECT COUNT(*) FROM trade_history WHERE status = 'open'")
+    open_positions = open_positions_row["count"] if open_positions_row else 0
 
-        cursor.execute("""
-            SELECT COUNT(*) FROM xtrades_alerts
-            WHERE created_at >= NOW() - INTERVAL '24 hours'
-        """)
-        xtrades_24h = cursor.fetchone()[0] or 0
+    # Get upcoming earnings count
+    upcoming_earnings_row = await db.fetchrow("""
+        SELECT COUNT(*) FROM earnings_calendar
+        WHERE report_date >= CURRENT_DATE
+          AND report_date <= CURRENT_DATE + INTERVAL '7 days'
+    """)
+    upcoming_earnings = upcoming_earnings_row["count"] if upcoming_earnings_row else 0
+
+    # Get recent xtrades alerts count
+    xtrades_24h_row = await db.fetchrow("""
+        SELECT COUNT(*) FROM xtrades_alerts
+        WHERE created_at >= NOW() - INTERVAL '24 hours'
+    """)
+    xtrades_24h = xtrades_24h_row["count"] if xtrades_24h_row else 0
 
     # Get goal status
     goal_service = GoalTrackingService(user_id)
@@ -121,8 +123,8 @@ async def get_morning_briefing_endpoint(user_id: str = "default_user"):
         }
 
     except Exception as e:
-        logger.error(f"Error generating briefing: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("generate_morning_briefing_error", error=str(e))
+        safe_internal_error(e, "generate morning briefing")
 
 
 @router.post("/morning/send")
@@ -138,15 +140,28 @@ async def send_morning_briefing_endpoint(
     Sends asynchronously in the background.
     """
     try:
-        # Send in background to not block the response
-        async def send_task():
-            service = MorningBriefingService(user_id)
-            await service.send_briefing(
-                via_telegram=via_telegram,
-                via_email=via_email
-            )
+        # Sync wrapper for BackgroundTasks (which expects sync functions)
+        def send_briefing_sync(uid: str, telegram: bool, email: bool):
+            """Sync wrapper that runs async service in new event loop"""
+            import asyncio
 
-        background_tasks.add_task(send_task)
+            async def _run():
+                service = MorningBriefingService(uid)
+                await service.send_briefing(
+                    via_telegram=telegram,
+                    via_email=email
+                )
+
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(_run())
+            except Exception as e:
+                logger.error("background_briefing_send_failed", error=str(e))
+            finally:
+                loop.close()
+
+        background_tasks.add_task(send_briefing_sync, user_id, via_telegram, via_email)
 
         return {
             "success": True,
@@ -158,8 +173,8 @@ async def send_morning_briefing_endpoint(
         }
 
     except Exception as e:
-        logger.error(f"Error scheduling briefing: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("schedule_morning_briefing_error", error=str(e))
+        safe_internal_error(e, "schedule morning briefing")
 
 
 @router.get("/history")
@@ -167,22 +182,22 @@ async def get_briefing_history(
     user_id: str = "default_user",
     limit: int = 10
 ):
-    """Get history of generated briefings. Uses asyncio.to_thread() for non-blocking DB."""
+    """Get history of generated briefings. Uses async database manager for non-blocking DB."""
     try:
-        return await asyncio.to_thread(_fetch_briefing_history_sync, user_id, limit)
+        return await _fetch_briefing_history_async(user_id, limit)
     except Exception as e:
-        logger.error(f"Error getting briefing history: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("fetch_briefing_history_error", error=str(e))
+        safe_internal_error(e, "fetch briefing history")
 
 
 @router.get("/preview")
 async def preview_briefing(user_id: str = "default_user"):
     """
     Get a quick preview/summary of what the briefing will contain.
-    Uses asyncio.to_thread() for non-blocking DB and service calls.
+    Uses async database manager for non-blocking DB and service calls.
     """
     try:
-        return await asyncio.to_thread(_fetch_briefing_preview_sync, user_id)
+        return await _fetch_briefing_preview_async(user_id)
     except Exception as e:
-        logger.error(f"Error getting briefing preview: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("fetch_briefing_preview_error", error=str(e))
+        safe_internal_error(e, "fetch briefing preview")

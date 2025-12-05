@@ -89,11 +89,11 @@ class WebSocketManager:
         """Set portfolio analytics provider"""
         self.streaming_server.set_portfolio_provider(provider)
 
-    async def start(self):
+    async def start(self) -> None:
         """Start the streaming server"""
         await self.streaming_server.start()
 
-    async def stop(self):
+    async def stop(self) -> None:
         """Stop the streaming server"""
         await self.streaming_server.stop()
 
@@ -324,7 +324,7 @@ if __name__ == "__main__":
 
     # Create mock provider
     class MockProvider:
-        def get_positions(self):
+        def get_positions(self) -> None:
             return [
                 {
                     "id": "1",
@@ -334,7 +334,7 @@ if __name__ == "__main__":
                 }
             ]
 
-        def get_summary(self):
+        def get_summary(self) -> None:
             return {
                 "total_value": 125000,
                 "daily_pnl": 450,
@@ -364,13 +364,13 @@ if __name__ == "__main__":
     async def root():
         return {
             "message": "AVA Streaming Server",
-            "websocket_url": "ws://localhost:8000/stream/ws",
+            "websocket_url": "ws://localhost:8002/stream/ws",
             "docs": "/docs"
         }
 
     print("Starting test server...")
-    print("WebSocket URL: ws://localhost:8000/stream/ws")
-    print("API docs: http://localhost:8000/docs")
+    print("WebSocket URL: ws://localhost:8002/stream/ws")
+    print("API docs: http://localhost:8002/docs")
     print("\nTo test, connect via WebSocket and send:")
     print('  {"action": "subscribe", "streams": ["positions", "portfolio"]}')
 

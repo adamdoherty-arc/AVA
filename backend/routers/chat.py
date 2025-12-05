@@ -1,15 +1,33 @@
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, HTTPException, Body, Request
 from typing import List, Dict, Optional, Any
 from pydantic import BaseModel
-from src.ava.agent_aware_nlp_handler import get_agent_aware_handler
+import structlog
+from backend.infrastructure.observability import get_audit_logger, AuditEventType
+from backend.infrastructure.rate_limiter import rate_limited, RateLimitExceeded
+from backend.infrastructure.errors import safe_internal_error
+
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(
     prefix="/api/chat",
     tags=["chat"]
 )
 
-# Initialize Ava Handler (singleton)
-ava_handler = get_agent_aware_handler()
+# Lazy initialization to prevent import failures from breaking router
+_ava_handler = None
+
+def get_handler():
+    """Lazy initialize Ava handler to prevent import failures from breaking router."""
+    global _ava_handler
+    if _ava_handler is None:
+        try:
+            from src.ava.agent_aware_nlp_handler import get_agent_aware_handler
+            _ava_handler = get_agent_aware_handler()
+            logger.info("ava_handler_initialized")
+        except Exception as e:
+            logger.error("ava_handler_init_failed", error=str(e))
+            raise HTTPException(status_code=503, detail="Chat service temporarily unavailable")
+    return _ava_handler
 
 class ChatRequest(BaseModel):
     message: str
@@ -33,6 +51,9 @@ AVAILABLE_MODELS = {
     # Low Cost - DeepSeek
     "deepseek-chat": {"name": "DeepSeek Chat", "description": "$0.14/1M tokens, excellent quality", "speed": "~80 tok/s", "tier": "cheap"},
     "deepseek-coder": {"name": "DeepSeek Coder", "description": "Best for code analysis", "speed": "~80 tok/s", "tier": "cheap"},
+
+    # Local - DeepSeek R1 32B (Deep Reasoning) - R1-0528 Update
+    "deepseek-r1": {"name": "DeepSeek R1 32B (Local)", "description": "Chain-of-thought reasoning approaching O3/Gemini 2.5 Pro (R1-0528)", "speed": "~25 tok/s", "tier": "local"},
 
     # Google Gemini
     "gemini-flash": {"name": "Gemini 2.5 Flash", "description": "Very fast, cost-effective", "speed": "~150 tok/s", "tier": "cheap"},
@@ -59,6 +80,7 @@ MODEL_MAPPING = {
     "hf-mixtral": ("huggingface", "mistralai/Mixtral-8x7B-Instruct-v0.1"),
     "deepseek-chat": ("deepseek", "deepseek-chat"),
     "deepseek-coder": ("deepseek", "deepseek-coder"),
+    "deepseek-r1": ("ollama", "deepseek-r1:32b"),  # DeepSeek R1 32B - deep reasoning (R1-0528)
     "gemini-flash": ("gemini", "gemini-2.5-flash"),
     "gemini-pro": ("gemini", "gemini-2.5-pro"),
     "gpt-4o-mini": ("openai", "gpt-4o-mini"),
@@ -98,7 +120,8 @@ async def chat(request: ChatRequest):
     """
     try:
         # Process message using Ava's routing logic with model preference
-        result = ava_handler.parse_query(
+        handler = get_handler()
+        result = handler.parse_query(
             request.message,
             context={
                 'history': request.history,
@@ -129,4 +152,91 @@ async def chat(request: ChatRequest):
             confidence=confidence
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "process chat message")
+
+
+# Deep Reasoning endpoint using DeepSeek R1
+class DeepReasoningRequest(BaseModel):
+    problem: str
+    context: Optional[Dict[str, Any]] = None
+    depth: Optional[str] = "deep"  # standard, deep, exhaustive
+
+
+class DeepReasoningResponse(BaseModel):
+    status: str
+    model: str
+    reasoning_depth: str
+    response: str
+    processing_time_ms: float = 0.0
+
+
+@router.post("/deep-reasoning", response_model=DeepReasoningResponse)
+@rate_limited(requests=3, window=60)  # 3 requests per minute - very expensive operation
+async def deep_reasoning(request: DeepReasoningRequest, req: Request):
+    """
+    Deep reasoning endpoint using DeepSeek R1 model.
+    Rate limited to 3 requests per minute due to high computational cost.
+
+    Use this for:
+    - Complex multi-step analysis
+    - Hypothesis testing
+    - Portfolio optimization scenarios
+    - Risk scenario analysis
+    - What-if market scenarios
+    - Strategy backtesting logic
+
+    Depth levels:
+    - standard: Basic step-by-step reasoning
+    - deep: Full reasoning chain with multiple perspectives
+    - exhaustive: Complete analysis with probabilities and edge cases
+    """
+    import time
+    from src.magnus_local_llm import get_magnus_llm
+
+    audit = get_audit_logger()
+    start_time = time.time()
+
+    try:
+        llm = get_magnus_llm()
+
+        # Validate depth
+        depth = request.depth if request.depth in ["standard", "deep", "exhaustive"] else "deep"
+
+        result = llm.deep_reasoning(
+            problem=request.problem,
+            context=request.context,
+            reasoning_depth=depth
+        )
+
+        processing_time = (time.time() - start_time) * 1000
+
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=500,
+                detail=f"Deep reasoning failed: {result.get('error')}"
+            )
+
+        # Log successful deep reasoning query
+        await audit.log(
+            AuditEventType.DEEP_REASONING_QUERY,
+            action=f"Deep reasoning query ({depth})",
+            resource_type="ai_reasoning",
+            details={
+                "depth": depth,
+                "problem_preview": request.problem[:200] if request.problem else "",
+                "processing_time_ms": processing_time,
+                "model": result.get("model", "DeepSeek R1"),
+            },
+            ip_address=req.client.host if req.client else None,
+        )
+
+        return DeepReasoningResponse(
+            status=result.get("status", "success"),
+            model=result.get("model", "DeepSeek R1"),
+            reasoning_depth=result.get("reasoning_depth", depth),
+            response=result.get("response", ""),
+            processing_time_ms=processing_time
+        )
+
+    except Exception as e:
+        safe_internal_error(e, "deep reasoning analysis")

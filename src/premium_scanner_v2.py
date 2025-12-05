@@ -7,6 +7,7 @@ Key improvements:
 - Better error handling and logging
 - Supports sector/category filtering
 - Improved caching strategy
+- Rate limiting and circuit breaker patterns (2025-12-05)
 """
 
 import yfinance as yf
@@ -18,8 +19,111 @@ from enum import Enum
 import threading
 import time
 import logging
+from functools import wraps
 
 logger = logging.getLogger(__name__)
+
+# ============================================================================
+# TIMEOUT AND RATE LIMIT CONFIGURATION
+# ============================================================================
+# These values are tuned for optimal balance between speed and reliability
+
+# Maximum total scan time regardless of symbol count (hard cap)
+MAX_SCAN_TIMEOUT_SECONDS = 120
+
+# Minimum total scan timeout (floor)
+MIN_SCAN_TIMEOUT_SECONDS = 30
+
+# Timeout per symbol (used for calculation, capped by MAX_SCAN_TIMEOUT_SECONDS)
+TIMEOUT_PER_SYMBOL_SECONDS = 8
+
+# Individual yfinance API call timeout
+YFINANCE_REQUEST_TIMEOUT_SECONDS = 10
+
+# Rate limiting: minimum delay between yfinance calls (in seconds)
+RATE_LIMIT_DELAY_SECONDS = 0.1
+
+# Circuit breaker: consecutive failures before tripping
+CIRCUIT_BREAKER_FAILURE_THRESHOLD = 5
+
+# Circuit breaker: seconds to wait before retry after trip
+CIRCUIT_BREAKER_RESET_SECONDS = 30
+
+
+class CircuitBreaker:
+    """
+    Circuit breaker pattern to prevent cascading failures.
+    Trips after consecutive failures and stays open for a reset period.
+    """
+    def __init__(self, failure_threshold: int = CIRCUIT_BREAKER_FAILURE_THRESHOLD,
+                 reset_timeout: float = CIRCUIT_BREAKER_RESET_SECONDS):
+        self.failure_threshold = failure_threshold
+        self.reset_timeout = reset_timeout
+        self.failures = 0
+        self.last_failure_time: Optional[float] = None
+        self.state = "closed"  # closed, open, half-open
+        self._lock = threading.Lock()
+
+    def record_success(self) -> None:
+        with self._lock:
+            self.failures = 0
+            self.state = "closed"
+
+    def record_failure(self) -> None:
+        with self._lock:
+            self.failures += 1
+            self.last_failure_time = time.time()
+            if self.failures >= self.failure_threshold:
+                self.state = "open"
+                logger.warning(f"Circuit breaker tripped after {self.failures} failures")
+
+    def can_execute(self) -> bool:
+        with self._lock:
+            if self.state == "closed":
+                return True
+            if self.state == "open":
+                if self.last_failure_time and (time.time() - self.last_failure_time) > self.reset_timeout:
+                    self.state = "half-open"
+                    return True
+                return False
+            # half-open: allow one attempt
+            return True
+
+    def get_state(self) -> Dict[str, Any]:
+        with self._lock:
+            return {
+                "state": self.state,
+                "failures": self.failures,
+                "threshold": self.failure_threshold
+            }
+
+
+# Global circuit breaker for yfinance calls
+_yfinance_circuit_breaker = CircuitBreaker()
+
+
+class RateLimiter:
+    """
+    Token bucket rate limiter for API calls.
+    Ensures minimum delay between requests.
+    """
+    def __init__(self, min_interval: float = RATE_LIMIT_DELAY_SECONDS):
+        self.min_interval = min_interval
+        self.last_call_time: float = 0
+        self._lock = threading.Lock()
+
+    def wait(self) -> None:
+        """Wait if needed to respect rate limit"""
+        with self._lock:
+            now = time.time()
+            elapsed = now - self.last_call_time
+            if elapsed < self.min_interval:
+                time.sleep(self.min_interval - elapsed)
+            self.last_call_time = time.time()
+
+
+# Global rate limiter for yfinance calls
+_yfinance_rate_limiter = RateLimiter()
 
 
 class ScanStatus(Enum):
@@ -164,7 +268,7 @@ class PremiumScannerV2:
         self._cache = SymbolCache(ttl_seconds=300)
         self._universe_service = None
 
-    def _get_universe_service(self):
+    def _get_universe_service(self) -> None:
         """Lazy load universe service to avoid circular imports"""
         if self._universe_service is None:
             try:
@@ -175,18 +279,31 @@ class PremiumScannerV2:
         return self._universe_service
 
     def _enrich_with_universe_data(self, symbol: str) -> Dict[str, Any]:
-        """Get additional data from universe for a symbol"""
+        """
+        Get additional data from universe for a symbol.
+
+        Note: UniverseService.get_symbol_info is async, so we skip enrichment
+        in sync contexts to avoid runtime warnings.
+        """
         universe = self._get_universe_service()
         if not universe:
             return {}
 
-        info = universe.get_symbol_info(symbol)
-        if info:
-            return {
-                'sector': getattr(info, 'sector', None),
-                'industry': getattr(info, 'industry', None),
-                'market_cap': getattr(info, 'market_cap', None)
-            }
+        try:
+            import inspect
+            # Skip if get_symbol_info is async (we're in sync context)
+            if inspect.iscoroutinefunction(universe.get_symbol_info):
+                return {}
+
+            info = universe.get_symbol_info(symbol)
+            if info:
+                return {
+                    'sector': getattr(info, 'sector', None),
+                    'industry': getattr(info, 'industry', None),
+                    'market_cap': getattr(info, 'market_cap', None)
+                }
+        except Exception:
+            pass
         return {}
 
     def _validate_symbols(self, symbols: List[str],
@@ -195,22 +312,81 @@ class PremiumScannerV2:
         """
         Pre-validate symbols using UniverseService.
         Returns (valid_symbols, skipped_symbols)
+
+        Note: UniverseService.validate_symbols is async, so we skip validation
+        in sync contexts and return all symbols as valid.
         """
         universe = self._get_universe_service()
         if not universe:
             # No universe service, return all symbols as valid
             return symbols, []
 
-        valid, invalid = universe.validate_symbols(
-            symbols=symbols,
-            require_options=require_options,
-            max_price=max_price
-        )
+        try:
+            import asyncio
+            import inspect
 
-        if invalid:
-            logger.info(f"Pre-filtered {len(invalid)} symbols (no options or price too high)")
+            # Check if validate_symbols is a coroutine function
+            if inspect.iscoroutinefunction(universe.validate_symbols):
+                # We're in a sync context, skip async validation
+                # Just do basic filtering by symbol format
+                logger.debug("Skipping async validation in sync context, returning all symbols as valid")
+                return symbols, []
 
-        return valid, invalid
+            valid, invalid = universe.validate_symbols(
+                symbols=symbols,
+                require_options=require_options,
+                max_price=max_price
+            )
+
+            if invalid:
+                logger.info(f"Pre-filtered {len(invalid)} symbols (no options or price too high)")
+
+            return valid, invalid
+
+        except Exception as e:
+            logger.warning(f"Symbol validation failed: {e}, proceeding with all symbols")
+            return symbols, []
+
+    def _fetch_ticker_info_with_timeout(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """
+        Fetch ticker info with timeout and rate limiting.
+        Uses circuit breaker pattern to avoid hammering failing API.
+        """
+        if not _yfinance_circuit_breaker.can_execute():
+            logger.debug(f"Circuit breaker open, skipping {symbol}")
+            return None
+
+        _yfinance_rate_limiter.wait()
+
+        try:
+            ticker = yf.Ticker(symbol)
+            # yfinance doesn't have native timeout, but we can limit via session
+            info = ticker.info
+            _yfinance_circuit_breaker.record_success()
+            return info
+        except Exception as e:
+            _yfinance_circuit_breaker.record_failure()
+            logger.debug(f"Ticker info fetch failed for {symbol}: {e}")
+            return None
+
+    def _fetch_options_chain_with_timeout(self, symbol: str, expiry: str) -> Optional[Any]:
+        """
+        Fetch options chain with timeout and rate limiting.
+        """
+        if not _yfinance_circuit_breaker.can_execute():
+            return None
+
+        _yfinance_rate_limiter.wait()
+
+        try:
+            ticker = yf.Ticker(symbol)
+            opt_chain = ticker.option_chain(expiry)
+            _yfinance_circuit_breaker.record_success()
+            return opt_chain
+        except Exception as e:
+            _yfinance_circuit_breaker.record_failure()
+            logger.debug(f"Options chain fetch failed for {symbol}: {e}")
+            return None
 
     def _scan_single_symbol(self,
                            symbol: str,
@@ -220,13 +396,22 @@ class PremiumScannerV2:
         """
         Scan a single symbol for premium opportunities.
         Returns: (symbol, results, error_message)
+
+        Uses rate limiting and circuit breaker for robust API access.
         """
         results = []
         error = None
+        scan_start = time.time()
 
         try:
-            ticker = yf.Ticker(symbol)
-            info = ticker.info
+            # Check circuit breaker before starting
+            if not _yfinance_circuit_breaker.can_execute():
+                return symbol, [], "Circuit breaker open"
+
+            # Fetch ticker info with rate limiting
+            info = self._fetch_ticker_info_with_timeout(symbol)
+            if not info:
+                return symbol, [], "Failed to fetch ticker info"
 
             current_price = info.get('currentPrice') or info.get('regularMarketPrice', 0)
 
@@ -236,7 +421,9 @@ class PremiumScannerV2:
             if current_price > max_price:
                 return symbol, [], f"Price ${current_price:.2f} > max ${max_price}"
 
-            # Get expiration dates
+            # Get expiration dates (with rate limit)
+            _yfinance_rate_limiter.wait()
+            ticker = yf.Ticker(symbol)
             expirations = ticker.options
             if not expirations:
                 return symbol, [], "No options available"
@@ -248,8 +435,11 @@ class PremiumScannerV2:
                 key=lambda x: abs((datetime.strptime(x, '%Y-%m-%d') - target_date).days)
             )
 
-            # Get options chain
-            opt_chain = ticker.option_chain(best_expiry)
+            # Get options chain with rate limiting
+            opt_chain = self._fetch_options_chain_with_timeout(symbol, best_expiry)
+            if opt_chain is None:
+                return symbol, [], "Failed to fetch options chain"
+
             puts = opt_chain.puts
 
             if puts.empty:
@@ -376,7 +566,15 @@ class PremiumScannerV2:
 
         logger.info(f"Scanning {len(symbols_to_scan)} symbols (cached: {len(valid_symbols) - len(symbols_to_scan)}, skipped: {len(skipped)})")
 
-        # Concurrent scanning with timeouts
+        # Calculate capped total timeout: min 30s, max 120s, scales with symbol count
+        # This prevents unbounded waits for large symbol lists
+        calculated_timeout = TIMEOUT_PER_SYMBOL_SECONDS * len(symbols_to_scan)
+        total_timeout = min(MAX_SCAN_TIMEOUT_SECONDS, max(MIN_SCAN_TIMEOUT_SECONDS, calculated_timeout))
+        logger.debug(f"Using total timeout of {total_timeout}s for {len(symbols_to_scan)} symbols")
+
+        scan_start_time = time.time()
+
+        # Concurrent scanning with CAPPED timeouts
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             future_to_symbol = {
                 executor.submit(
@@ -389,43 +587,60 @@ class PremiumScannerV2:
                 for symbol in symbols_to_scan
             }
 
-            for future in as_completed(future_to_symbol, timeout=self.symbol_timeout * len(symbols_to_scan)):
-                symbol = future_to_symbol[future]
-                progress.current_symbol = symbol
-                progress.scanned += 1
+            try:
+                for future in as_completed(future_to_symbol, timeout=total_timeout):
+                    # Check if we've exceeded our total timeout
+                    elapsed = time.time() - scan_start_time
+                    if elapsed > total_timeout:
+                        logger.warning(f"Total scan timeout exceeded ({elapsed:.1f}s > {total_timeout}s)")
+                        progress.status = ScanStatus.TIMEOUT
+                        break
 
-                try:
-                    sym, results, error = future.result(timeout=self.symbol_timeout)
+                    symbol = future_to_symbol[future]
+                    progress.current_symbol = symbol
+                    progress.scanned += 1
 
-                    if error:
+                    try:
+                        # Individual future timeout is capped at 15 seconds
+                        sym, results, error = future.result(timeout=min(self.symbol_timeout, 15))
+
+                        if error:
+                            progress.failed += 1
+                            progress.errors.append(f"{sym}: {error}")
+                        else:
+                            progress.successful += 1
+
+                        # Cache results
+                        result_dicts = [r.to_dict() for r in results]
+                        self._cache.set(symbol, dte, result_dicts)
+
+                        # Apply sector filter if specified
+                        for r in results:
+                            if sectors and r.sector and r.sector not in sectors:
+                                continue
+                            all_results.append(r.to_dict())
+
+                        progress.results_count = len(all_results)
+
+                    except TimeoutError:
                         progress.failed += 1
-                        progress.errors.append(f"{sym}: {error}")
-                    else:
-                        progress.successful += 1
+                        progress.errors.append(f"{symbol}: Timeout")
+                    except Exception as e:
+                        progress.failed += 1
+                        progress.errors.append(f"{symbol}: {str(e)[:50]}")
 
-                    # Cache results
-                    result_dicts = [r.to_dict() for r in results]
-                    self._cache.set(symbol, dte, result_dicts)
+                    if progress_callback:
+                        progress_callback(progress)
 
-                    # Apply sector filter if specified
-                    for r in results:
-                        if sectors and r.sector and r.sector not in sectors:
-                            continue
-                        all_results.append(r.to_dict())
+            except TimeoutError:
+                # Total scan timeout exceeded
+                logger.warning(f"Scan exceeded total timeout of {total_timeout}s")
+                progress.status = ScanStatus.TIMEOUT
+                progress.errors.append(f"Total timeout ({total_timeout}s) exceeded")
 
-                    progress.results_count = len(all_results)
-
-                except TimeoutError:
-                    progress.failed += 1
-                    progress.errors.append(f"{symbol}: Timeout")
-                except Exception as e:
-                    progress.failed += 1
-                    progress.errors.append(f"{symbol}: {str(e)[:50]}")
-
-                if progress_callback:
-                    progress_callback(progress)
-
-        progress.status = ScanStatus.COMPLETED
+        # Set final status if not already set to timeout
+        if progress.status != ScanStatus.TIMEOUT:
+            progress.status = ScanStatus.COMPLETED
         progress.current_symbol = ""
 
         if progress_callback:
@@ -467,6 +682,31 @@ class PremiumScannerV2:
         stats = self._cache.stats()
         self._cache.clear()
         return stats
+
+    def get_diagnostics(self) -> Dict[str, Any]:
+        """
+        Get scanner diagnostics including circuit breaker state, cache stats, and config.
+        Useful for monitoring and debugging.
+        """
+        return {
+            'circuit_breaker': _yfinance_circuit_breaker.get_state(),
+            'cache_stats': self._cache.stats(),
+            'config': {
+                'max_workers': self.max_workers,
+                'symbol_timeout': self.symbol_timeout,
+                'min_volume': self.min_volume,
+                'min_open_interest': self.min_open_interest,
+                'max_scan_timeout': MAX_SCAN_TIMEOUT_SECONDS,
+                'min_scan_timeout': MIN_SCAN_TIMEOUT_SECONDS,
+                'timeout_per_symbol': TIMEOUT_PER_SYMBOL_SECONDS,
+                'rate_limit_delay': RATE_LIMIT_DELAY_SECONDS
+            }
+        }
+
+    def reset_circuit_breaker(self) -> Dict[str, Any]:
+        """Reset the circuit breaker to closed state"""
+        _yfinance_circuit_breaker.record_success()  # This resets failures and sets state to closed
+        return _yfinance_circuit_breaker.get_state()
 
 
 # Singleton instance

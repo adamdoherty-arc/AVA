@@ -10,6 +10,7 @@ import yfinance as yf
 import numpy as np
 from pydantic import BaseModel
 from backend.services.strategy_service import get_strategy_service, StrategyService
+from backend.infrastructure.errors import safe_internal_error
 
 logger = logging.getLogger(__name__)
 
@@ -128,7 +129,7 @@ async def analyze_watchlist(
     try:
         return await service.analyze_watchlist(watchlist, min_score, strategies)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "analyze watchlist strategies")
 
 from backend.services.llm_options_strategist import LLMOptionsStrategist
 

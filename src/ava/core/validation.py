@@ -115,7 +115,7 @@ class TimestampedModel(AVABaseModel):
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: Optional[datetime] = None
 
-    def touch(self):
+    def touch(self) -> None:
         self.updated_at = datetime.now()
 
 
@@ -161,7 +161,7 @@ class OptionLeg(AVABaseModel):
         return v
 
     @model_validator(mode='after')
-    def validate_bid_ask(self):
+    def validate_bid_ask(self) -> None:
         """Ensure bid <= ask"""
         if self.bid > self.ask > 0:
             raise ValueError(f"Bid ({self.bid}) cannot be greater than ask ({self.ask})")
@@ -287,7 +287,7 @@ class StrategySetup(AVABaseModel):
     notes: Optional[str] = None
 
     @model_validator(mode='after')
-    def validate_setup(self):
+    def validate_setup(self) -> None:
         """Comprehensive setup validation"""
         # Validate max_loss is negative or zero
         if self.max_loss > 0:
@@ -349,7 +349,7 @@ class TradeSignal(AVABaseModel):
     expires_at: Optional[datetime] = None
 
     @model_validator(mode='after')
-    def set_expiry(self):
+    def set_expiry(self) -> None:
         """Set signal expiry if not provided"""
         if self.expires_at is None:
             # Signals expire at market close
@@ -383,7 +383,7 @@ class OrderRequest(AVABaseModel):
     notes: Optional[str] = None
 
     @model_validator(mode='after')
-    def validate_prices(self):
+    def validate_prices(self) -> None:
         """Validate price requirements based on order type"""
         if self.order_type == OrderType.LIMIT and self.limit_price is None:
             raise ValueError("Limit orders require limit_price")
@@ -611,7 +611,7 @@ class BacktestConfig(AVABaseModel):
     random_seed: Optional[int] = None
 
     @model_validator(mode='after')
-    def validate_dates(self):
+    def validate_dates(self) -> None:
         if self.start_date >= self.end_date:
             raise ValueError("start_date must be before end_date")
         if self.min_dte > self.max_dte:
@@ -640,7 +640,7 @@ class BacktestTrade(AVABaseModel):
     exit_reason: str = "unknown"
 
     @model_validator(mode='after')
-    def validate_dates(self):
+    def validate_dates(self) -> None:
         if self.entry_date > self.exit_date:
             raise ValueError("entry_date cannot be after exit_date")
         return self

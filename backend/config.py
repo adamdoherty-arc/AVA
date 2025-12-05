@@ -31,24 +31,49 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
 
     # ==========================================================================
+    # Server Ports - HARDCODED - DO NOT CHANGE
+    # ==========================================================================
+    SERVER_HOST: str = "0.0.0.0"
+    SERVER_PORT: int = 8002  # Backend API port - HARDCODED
+    FRONTEND_PORT: int = 5181  # Frontend dev server port - HARDCODED
+
+    # ==========================================================================
     # CORS Configuration
     # ==========================================================================
     CORS_ORIGINS: str = Field(
         default=(
             "http://localhost:5173,http://localhost:5174,"
-            "http://localhost:5175,http://localhost:5179,http://localhost:3000"
+            "http://localhost:5175,http://localhost:5179,http://localhost:5180,"
+            "http://localhost:5181,http://localhost:3000,"
+            "http://127.0.0.1:5173,http://127.0.0.1:5174,"
+            "http://127.0.0.1:5175,http://127.0.0.1:5179,http://127.0.0.1:5180,"
+            "http://127.0.0.1:5181,http://127.0.0.1:3000"
         ),
         description="Comma-separated list of allowed CORS origins"
     )
     CORS_ALLOW_CREDENTIALS: bool = True
-    CORS_ALLOW_METHODS: str = "*"
-    CORS_ALLOW_HEADERS: str = "*"
+    # Security: Explicit methods instead of wildcard
+    CORS_ALLOW_METHODS: str = "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+    # Security: Explicit headers instead of wildcard
+    CORS_ALLOW_HEADERS: str = "Accept,Authorization,Content-Type,X-Correlation-ID,X-Requested-With"
 
     @property
     def cors_origins_list(self) -> List[str]:
         """Parse CORS origins into list"""
         origins = self.CORS_ORIGINS.split(",")
         return [origin.strip() for origin in origins if origin.strip()]
+
+    @property
+    def cors_methods_list(self) -> List[str]:
+        """Parse CORS methods into list"""
+        methods = self.CORS_ALLOW_METHODS.split(",")
+        return [method.strip() for method in methods if method.strip()]
+
+    @property
+    def cors_headers_list(self) -> List[str]:
+        """Parse CORS headers into list"""
+        headers = self.CORS_ALLOW_HEADERS.split(",")
+        return [header.strip() for header in headers if header.strip()]
 
     # ==========================================================================
     # API Keys

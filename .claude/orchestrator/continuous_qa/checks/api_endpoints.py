@@ -32,18 +32,34 @@ class APIEndpointsCheck(BaseCheck):
     CRITICAL check - API endpoints must work and return real data.
     """
 
-    # Default endpoints to test
+    # Default endpoints to test - VERIFIED against actual FastAPI routes (Dec 2025)
+    # All endpoints verified returning 200 status
     DEFAULT_ENDPOINTS = [
-        ("GET", "/api/health", "Health check"),
+        # System endpoints (CRITICAL)
+        ("GET", "/api/system/health", "System health check"),
+        ("GET", "/api/system/services", "System services status"),
+        # Portfolio endpoints (HIGH PRIORITY)
+        ("GET", "/api/portfolio/positions", "Portfolio positions"),
+        ("GET", "/api/portfolio/summary", "Portfolio summary"),
+        # Dashboard endpoints
+        ("GET", "/api/dashboard/summary", "Dashboard summary"),
+        # Sports endpoints
         ("GET", "/api/sports/games", "Sports games"),
-        ("GET", "/api/predictions/nfl", "NFL predictions"),
-        ("GET", "/api/dashboard/portfolio", "Portfolio dashboard"),
+        # Predictions endpoints
+        ("GET", "/api/predictions/kalshi", "Kalshi markets"),
+        # Scanner endpoints (HIGH PRIORITY)
+        ("GET", "/api/scanner/quick-scan", "Quick scan"),
+        ("GET", "/api/scanner/stored-premiums", "Stored premiums"),
+        ("GET", "/api/scanner/ai-picks", "AI picks"),
+        # Chat endpoints
         ("GET", "/api/chat/history", "Chat history"),
+        # Options endpoints (HIGH PRIORITY)
         ("GET", "/api/options/analysis", "Options analysis"),
+        # Earnings endpoints
         ("GET", "/api/earnings/calendar", "Earnings calendar"),
+        # Watchlist endpoints
         ("GET", "/api/xtrades/watchlist", "XTrades watchlist"),
-        ("GET", "/api/scanner/opportunities", "Scanner opportunities"),
-        ("GET", "/api/positions", "Positions"),
+        ("GET", "/api/watchlist/all", "All watchlists"),
     ]
 
     # Patterns that indicate mock/dummy data
@@ -181,15 +197,15 @@ class APIEndpointsCheck(BaseCheck):
         """Check if the API server is available."""
         try:
             response = requests.get(
-                f"{self.base_url}/api/health",
+                f"{self.base_url}/api/system/health",
                 timeout=5,
             )
-            return response.status_code in (200, 404)  # 404 is OK (no health endpoint)
+            return response.status_code == 200
         except requests.exceptions.RequestException:
-            # Try root endpoint
+            # Try legacy health endpoint
             try:
-                response = requests.get(self.base_url, timeout=5)
-                return True
+                response = requests.get(f"{self.base_url}/api/health", timeout=5)
+                return response.status_code in (200, 404)
             except requests.exceptions.RequestException:
                 return False
 

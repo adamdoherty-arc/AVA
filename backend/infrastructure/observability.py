@@ -647,7 +647,7 @@ class HealthChecker:
     - Custom health check registration
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._checks: Dict[str, Callable[[], Awaitable[HealthCheck]]] = {}
         self._logger = get_logger("health_checker")
 
@@ -799,3 +799,215 @@ def setup_observability(config: Optional[ObservabilityConfig] = None) -> None:
         metrics_enabled=config.metrics_enabled,
         environment=config.environment,
     )
+
+
+# =============================================================================
+# Audit Logging
+# =============================================================================
+
+
+class AuditEventType(str, Enum):
+    """Types of audit events for compliance and security tracking."""
+
+    # Trading Actions
+    ORDER_PLACED = "order_placed"
+    ORDER_CANCELLED = "order_cancelled"
+    ORDER_MODIFIED = "order_modified"
+    ORDER_FILLED = "order_filled"
+    POSITION_OPENED = "position_opened"
+    POSITION_CLOSED = "position_closed"
+
+    # Portfolio Actions
+    PORTFOLIO_SYNC = "portfolio_sync"
+    WATCHLIST_CREATED = "watchlist_created"
+    WATCHLIST_MODIFIED = "watchlist_modified"
+    WATCHLIST_DELETED = "watchlist_deleted"
+    ALERT_CREATED = "alert_created"
+    ALERT_TRIGGERED = "alert_triggered"
+
+    # Authentication/Security
+    LOGIN_SUCCESS = "login_success"
+    LOGIN_FAILED = "login_failed"
+    LOGOUT = "logout"
+    API_KEY_CREATED = "api_key_created"
+    API_KEY_REVOKED = "api_key_revoked"
+
+    # AI/Agent Actions
+    AGENT_INVOKED = "agent_invoked"
+    DEEP_REASONING_QUERY = "deep_reasoning_query"
+    PREDICTION_MADE = "prediction_made"
+
+    # Data Access
+    SENSITIVE_DATA_ACCESSED = "sensitive_data_accessed"
+    EXPORT_REQUESTED = "export_requested"
+
+    # Settings
+    SETTINGS_CHANGED = "settings_changed"
+    BROKER_CONNECTED = "broker_connected"
+    BROKER_DISCONNECTED = "broker_disconnected"
+
+
+@dataclass
+class AuditEvent:
+    """Represents a single audit log event."""
+
+    event_type: AuditEventType
+    user_id: Optional[str] = None
+    correlation_id: Optional[str] = None
+    action: str = ""
+    resource_type: Optional[str] = None
+    resource_id: Optional[str] = None
+    details: Dict[str, Any] = field(default_factory=dict)
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
+    timestamp: datetime = field(default_factory=datetime.now)
+    success: bool = True
+    error_message: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for storage/logging."""
+        return {
+            "event_type": self.event_type.value,
+            "user_id": self.user_id,
+            "correlation_id": self.correlation_id,
+            "action": self.action,
+            "resource_type": self.resource_type,
+            "resource_id": self.resource_id,
+            "details": self.details,
+            "ip_address": self.ip_address,
+            "user_agent": self.user_agent,
+            "timestamp": self.timestamp.isoformat(),
+            "success": self.success,
+            "error_message": self.error_message,
+        }
+
+
+class AuditLogger:
+    """
+    Audit logging service for compliance and security tracking.
+
+    Features:
+    - Structured audit event logging
+    - Database persistence (optional)
+    - Correlation with request IDs
+    - SEC/FINRA compliance support
+
+    Usage:
+        audit = get_audit_logger()
+        await audit.log(
+            AuditEventType.ORDER_PLACED,
+            user_id="user123",
+            action="Buy 100 shares AAPL",
+            resource_type="order",
+            resource_id="order-456",
+            details={"symbol": "AAPL", "quantity": 100, "price": 150.00}
+        )
+    """
+
+    def __init__(self) -> None:
+        self._logger = structlog.get_logger("audit")
+        self._db_enabled = False
+        self._events: List[AuditEvent] = []  # In-memory buffer
+
+    async def log(
+        self,
+        event_type: AuditEventType,
+        user_id: Optional[str] = None,
+        action: str = "",
+        resource_type: Optional[str] = None,
+        resource_id: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None,
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None,
+        success: bool = True,
+        error_message: Optional[str] = None,
+        correlation_id: Optional[str] = None,
+    ) -> AuditEvent:
+        """Log an audit event."""
+        event = AuditEvent(
+            event_type=event_type,
+            user_id=user_id,
+            correlation_id=correlation_id or generate_correlation_id(),
+            action=action,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            details=details or {},
+            ip_address=ip_address,
+            user_agent=user_agent,
+            success=success,
+            error_message=error_message,
+        )
+
+        # Log to structured log
+        self._logger.info(
+            "audit_event",
+            **event.to_dict()
+        )
+
+        # Store in memory buffer (could persist to DB)
+        self._events.append(event)
+        if len(self._events) > 10000:  # Keep last 10k events in memory
+            self._events = self._events[-5000:]
+
+        # Optionally persist to database
+        if self._db_enabled:
+            await self._persist_to_db(event)
+
+        return event
+
+    async def _persist_to_db(self, event: AuditEvent) -> None:
+        """Persist audit event to database."""
+        try:
+            from backend.infrastructure.database import get_database
+            db = await get_database()
+            await db.execute(
+                """
+                INSERT INTO audit_log
+                (event_type, user_id, correlation_id, action, resource_type,
+                 resource_id, details, ip_address, user_agent, timestamp, success, error_message)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                """,
+                event.event_type.value,
+                event.user_id,
+                event.correlation_id,
+                event.action,
+                event.resource_type,
+                event.resource_id,
+                event.details,
+                event.ip_address,
+                event.user_agent,
+                event.timestamp,
+                event.success,
+                event.error_message,
+            )
+        except Exception as e:
+            self._logger.error("audit_db_persist_failed", error=str(e))
+
+    def get_recent_events(
+        self,
+        event_type: Optional[AuditEventType] = None,
+        user_id: Optional[str] = None,
+        limit: int = 100
+    ) -> List[AuditEvent]:
+        """Get recent audit events from memory buffer."""
+        events = self._events.copy()
+
+        if event_type:
+            events = [e for e in events if e.event_type == event_type]
+
+        if user_id:
+            events = [e for e in events if e.user_id == user_id]
+
+        return events[-limit:]
+
+
+# Global audit logger instance
+_audit_logger: Optional[AuditLogger] = None
+
+
+def get_audit_logger() -> AuditLogger:
+    """Get the global audit logger instance."""
+    global _audit_logger
+    if _audit_logger is None:
+        _audit_logger = AuditLogger()
+    return _audit_logger

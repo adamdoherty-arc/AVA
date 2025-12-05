@@ -15,6 +15,7 @@ import numpy as np
 from src.advanced_technical_indicators import VolumeProfileCalculator, OrderFlowAnalyzer
 from src.standard_indicators import StandardIndicators
 from src.momentum_indicators import MomentumIndicators
+from backend.infrastructure.errors import safe_internal_error
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +126,7 @@ async def get_volume_profile(symbol: str, period: str = "3M", bins: int = 50):
         raise
     except Exception as e:
         logger.error(f"Error getting Volume Profile for {symbol}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "get volume profile")
 
 
 @router.get("/cvd/{symbol}")
@@ -229,7 +230,7 @@ async def get_cvd_analysis(symbol: str, period: str = "1M"):
         raise
     except Exception as e:
         logger.error(f"Error getting CVD for {symbol}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "get CVD analysis")
 
 
 @router.get("/ichimoku/{symbol}")
@@ -331,7 +332,7 @@ async def get_ichimoku_cloud(symbol: str, period: str = "3M"):
         raise
     except Exception as e:
         logger.error(f"Error getting Ichimoku for {symbol}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "get Ichimoku cloud")
 
 
 @router.get("/fibonacci/{symbol}")
@@ -452,7 +453,7 @@ async def get_fibonacci_levels(symbol: str, period: str = "3M", trend: str = "au
         raise
     except Exception as e:
         logger.error(f"Error getting Fibonacci for {symbol}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "get Fibonacci levels")
 
 
 @router.get("/all-indicators/{symbol}")
@@ -505,4 +506,4 @@ async def get_all_standard_indicators(symbol: str, period: str = "3M"):
         raise
     except Exception as e:
         logger.error(f"Error getting all indicators for {symbol}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "get all indicators")

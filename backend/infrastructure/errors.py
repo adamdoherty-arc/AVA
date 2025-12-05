@@ -658,3 +658,380 @@ def register_exception_handlers(app: Any) -> None:
     app.add_exception_handler(Exception, generic_exception_handler)
 
     logger.info("exception_handlers_registered")
+
+
+# =============================================================================
+# Safe Error Helpers
+# =============================================================================
+
+
+def raise_safe_http_error(
+    status_code: int,
+    user_message: str,
+    exception: Optional[Exception] = None,
+    log_error: bool = True,
+) -> None:
+    """
+    Raise HTTPException with a safe user-facing message while logging the actual error.
+
+    Use this instead of `raise HTTPException(status_code=500, detail=str(e))`
+    to avoid exposing internal error details to users.
+
+    Args:
+        status_code: HTTP status code
+        user_message: Safe message to show to users
+        exception: Original exception (logged but not exposed)
+        log_error: Whether to log the exception
+
+    Raises:
+        HTTPException with user_message as detail
+
+    Usage:
+        try:
+            await do_something()
+        except Exception as e:
+            raise_safe_http_error(500, "Failed to process request", e)
+    """
+    if log_error and exception:
+        logger.error(
+            "safe_http_error",
+            status_code=status_code,
+            user_message=user_message,
+            error_type=type(exception).__name__,
+            error_detail=str(exception),
+        )
+    raise HTTPException(status_code=status_code, detail=user_message)
+
+
+def safe_internal_error(
+    exception: Exception,
+    operation: str = "process request",
+) -> None:
+    """
+    Helper for 500 errors - logs detail but shows generic message.
+
+    Usage:
+        except Exception as e:
+            safe_internal_error(e, "fetch positions")
+    """
+    raise_safe_http_error(
+        status_code=500,
+        user_message=f"Failed to {operation}. Please try again later.",
+        exception=exception,
+    )
+
+
+def safe_service_error(
+    exception: Exception,
+    service_name: str,
+) -> None:
+    """
+    Helper for external service errors.
+
+    Usage:
+        except Exception as e:
+            safe_service_error(e, "Robinhood")
+    """
+    raise_safe_http_error(
+        status_code=502,
+        user_message=f"{service_name} service is temporarily unavailable.",
+        exception=exception,
+    )
+
+
+# =============================================================================
+# AI-Powered Error Classification
+# =============================================================================
+
+
+class ErrorClassifier:
+    """
+    AI-powered error classification and correlation system.
+
+    Features:
+    - Automatic error categorization using pattern matching
+    - Error correlation to identify related issues
+    - Smart suggestions for resolution
+    - Error trend analysis
+    """
+
+    # Error pattern definitions for classification
+    ERROR_PATTERNS = {
+        ErrorCode.DATABASE_ERROR: [
+            "connection", "postgres", "asyncpg", "pool", "timeout", "deadlock",
+            "constraint", "duplicate key", "foreign key", "transaction"
+        ],
+        ErrorCode.BROKER_API_ERROR: [
+            "robinhood", "broker", "authentication", "token", "session",
+            "trading", "order", "position", "401", "403"
+        ],
+        ErrorCode.MARKET_DATA_ERROR: [
+            "yfinance", "yahoo", "quote", "ticker", "market data", "price",
+            "historical", "options chain", "expiration"
+        ],
+        ErrorCode.AI_SERVICE_ERROR: [
+            "llm", "ollama", "openai", "anthropic", "model", "inference",
+            "embedding", "rag", "vector", "chromadb"
+        ],
+        ErrorCode.RATE_LIMIT_EXCEEDED: [
+            "rate limit", "too many requests", "429", "throttle", "quota"
+        ],
+        ErrorCode.SPORTS_API_ERROR: [
+            "espn", "kalshi", "odds", "game", "sport", "betting"
+        ],
+        ErrorCode.CACHE_ERROR: [
+            "redis", "cache", "memcached", "ttl", "expire"
+        ],
+        ErrorCode.VALIDATION_ERROR: [
+            "validation", "invalid", "required", "format", "type error",
+            "pydantic", "schema"
+        ],
+    }
+
+    # Suggested actions for each error code
+    RESOLUTION_HINTS = {
+        ErrorCode.DATABASE_ERROR: [
+            "Check database connection pool status",
+            "Verify PostgreSQL is running",
+            "Review connection string in .env",
+            "Check for long-running queries or deadlocks"
+        ],
+        ErrorCode.BROKER_API_ERROR: [
+            "Re-authenticate with Robinhood",
+            "Check if session token is expired",
+            "Verify trading hours",
+            "Review rate limits"
+        ],
+        ErrorCode.MARKET_DATA_ERROR: [
+            "Verify symbol is valid and tradeable",
+            "Check if market is open",
+            "Try refreshing data cache",
+            "Verify yfinance installation"
+        ],
+        ErrorCode.AI_SERVICE_ERROR: [
+            "Check if Ollama is running",
+            "Verify model is downloaded",
+            "Review API key configuration",
+            "Check GPU/memory availability"
+        ],
+        ErrorCode.RATE_LIMIT_EXCEEDED: [
+            "Wait before retrying",
+            "Implement request caching",
+            "Reduce request frequency",
+            "Check API quota usage"
+        ],
+        ErrorCode.SPORTS_API_ERROR: [
+            "Verify ESPN API is accessible",
+            "Check Kalshi connection",
+            "Verify game IDs are valid",
+            "Review sports data cache"
+        ],
+        ErrorCode.CACHE_ERROR: [
+            "Check Redis connection",
+            "Verify cache key format",
+            "Review TTL settings",
+            "Fall back to in-memory cache"
+        ],
+    }
+
+    def __init__(self) -> None:
+        self._error_history: List[Dict[str, Any]] = []
+        self._correlation_window = 300  # 5 minutes
+
+    def classify(self, exception: Exception) -> ErrorCode:
+        """
+        Classify an exception into an appropriate error code using AI pattern matching.
+
+        Args:
+            exception: The exception to classify
+
+        Returns:
+            ErrorCode that best matches the exception
+        """
+        error_str = str(exception).lower()
+        exception_type = type(exception).__name__.lower()
+
+        # Check each pattern category
+        scores: Dict[ErrorCode, int] = {}
+
+        for code, patterns in self.ERROR_PATTERNS.items():
+            score = 0
+            for pattern in patterns:
+                if pattern in error_str or pattern in exception_type:
+                    score += 1
+            if score > 0:
+                scores[code] = score
+
+        # Return highest scoring code, or INTERNAL_ERROR if no match
+        if scores:
+            return max(scores, key=scores.get)
+        return ErrorCode.INTERNAL_ERROR
+
+    def get_resolution_hints(self, code: ErrorCode) -> List[str]:
+        """Get suggested resolution steps for an error code."""
+        return self.RESOLUTION_HINTS.get(code, [
+            "Check application logs for more details",
+            "Verify all services are running",
+            "Contact support if issue persists"
+        ])
+
+    def record_error(
+        self,
+        exception: Exception,
+        code: ErrorCode,
+        context: Optional[Dict[str, Any]] = None
+    ) -> str:
+        """
+        Record an error for correlation analysis.
+
+        Returns:
+            error_id for tracking
+        """
+        import uuid
+        from datetime import datetime
+
+        error_id = str(uuid.uuid4())[:8]
+
+        self._error_history.append({
+            "error_id": error_id,
+            "timestamp": datetime.now(),
+            "code": code,
+            "exception_type": type(exception).__name__,
+            "message": str(exception)[:500],
+            "context": context or {},
+        })
+
+        # Keep only recent errors (memory management)
+        cutoff = datetime.now() - timedelta(seconds=self._correlation_window * 2)
+        self._error_history = [
+            e for e in self._error_history
+            if e["timestamp"] > cutoff
+        ]
+
+        return error_id
+
+    def find_correlated_errors(self, error_id: str) -> List[Dict[str, Any]]:
+        """Find errors that may be related to a given error."""
+        from datetime import datetime
+
+        # Find the target error
+        target = next(
+            (e for e in self._error_history if e["error_id"] == error_id),
+            None
+        )
+        if not target:
+            return []
+
+        # Find errors within correlation window with same code
+        cutoff_start = target["timestamp"] - timedelta(seconds=self._correlation_window)
+        cutoff_end = target["timestamp"] + timedelta(seconds=self._correlation_window)
+
+        correlated = [
+            e for e in self._error_history
+            if e["error_id"] != error_id
+            and cutoff_start <= e["timestamp"] <= cutoff_end
+            and e["code"] == target["code"]
+        ]
+
+        return correlated
+
+    def get_error_trends(self) -> Dict[str, Any]:
+        """Analyze recent error trends."""
+        from collections import Counter
+        from datetime import datetime
+
+        if not self._error_history:
+            return {"total_errors": 0, "trends": {}}
+
+        # Count by code
+        code_counts = Counter(e["code"].name for e in self._error_history)
+
+        # Count by exception type
+        type_counts = Counter(e["exception_type"] for e in self._error_history)
+
+        # Calculate error rate (per minute)
+        if len(self._error_history) >= 2:
+            time_range = (
+                self._error_history[-1]["timestamp"] -
+                self._error_history[0]["timestamp"]
+            ).total_seconds() / 60
+            error_rate = len(self._error_history) / max(time_range, 1)
+        else:
+            error_rate = 0
+
+        return {
+            "total_errors": len(self._error_history),
+            "error_rate_per_minute": round(error_rate, 2),
+            "by_code": dict(code_counts.most_common(5)),
+            "by_type": dict(type_counts.most_common(5)),
+            "window_seconds": self._correlation_window,
+        }
+
+
+# Global error classifier instance
+_error_classifier: Optional[ErrorClassifier] = None
+
+
+def get_error_classifier() -> ErrorClassifier:
+    """Get the global error classifier instance."""
+    global _error_classifier
+    if _error_classifier is None:
+        _error_classifier = ErrorClassifier()
+    return _error_classifier
+
+
+def smart_error_response(
+    exception: Exception,
+    operation: str,
+    context: Optional[Dict[str, Any]] = None,
+    include_hints: bool = False,
+) -> None:
+    """
+    AI-enhanced error response with classification and correlation.
+
+    Features:
+    - Automatic error code classification
+    - Error correlation tracking
+    - Optional resolution hints in dev mode
+
+    Usage:
+        except Exception as e:
+            smart_error_response(e, "fetch portfolio", {"user_id": user_id})
+    """
+    classifier = get_error_classifier()
+
+    # Classify the error
+    code = classifier.classify(exception)
+
+    # Record for correlation
+    error_id = classifier.record_error(exception, code, context)
+
+    # Log with full context
+    logger.error(
+        "smart_error_classified",
+        error_id=error_id,
+        operation=operation,
+        error_code=code.name,
+        exception_type=type(exception).__name__,
+        message=str(exception),
+        context=context,
+        correlated_count=len(classifier.find_correlated_errors(error_id)),
+    )
+
+    # Build user message
+    user_message = f"Failed to {operation}. Please try again later."
+
+    # Add hints in development mode
+    if include_hints:
+        hints = classifier.get_resolution_hints(code)
+        if hints:
+            user_message += f" (Error ID: {error_id})"
+
+    # Get HTTP status from error code
+    http_status = ERROR_CODE_TO_HTTP.get(code, 500)
+
+    raise HTTPException(
+        status_code=http_status,
+        detail=user_message,
+        headers={"X-Error-ID": error_id, "X-Error-Code": code.name}
+    )

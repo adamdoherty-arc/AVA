@@ -25,7 +25,7 @@ Usage:
         module_name="api_endpoints",
         check_name="server_available",
         status="passed",
-        message="API server responding at http://localhost:8002"
+        message=f"API server responding at {os.getenv("API_BASE_URL", "http://localhost:8002").rstrip("/api")}"
     )
 
     # Log an issue
@@ -71,7 +71,7 @@ class QAIssuesDBManager:
         }
         self._connection = None
 
-    def get_connection(self):
+    def get_connection(self) -> None:
         """Create and return a database connection"""
         try:
             conn = psycopg2.connect(**self.db_config)
@@ -999,7 +999,7 @@ if __name__ == "__main__":
             module_name="api_endpoints",
             check_name="server_available",
             status="passed",
-            message="API server responding at http://localhost:8002",
+            message=f"API server responding at {os.getenv("API_BASE_URL", "http://localhost:8002").rstrip("/api")}",
             duration_ms=150
         )
         qa_mgr.log_check_result(

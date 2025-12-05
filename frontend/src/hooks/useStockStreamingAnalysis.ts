@@ -4,6 +4,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { BACKEND_URL } from '@/config/api';
 
 export interface AnalysisState {
   status: 'idle' | 'connecting' | 'analyzing' | 'complete' | 'error';
@@ -74,8 +75,8 @@ export const useStockStreamingAnalysis = () => {
         symbol: symbol.toUpperCase(),
       });
 
-      // Create new EventSource
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8002';
+      // Create new EventSource - uses centralized config
+      const apiUrl = BACKEND_URL;
       const url = `${apiUrl}/api/stocks/tiles/stream/analyze/${symbol.toUpperCase()}`;
 
       const eventSource = new EventSource(url);

@@ -1,0 +1,7 @@
+{
+  "pid": 45504,
+  "service_name": "qa_runner",
+  "port": null,
+  "start_time": "2025-12-05T17:07:47.011866",
+  "command": "C:\\code\\MagnusAntiG\\Magnus\\.claude\\orchestrator\\continuous_qa\\qa_runner.py --daemon --force --interval 10"
+}

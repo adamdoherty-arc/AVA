@@ -291,7 +291,7 @@ class GreeksStreamer:
             if position_id in self._last_greeks:
                 del self._last_greeks[position_id]
 
-    def clear_positions(self):
+    def clear_positions(self) -> None:
         """Clear all tracked positions"""
         self.positions.clear()
         self._last_greeks.clear()
@@ -319,7 +319,7 @@ class GreeksStreamer:
     # STREAMING
     # =========================================================================
 
-    async def start(self):
+    async def start(self) -> None:
         """Start Greeks streaming"""
         if self.running:
             return
@@ -328,7 +328,7 @@ class GreeksStreamer:
         self.task = asyncio.create_task(self._streaming_loop())
         logger.info("Greeks streamer started")
 
-    async def stop(self):
+    async def stop(self) -> None:
         """Stop Greeks streaming"""
         self.running = False
         if self.task:
@@ -339,7 +339,7 @@ class GreeksStreamer:
                 pass
         logger.info("Greeks streamer stopped")
 
-    async def _streaming_loop(self):
+    async def _streaming_loop(self) -> None:
         """Main streaming loop"""
         while self.running:
             try:

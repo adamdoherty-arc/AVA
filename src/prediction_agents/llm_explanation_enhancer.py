@@ -1,6 +1,12 @@
 """
 LLM Explanation Enhancer for Sports Predictions
-Uses Qwen2.5 local model to generate natural language explanations
+================================================
+
+Uses local LLMs for generating natural language explanations:
+- Qwen 2.5 32B: Fast explanations (~5s)
+- DeepSeek R1 32B: Deep reasoning analysis (~30s) for high-stakes predictions
+
+The R1-0528 update provides chain-of-thought reasoning approaching O3/Gemini 2.5 Pro.
 """
 
 import logging
@@ -12,7 +18,11 @@ logger = logging.getLogger(__name__)
 
 class LLMExplanationEnhancer:
     """
-    Enhances sports prediction explanations using local LLM (Qwen2.5).
+    Enhances sports prediction explanations using local LLMs.
+
+    Models:
+    - Qwen 2.5 32B: Default for quick explanations
+    - DeepSeek R1 32B: Deep reasoning for high-value predictions (chain-of-thought)
 
     Falls back to template-based explanations if LLM is unavailable.
     """
@@ -234,6 +244,159 @@ Write in a confident, analytical tone suitable for serious bettors. Be specific 
         }
 
         return f"{winner} {confidence_desc.get(confidence_level, 'favored')} to win ({probability:.1%} probability)"
+
+    def enhance_with_deep_reasoning(
+        self,
+        sport: str,
+        home_team: str,
+        away_team: str,
+        winner: str,
+        probability: float,
+        features: Dict[str, Any],
+        adjustments: Dict[str, Any],
+        betting_line: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Generate deep reasoning analysis using DeepSeek R1 32B.
+
+        This method uses chain-of-thought reasoning for:
+        - High-stakes predictions (probability edge > 10%)
+        - Complex multi-factor analysis
+        - Value bet identification
+        - Risk assessment
+
+        Args:
+            sport: Sport type
+            home_team: Home team name
+            away_team: Away team name
+            winner: Predicted winner
+            probability: Win probability (0-1)
+            features: Features dictionary
+            adjustments: Adjustments dictionary
+            betting_line: Optional betting line data (spread, total, odds)
+
+        Returns:
+            Dict with:
+            - thinking: Chain-of-thought reasoning process
+            - analysis: Final analysis
+            - confidence: Confidence level (High/Medium/Low)
+            - value_assessment: Whether this is a value bet
+            - key_factors: Top factors driving prediction
+        """
+        try:
+            from src.magnus_local_llm import get_magnus_llm, TaskComplexity
+
+            llm = get_magnus_llm()
+
+            # Format all data
+            features_str = self._format_features(features)
+            adjustments_str = self._format_adjustments(adjustments)
+
+            betting_str = ""
+            if betting_line:
+                betting_str = f"""
+BETTING LINE DATA:
+- Spread: {betting_line.get('spread', 'N/A')}
+- Over/Under: {betting_line.get('total', 'N/A')}
+- Moneyline: {betting_line.get('moneyline', 'N/A')}
+- Implied Probability: {betting_line.get('implied_prob', 'N/A')}
+"""
+
+            problem = f"""Analyze this {sport} prediction with deep reasoning:
+
+MATCHUP: {away_team} @ {home_team}
+PREDICTED WINNER: {winner}
+MODEL PROBABILITY: {probability:.1%}
+
+ANALYSIS FACTORS:
+{features_str}
+
+ADJUSTMENTS:
+{adjustments_str}
+{betting_str}
+
+Provide a deep analysis covering:
+1. Why is {winner} favored? What are the key statistical drivers?
+2. What could go wrong with this prediction? Identify risks.
+3. Is this a value bet? Compare model probability to implied odds.
+4. What specific game factors should we watch?
+5. Final confidence level (High/Medium/Low) with justification."""
+
+            context = {
+                "sport": sport,
+                "matchup": f"{away_team} @ {home_team}",
+                "model_probability": f"{probability:.1%}",
+                "predicted_winner": winner
+            }
+
+            # Use DeepSeek R1 for deep reasoning
+            result = llm.deep_reasoning(
+                problem=problem,
+                context=context,
+                reasoning_depth="deep",
+                extract_thinking=True
+            )
+
+            if result.get("status") == "success":
+                logger.info(f"Deep reasoning generated for {home_team} vs {away_team}")
+                return {
+                    "status": "success",
+                    "model": "DeepSeek R1 32B (R1-0528)",
+                    "thinking": result.get("thinking", ""),
+                    "analysis": result.get("answer", result.get("response", "")),
+                    "confidence": result.get("confidence", "Medium"),
+                    "value_assessment": self._extract_value_assessment(result.get("answer", "")),
+                    "key_factors": self._extract_key_factors(result.get("answer", "")),
+                    "raw_response": result.get("response", "")
+                }
+            else:
+                logger.warning(f"Deep reasoning failed: {result.get('error')}")
+                return {
+                    "status": "error",
+                    "error": result.get("error", "Unknown error"),
+                    "fallback_available": True
+                }
+
+        except Exception as e:
+            logger.error(f"Deep reasoning error: {e}")
+            return {
+                "status": "error",
+                "error": str(e),
+                "fallback_available": True
+            }
+
+    def _extract_value_assessment(self, analysis: str) -> Optional[str]:
+        """Extract value bet assessment from analysis."""
+        import re
+        analysis_lower = analysis.lower()
+
+        if "strong value" in analysis_lower or "excellent value" in analysis_lower:
+            return "Strong Value"
+        elif "value bet" in analysis_lower or "good value" in analysis_lower:
+            return "Good Value"
+        elif "fair value" in analysis_lower or "correctly priced" in analysis_lower:
+            return "Fair Value"
+        elif "no value" in analysis_lower or "overpriced" in analysis_lower:
+            return "No Value"
+
+        return None
+
+    def _extract_key_factors(self, analysis: str) -> list:
+        """Extract key factors from analysis."""
+        import re
+        factors = []
+
+        # Look for numbered points or bullet points
+        lines = analysis.split('\n')
+        for line in lines:
+            line = line.strip()
+            # Match "1." or "- " or "•" patterns
+            if re.match(r'^(\d+\.|-|•|\*)\s*', line):
+                clean = re.sub(r'^(\d+\.|-|•|\*)\s*', '', line).strip()
+                if clean and len(clean) > 10 and len(clean) < 200:
+                    factors.append(clean)
+
+        return factors[:5]  # Return top 5 factors
 
 
 # Singleton instance

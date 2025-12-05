@@ -25,7 +25,7 @@ class RateLimitConfig:
     requests: int  # Number of requests allowed
     window: int    # Time window in seconds
 
-    def __str__(self):
+    def __str__(self) -> None:
         return f"{self.requests}/{self.window}s"
 
 
@@ -54,7 +54,7 @@ class SlidingWindowRateLimiter:
             # Rate limited
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         # key -> list of request timestamps
         self._requests: Dict[str, list] = defaultdict(list)
         self._lock = asyncio.Lock()
@@ -162,7 +162,7 @@ class APIQuotaManager:
             for _ in range(calls):
                 self._usage.append(now)
 
-    def _cleanup_old_usage(self):
+    def _cleanup_old_usage(self) -> None:
         """Remove usage older than 1 hour"""
         cutoff = time.time() - 3600
         self._usage = [ts for ts in self._usage if ts > cutoff]
@@ -183,7 +183,7 @@ class APIQuotaManager:
                 "pct_used": round(used / self.hourly_limit * 100, 1)
             }
 
-    async def reset(self):
+    async def reset(self) -> None:
         """Reset quota (use carefully)"""
         async with self._lock:
             self._usage.clear()

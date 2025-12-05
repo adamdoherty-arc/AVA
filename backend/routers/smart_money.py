@@ -12,6 +12,7 @@ import pandas as pd
 
 # Import existing Smart Money Indicators
 from src.smart_money_indicators import SmartMoneyIndicators
+from backend.infrastructure.errors import safe_internal_error
 
 logger = logging.getLogger(__name__)
 
@@ -249,7 +250,7 @@ async def get_smart_money_analysis(
         raise
     except Exception as e:
         logger.error(f"Error getting Smart Money analysis for {symbol}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "get Smart Money analysis")
 
 
 @router.get("/order-blocks/{symbol}")
@@ -295,7 +296,7 @@ async def get_order_blocks(symbol: str, timeframe: str = "1D"):
         raise
     except Exception as e:
         logger.error(f"Error getting Order Blocks for {symbol}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "get order blocks")
 
 
 @router.get("/fvg/{symbol}")
@@ -341,7 +342,7 @@ async def get_fair_value_gaps(symbol: str, timeframe: str = "1D"):
         raise
     except Exception as e:
         logger.error(f"Error getting FVGs for {symbol}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "get fair value gaps")
 
 
 @router.get("/liquidity/{symbol}")
@@ -390,7 +391,7 @@ async def get_liquidity_pools(symbol: str, timeframe: str = "1D"):
         raise
     except Exception as e:
         logger.error(f"Error getting liquidity pools for {symbol}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "get liquidity pools")
 
 
 @router.get("/structure/{symbol}")
@@ -444,4 +445,4 @@ async def get_market_structure(symbol: str, timeframe: str = "1D"):
         raise
     except Exception as e:
         logger.error(f"Error getting market structure for {symbol}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "get market structure")

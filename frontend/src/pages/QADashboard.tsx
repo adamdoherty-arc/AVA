@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { axiosInstance } from '../lib/axios'
+import { WS_API_URL } from '@/config/api'
 import {
     Shield, RefreshCw, Activity, CheckCircle, XCircle, AlertTriangle,
     Zap, TrendingUp, TrendingDown, Clock, FileCode, Bug, Wrench,
@@ -923,15 +924,15 @@ const useQAWebSocket = (enabled: boolean = true): UseWebSocketReturn => {
     const [lastMessage, setLastMessage] = useState<WebSocketMessage | null>(null)
     const [activeConnections, setActiveConnections] = useState(0)
     const wsRef = useRef<WebSocket | null>(null)
-    const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+    const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const queryClient = useQueryClient()
 
     const connect = useCallback(() => {
         if (!enabled || wsRef.current?.readyState === WebSocket.OPEN) return
 
         try {
-            // Get WebSocket URL from API base URL
-            const wsUrl = `ws://localhost:8002/api/qa/ws`
+            // Uses centralized config from @/config/api
+            const wsUrl = `${WS_API_URL}/qa/ws`
             wsRef.current = new WebSocket(wsUrl)
 
             wsRef.current.onopen = () => {
@@ -1386,7 +1387,7 @@ export default function QADashboard() {
         }
     }
 
-    const formatTime = (isoString: string | null) => {
+    const formatTime = (isoString: string | null | undefined) => {
         if (!isoString) return 'Never'
         const date = new Date(isoString)
         return date.toLocaleString()

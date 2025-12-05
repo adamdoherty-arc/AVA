@@ -221,7 +221,7 @@ export default function SmartMoneyConcepts() {
               </CardHeader>
               <CardContent>
                 <div className="grid gap-3">
-                  {data.signals.map((signal, idx) => (
+                  {(data.signals ?? []).map((signal, idx) => (
                     <div
                       key={idx}
                       className={`p-4 rounded-lg border ${

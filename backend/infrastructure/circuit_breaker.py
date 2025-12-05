@@ -146,7 +146,7 @@ class CircuitBreaker(Generic[T]):
             await self._on_failure(e)
             raise
 
-    async def _on_success(self):
+    async def _on_success(self) -> None:
         """Handle successful call"""
         async with self._lock:
             self.stats.successful_calls += 1
@@ -202,7 +202,7 @@ class CircuitBreaker(Generic[T]):
             }
         }
 
-    def reset(self):
+    def reset(self) -> None:
         """Manually reset circuit to closed state"""
         self._state = CircuitState.CLOSED
         self._failure_count = 0

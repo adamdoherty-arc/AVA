@@ -176,7 +176,7 @@ class AdvancedRiskModels:
         }
     ]
 
-    def __init__(self):
+    def __init__(self) -> None:
         pass
 
     def calculate_var_parametric(
@@ -552,7 +552,7 @@ class AIPredictionEngine:
     - Seasonal patterns
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.price_history: Dict[str, deque] = {}  # Symbol -> price history
         self.prediction_cache: Dict[str, PricePrediction] = {}
         self.cache_ttl = 300  # 5 minutes
@@ -843,7 +843,7 @@ class PortfolioAnomalyDetector:
         "price_deviation": 0.05,    # Max deviation from expected price
     }
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.historical_metrics: deque = deque(maxlen=100)
         self.detected_anomalies: List[AnomalyResult] = []
 

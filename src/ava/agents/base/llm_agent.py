@@ -420,7 +420,7 @@ Important:
             "circuit_breaker_state": self._circuit_breaker.state.value if self._circuit_breaker else "disabled"
         }
 
-    def reset_stats(self):
+    def reset_stats(self) -> None:
         """Reset execution statistics"""
         self._stats = {
             "executions": 0,

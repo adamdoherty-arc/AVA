@@ -184,7 +184,9 @@ export default function MarketSentiment() {
                                 Trending Topics
                             </h3>
                             <div className="space-y-3">
-                                {data.trending_topics.map((topic, idx) => (
+                                {(data.trending_topics ?? []).length === 0 ? (
+                                    <p className="text-sm text-slate-500 text-center py-4">No trending topics available</p>
+                                ) : (data.trending_topics ?? []).map((topic, idx) => (
                                     <div key={idx} className="flex items-center justify-between p-2 bg-slate-800/50 rounded-lg">
                                         <div>
                                             <p className="font-medium">{topic.topic}</p>
@@ -210,7 +212,9 @@ export default function MarketSentiment() {
                                 Recent Headlines
                             </h3>
                             <div className="space-y-3">
-                                {data.news_headlines.map((news, idx) => (
+                                {(data.news_headlines ?? []).length === 0 ? (
+                                    <p className="text-sm text-slate-500 text-center py-4">No headlines available</p>
+                                ) : (data.news_headlines ?? []).map((news, idx) => (
                                     <div key={idx} className="p-2 bg-slate-800/50 rounded-lg">
                                         <div className="flex items-start gap-2">
                                             <div className={clsx(

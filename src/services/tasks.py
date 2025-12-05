@@ -39,7 +39,7 @@ def controlled_task(automation_name: str):
     Usage:
         @shared_task(name='src.services.tasks.sync_kalshi_markets', bind=True)
         @controlled_task('sync-kalshi-markets')
-        def sync_kalshi_markets(self):
+        def sync_kalshi_markets(self) -> None:
             ...
 
     Args:
@@ -123,7 +123,7 @@ def controlled_task(automation_name: str):
 
 @shared_task(name='src.services.tasks.sync_kalshi_markets', bind=True, max_retries=3)
 @controlled_task('sync-kalshi-markets')
-def sync_kalshi_markets(self):
+def sync_kalshi_markets(self) -> None:
     """
     Sync Kalshi prediction markets
 
@@ -147,7 +147,7 @@ def sync_kalshi_markets(self):
 
 @shared_task(name='src.services.tasks.update_stock_prices', bind=True)
 @controlled_task('update-stock-prices')
-def update_stock_prices(self):
+def update_stock_prices(self) -> None:
     """
     Update stock prices for watchlist
 
@@ -169,7 +169,7 @@ def update_stock_prices(self):
 
 @shared_task(name='src.services.tasks.sync_discord_messages', bind=True)
 @controlled_task('sync-discord-messages')
-def sync_discord_messages(self):
+def sync_discord_messages(self) -> None:
     """
     Sync Discord messages with premium alert prioritization
 
@@ -206,7 +206,7 @@ def sync_discord_messages(self):
 
 @shared_task(name='src.services.tasks.update_earnings_calendar', bind=True)
 @controlled_task('update-earnings-calendar')
-def update_earnings_calendar(self):
+def update_earnings_calendar(self) -> None:
     """
     Update earnings calendar for next 30 days
 
@@ -233,7 +233,7 @@ def update_earnings_calendar(self):
 
 @shared_task(name='src.services.tasks.generate_predictions', bind=True)
 @controlled_task('generate-predictions')
-def generate_predictions(self):
+def generate_predictions(self) -> None:
     """
     Generate AI predictions for upcoming games
 
@@ -281,7 +281,7 @@ def generate_predictions(self):
 
 @shared_task(name='src.services.tasks.send_alerts', bind=True)
 @controlled_task('send-hourly-alerts')
-def send_alerts(self):
+def send_alerts(self) -> None:
     """
     Send scheduled alerts (high-confidence predictions, opportunities)
 
@@ -402,7 +402,7 @@ def cleanup_old_data(self, days_to_keep: int = 90):
 
 @shared_task(name='src.services.tasks.warm_caches', bind=True)
 @controlled_task('warm-caches')
-def warm_caches(self):
+def warm_caches(self) -> None:
     """
     Warm frequently accessed caches
 
@@ -438,7 +438,7 @@ def warm_caches(self):
 
 
 @shared_task(name='src.services.tasks.optimize_database', bind=True)
-def optimize_database(self):
+def optimize_database(self) -> None:
     """
     Run database optimization (VACUUM ANALYZE)
 
@@ -524,7 +524,7 @@ def generate_daily_report():
 
 @shared_task(name='src.services.tasks.sync_xtrades_to_rag', bind=True)
 @controlled_task('sync-xtrades-to-rag')
-def sync_xtrades_to_rag(self):
+def sync_xtrades_to_rag(self) -> None:
     """
     Sync XTrades messages to RAG knowledge base
 
@@ -554,7 +554,7 @@ def sync_xtrades_to_rag(self):
 
 @shared_task(name='src.services.tasks.sync_discord_to_rag', bind=True)
 @controlled_task('sync-discord-to-rag')
-def sync_discord_to_rag(self):
+def sync_discord_to_rag(self) -> None:
     """
     Sync Discord messages to RAG knowledge base
 
@@ -636,7 +636,7 @@ def ingest_documents_batch(
 
 @shared_task(name='src.services.tasks.sync_live_sports_games', bind=True)
 @controlled_task('sync-live-sports')
-def sync_live_sports_games(self):
+def sync_live_sports_games(self) -> None:
     """
     Sync live sports games from ESPN (runs every 30 seconds during game windows).
 
@@ -745,7 +745,7 @@ def sync_live_sports_games(self):
 
 @shared_task(name='src.services.tasks.sync_sports_odds', bind=True)
 @controlled_task('sync-sports-odds')
-def sync_sports_odds(self):
+def sync_sports_odds(self) -> None:
     """
     Sync odds from Kalshi prediction markets (runs every 60 seconds during game windows).
 
@@ -818,7 +818,7 @@ def sync_sports_odds(self):
 
 @shared_task(name='src.services.tasks.settle_completed_predictions', bind=True)
 @controlled_task('settle-predictions')
-def settle_completed_predictions(self):
+def settle_completed_predictions(self) -> None:
     """
     Settle predictions for completed games (runs hourly).
 

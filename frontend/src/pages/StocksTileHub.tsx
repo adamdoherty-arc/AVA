@@ -50,6 +50,7 @@ import { AnimatedStockCard } from '@/components/stocks/AnimatedStockCard';
 import type { StockTileData } from '@/components/stocks/AnimatedStockCard';
 import { useStockWatchlistStore, DEFAULT_WATCHLISTS } from '@/store/stockWatchlistStore';
 import { useStockStreamingAnalysis } from '@/hooks/useStockStreamingAnalysis';
+import { BACKEND_URL } from '@/config/api';
 
 // Filter types
 type FilterType = 'all' | 'bullish' | 'bearish' | 'high_iv' | 'breakout' | 'favorites';
@@ -355,7 +356,8 @@ export const StocksTileHub: React.FC = () => {
     setError(null);
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8002';
+      // Uses centralized config from @/config/api
+      const apiUrl = BACKEND_URL;
       const response = await fetch(
         `${apiUrl}/api/stocks/tiles/all-data?watchlist=${encodeURIComponent(activeWatchlist)}`
       );

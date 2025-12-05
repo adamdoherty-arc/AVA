@@ -116,7 +116,7 @@ class AdvancedPortfolioAnalytics:
     - Streaming insights for real-time updates
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.executor = ThreadPoolExecutor(max_workers=4)
         self._alert_history: List[PositionAlert] = []
 

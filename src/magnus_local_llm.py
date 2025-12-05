@@ -33,6 +33,7 @@ class TaskComplexity(Enum):
     BALANCED = "balanced"  # Most trading analysis, research
     COMPLEX = "complex"    # Deep multi-step analysis, research reports
     CODING = "coding"      # Code generation, debugging, refactoring
+    REASONING = "reasoning"  # Deep reasoning, hypothesis testing, complex problem solving
 
 
 class ModelTier(Enum):
@@ -41,6 +42,7 @@ class ModelTier(Enum):
     BALANCED = "qwen2.5:32b-instruct-q4_K_M"
     COMPLEX = "llama3.3:70b-instruct-q4_K_M"
     CODING = "qwen2.5-coder:32b"  # Specialized coding model
+    REASONING = "deepseek-r1:32b"  # DeepSeek R1 32B for deep reasoning (R1-0528 update)
 
 
 @dataclass
@@ -99,6 +101,18 @@ class MagnusLocalLLM:
             tokens_per_second=45,
             context_window=32768,
             use_cases=["code_generation", "code_review", "debugging", "refactoring", "documentation"]
+        ),
+        TaskComplexity.REASONING: ModelSpecs(
+            name="DeepSeek R1 32B",
+            tier=ModelTier.REASONING,
+            vram_gb=19.0,
+            tokens_per_second=25,
+            context_window=131072,
+            use_cases=[
+                "hypothesis_testing", "complex_reasoning", "multi_step_analysis",
+                "portfolio_optimization", "risk_scenario_analysis", "market_prediction",
+                "strategy_backtesting", "correlation_analysis", "what_if_scenarios"
+            ]
         )
     }
 
@@ -269,7 +283,10 @@ Strategy: Income generation through premium collection"""
 
                 # Try fallback to simpler model
                 if self.enable_fallback and attempt < self.max_retries - 1:
-                    if complexity == TaskComplexity.COMPLEX:
+                    if complexity == TaskComplexity.REASONING:
+                        complexity = TaskComplexity.COMPLEX
+                        logger.info("Falling back from REASONING to COMPLEX complexity")
+                    elif complexity == TaskComplexity.COMPLEX:
                         complexity = TaskComplexity.BALANCED
                         logger.info("Falling back to BALANCED complexity")
                     elif complexity == TaskComplexity.BALANCED:
@@ -381,6 +398,149 @@ Provide:
         """Get model specifications"""
         return self.MODELS[complexity]
 
+    def deep_reasoning(
+        self,
+        problem: str,
+        context: Optional[Dict[str, Any]] = None,
+        reasoning_depth: Literal["standard", "deep", "exhaustive"] = "deep",
+        extract_thinking: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Use DeepSeek R1 32B (R1-0528) for deep reasoning and complex analysis.
+
+        DeepSeek R1 is optimized for chain-of-thought reasoning and performs
+        at levels approaching O3 and Gemini 2.5 Pro on reasoning benchmarks.
+
+        This method is optimized for:
+        - Multi-step reasoning problems
+        - Hypothesis testing and validation
+        - Complex portfolio optimization
+        - Risk scenario analysis
+        - What-if market scenarios
+        - Correlation analysis
+        - Strategy backtesting logic
+
+        Args:
+            problem: The problem or question requiring deep reasoning
+            context: Additional context (market data, positions, etc.)
+            reasoning_depth: Level of reasoning depth
+            extract_thinking: Extract and separate chain-of-thought from final answer
+
+        Returns:
+            Dict with reasoning chain, thinking process, conclusion, and confidence
+        """
+        depth_prompts = {
+            "standard": "Think through this step by step.",
+            "deep": "Think deeply through this problem. Show your complete reasoning chain, consider multiple perspectives, identify assumptions, and evaluate potential flaws in your logic.",
+            "exhaustive": "Perform exhaustive analysis. Consider all possible scenarios, quantify probabilities where possible, identify edge cases, challenge your assumptions, and provide confidence levels for each conclusion."
+        }
+
+        # R1-0528 optimized system prompt that leverages the model's enhanced reasoning
+        system_prompt = f"""You are AVA's deep reasoning engine powered by DeepSeek R1 32B (R1-0528 update).
+
+{depth_prompts[reasoning_depth]}
+
+Your reasoning capabilities approach frontier models like O3 and Gemini 2.5 Pro.
+Use your full chain-of-thought reasoning abilities to solve this problem.
+
+Structure your response in TWO parts:
+
+<thinking>
+[Your detailed internal reasoning process - explore the problem space, consider alternatives,
+identify assumptions, test hypotheses, and work through the logic step by step]
+</thinking>
+
+<answer>
+1. **Problem Understanding**: Restate the core problem
+2. **Key Variables**: Critical factors identified
+3. **Reasoning Chain**: Summary of your logical analysis
+4. **Alternative Scenarios**: Other possibilities considered
+5. **Risk Assessment**: Potential downsides or flaws
+6. **Conclusion**: Final recommendation with confidence level (High/Medium/Low)
+</answer>
+"""
+
+        context_str = ""
+        if context:
+            context_str = "\n\nContext Data:\n" + "\n".join(f"- {k}: {v}" for k, v in context.items())
+
+        full_prompt = f"{problem}{context_str}"
+
+        try:
+            response = self.query(
+                prompt=full_prompt,
+                complexity=TaskComplexity.REASONING,
+                system_prompt=system_prompt,
+                use_trading_context=False,
+                max_tokens=8000
+            )
+
+            # Extract thinking and answer sections if requested
+            thinking = ""
+            answer = response
+            confidence = "Medium"
+
+            if extract_thinking:
+                import re
+                thinking_match = re.search(r'<thinking>(.*?)</thinking>', response, re.DOTALL)
+                answer_match = re.search(r'<answer>(.*?)</answer>', response, re.DOTALL)
+
+                if thinking_match:
+                    thinking = thinking_match.group(1).strip()
+                if answer_match:
+                    answer = answer_match.group(1).strip()
+
+                # Extract confidence from answer
+                confidence_match = re.search(r'\b(High|Medium|Low)\b', answer, re.IGNORECASE)
+                if confidence_match:
+                    confidence = confidence_match.group(1).capitalize()
+
+            return {
+                "status": "success",
+                "model": "DeepSeek R1 32B (R1-0528)",
+                "model_id": "deepseek-r1:32b",
+                "reasoning_depth": reasoning_depth,
+                "thinking": thinking,  # Chain-of-thought process
+                "answer": answer,       # Final structured answer
+                "response": response,   # Full raw response
+                "confidence": confidence,
+                "metrics": self.get_metrics()
+            }
+        except Exception as e:
+            logger.error(f"Deep reasoning failed: {e}")
+            return {
+                "status": "error",
+                "error": str(e),
+                "fallback_available": True,
+                "fallback_model": "qwen2.5:32b-instruct-q4_K_M"
+            }
+
+    def quick_reasoning(
+        self,
+        question: str,
+        context: Optional[str] = None
+    ) -> str:
+        """
+        Quick reasoning query using DeepSeek R1 32B for simpler reasoning tasks.
+
+        Args:
+            question: The question to reason about
+            context: Optional context string
+
+        Returns:
+            String response with reasoning
+        """
+        prompt = question
+        if context:
+            prompt = f"Context: {context}\n\nQuestion: {question}"
+
+        return self.query(
+            prompt=prompt,
+            complexity=TaskComplexity.REASONING,
+            use_trading_context=False,
+            max_tokens=2000
+        )
+
     @classmethod
     def install_instructions(cls) -> str:
         """Return Ollama installation instructions"""
@@ -401,6 +561,7 @@ Provide:
    ollama pull qwen2.5:32b-instruct-q4_K_M
    ollama pull qwen2.5:14b-instruct-q4_K_M
    ollama pull llama3.3:70b-instruct-q4_K_M
+   ollama pull deepseek-r1:32b
 
 5. Verify models are ready:
    ollama list
@@ -409,8 +570,9 @@ Provide:
 - Qwen 2.5 14B: ~9GB
 - Qwen 2.5 32B: ~20GB
 - Llama 3.3 70B: ~40GB
+- DeepSeek R1 32B: ~19GB (Deep Reasoning - R1-0528 update)
 
-Total disk space needed: ~70GB
+Total disk space needed: ~90GB
 
 ## Testing
 Run in PowerShell:

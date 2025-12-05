@@ -187,7 +187,7 @@ class PriceStreamer:
     # STREAMING CONTROL
     # =========================================================================
 
-    async def start(self):
+    async def start(self) -> None:
         """Start streaming"""
         if self.running:
             return
@@ -204,7 +204,7 @@ class PriceStreamer:
         else:
             self.task = asyncio.create_task(self._simulation_loop())
 
-    async def stop(self):
+    async def stop(self) -> None:
         """Stop streaming"""
         self.running = False
         if self.task:
@@ -219,7 +219,7 @@ class PriceStreamer:
     # STREAMING LOOPS
     # =========================================================================
 
-    async def _simulation_loop(self):
+    async def _simulation_loop(self) -> None:
         """Simulated price feed for testing"""
         logger.info("Starting simulation price feed...")
 
@@ -294,7 +294,7 @@ class PriceStreamer:
                 logger.error(f"Simulation loop error: {e}")
                 await asyncio.sleep(1)
 
-    async def _yfinance_loop(self):
+    async def _yfinance_loop(self) -> None:
         """Yahoo Finance price feed"""
         logger.info("Starting yfinance price feed...")
 
@@ -374,7 +374,7 @@ class PriceStreamer:
                 logger.error(f"yfinance loop error: {e}")
                 await asyncio.sleep(5)
 
-    async def _polygon_loop(self):
+    async def _polygon_loop(self) -> None:
         """Polygon.io WebSocket feed"""
         logger.info("Starting Polygon.io price feed...")
 

@@ -4,6 +4,7 @@ AVA Tools - LangChain tool definitions
 
 from langchain_core.tools import tool
 from typing import Dict, Any, Optional
+from contextlib import contextmanager
 import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -11,6 +12,24 @@ import json
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def _safe_db_connection():
+    """Context manager for safe database connections - prevents leaks."""
+    conn = None
+    try:
+        conn = psycopg2.connect(
+            host=os.getenv('DB_HOST', 'localhost'),
+            port=os.getenv('DB_PORT', '5432'),
+            database=os.getenv('DB_NAME', 'magnus'),
+            user=os.getenv('DB_USER', 'postgres'),
+            password=os.getenv('DB_PASSWORD', '')
+        )
+        yield conn
+    finally:
+        if conn:
+            conn.close()
 
 
 @tool
@@ -26,20 +45,11 @@ def query_database_tool(query: str) -> str:
         JSON string with query results
     """
     try:
-        conn = psycopg2.connect(
-            host=os.getenv('DB_HOST', 'localhost'),
-            port=os.getenv('DB_PORT', '5432'),
-            database=os.getenv('DB_NAME', 'magnus'),
-            user=os.getenv('DB_USER', 'postgres'),
-            password=os.getenv('DB_PASSWORD', '')
-        )
-
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(query)
-            results = cur.fetchall()
-            conn.close()
-
-            return json.dumps([dict(row) for row in results], default=str)
+        with _safe_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(query)
+                results = cur.fetchall()
+                return json.dumps([dict(row) for row in results], default=str)
 
     except Exception as e:
         return f"Error executing query: {str(e)}"

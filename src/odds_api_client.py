@@ -106,7 +106,7 @@ class TheOddsAPIClient:
             self._use_distributed_cache = False
             logger.warning("Distributed cache not available, using client cache")
 
-    async def close(self):
+    async def close(self) -> None:
         """Close the client session."""
         await self._client.close()
 

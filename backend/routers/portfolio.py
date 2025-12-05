@@ -1,17 +1,21 @@
 """
 Portfolio Router - Real Data Integration
 NO MOCK DATA - All endpoints connect to real Robinhood API or database
+
+Thread-safe async database operations using AsyncDatabaseManager
 """
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Request
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 from pydantic import BaseModel
 import logging
-import asyncio
 import robin_stocks.robinhood as rh
 from backend.services.portfolio_service import get_portfolio_service, PortfolioService
+from backend.services.positions_sync_service import get_positions_sync_service, PositionsSyncService
+from backend.infrastructure.errors import safe_internal_error, safe_service_error
 from backend.services.metadata_service import get_metadata_service, MetadataService
-from src.database.connection_pool import get_db_connection
+from backend.infrastructure.database import get_database, AsyncDatabaseManager
+from backend.infrastructure.observability import get_audit_logger, AuditEventType
 from src.services.llm_service import LLMService
 
 logger = logging.getLogger(__name__)
@@ -22,121 +26,118 @@ router = APIRouter(
 )
 
 
-# ============ Sync Helper Functions (run via asyncio.to_thread) ============
+# ============ Async Database Helper Functions (Thread-Safe) ============
 
-def _fetch_journal_entries_sync(limit: int, symbol: Optional[str], status: str) -> Dict[str, Any]:
-    """Sync function to fetch journal entries - called via asyncio.to_thread()"""
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
+async def _fetch_journal_entries_async(limit: int, symbol: Optional[str], status: str) -> Dict[str, Any]:
+    """Async function to fetch journal entries using AsyncDatabaseManager"""
+    db = await get_database()
 
-        query = """
-            SELECT id, symbol, trade_type, direction, entry_price, exit_price,
-                   quantity, entry_date, exit_date, setup, thesis, emotion, lessons, tags,
-                   CASE WHEN exit_price IS NOT NULL THEN
-                       (exit_price - entry_price) * quantity
-                   ELSE NULL END as pnl
-            FROM trade_journal
-            WHERE 1=1
-        """
-        params = []
+    # Build query with parameterized placeholders ($1, $2, etc.)
+    query = """
+        SELECT id, symbol, trade_type, direction, entry_price, exit_price,
+               quantity, entry_date, exit_date, setup, thesis, emotion, lessons, tags,
+               CASE WHEN exit_price IS NOT NULL THEN
+                   (exit_price - entry_price) * quantity
+               ELSE NULL END as pnl
+        FROM trade_journal
+        WHERE 1=1
+    """
+    params = []
+    param_idx = 1
 
-        if symbol:
-            query += " AND symbol = %s"
-            params.append(symbol.upper())
+    if symbol:
+        query += f" AND symbol = ${param_idx}"
+        params.append(symbol.upper())
+        param_idx += 1
 
-        if status == "open":
-            query += " AND exit_date IS NULL"
-        elif status == "closed":
-            query += " AND exit_date IS NOT NULL"
+    if status == "open":
+        query += " AND exit_date IS NULL"
+    elif status == "closed":
+        query += " AND exit_date IS NOT NULL"
 
-        query += " ORDER BY entry_date DESC LIMIT %s"
-        params.append(limit)
+    query += f" ORDER BY entry_date DESC LIMIT ${param_idx}"
+    params.append(limit)
 
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
+    rows = await db.fetch(query, *params)
 
-        trades = []
-        total_pnl = 0
-        wins = 0
-        losses = 0
+    trades = []
+    total_pnl = 0
+    wins = 0
+    losses = 0
 
-        for row in rows:
-            pnl = row[14] if row[14] else 0
-            if pnl > 0:
-                wins += 1
-            elif pnl < 0:
-                losses += 1
-            total_pnl += pnl
+    for row in rows:
+        pnl = row['pnl'] if row['pnl'] else 0
+        if pnl > 0:
+            wins += 1
+        elif pnl < 0:
+            losses += 1
+        total_pnl += pnl
 
-            trades.append({
-                "id": row[0],
-                "symbol": row[1],
-                "trade_type": row[2],
-                "direction": row[3],
-                "entry_price": float(row[4]) if row[4] else 0,
-                "exit_price": float(row[5]) if row[5] else None,
-                "quantity": row[6],
-                "entry_date": str(row[7]) if row[7] else None,
-                "exit_date": str(row[8]) if row[8] else None,
-                "setup": row[9],
-                "thesis": row[10],
-                "emotion": row[11],
-                "lessons": row[12],
-                "tags": row[13] if row[13] else [],
-                "pnl": round(pnl, 2) if pnl else None,
-                "status": "closed" if row[8] else "open"
-            })
+        trades.append({
+            "id": row['id'],
+            "symbol": row['symbol'],
+            "trade_type": row['trade_type'],
+            "direction": row['direction'],
+            "entry_price": float(row['entry_price']) if row['entry_price'] else 0,
+            "exit_price": float(row['exit_price']) if row['exit_price'] else None,
+            "quantity": row['quantity'],
+            "entry_date": str(row['entry_date']) if row['entry_date'] else None,
+            "exit_date": str(row['exit_date']) if row['exit_date'] else None,
+            "setup": row['setup'],
+            "thesis": row['thesis'],
+            "emotion": row['emotion'],
+            "lessons": row['lessons'],
+            "tags": row['tags'] if row['tags'] else [],
+            "pnl": round(pnl, 2) if pnl else None,
+            "status": "closed" if row['exit_date'] else "open"
+        })
 
-        win_rate = (wins / (wins + losses) * 100) if (wins + losses) > 0 else 0
+    win_rate = (wins / (wins + losses) * 100) if (wins + losses) > 0 else 0
 
-        return {
-            "trades": trades,
-            "stats": {
-                "total_trades": len(trades),
-                "win_rate": round(win_rate, 1),
-                "wins": wins,
-                "losses": losses,
-                "total_pnl": round(total_pnl, 2)
-            },
-            "generated_at": datetime.now().isoformat()
-        }
+    return {
+        "trades": trades,
+        "stats": {
+            "total_trades": len(trades),
+            "win_rate": round(win_rate, 1),
+            "wins": wins,
+            "losses": losses,
+            "total_pnl": round(total_pnl, 2)
+        },
+        "generated_at": datetime.now().isoformat()
+    }
 
 
-def _create_journal_entry_sync(entry) -> Dict[str, Any]:
-    """Sync function to create journal entry - called via asyncio.to_thread()"""
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
+async def _create_journal_entry_async(entry) -> Dict[str, Any]:
+    """Async function to create journal entry using AsyncDatabaseManager"""
+    db = await get_database()
 
-        cursor.execute("""
-            INSERT INTO trade_journal
-            (symbol, trade_type, direction, entry_price, exit_price, quantity,
-             entry_date, exit_date, setup, thesis, emotion, lessons, tags)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
-        """, (
-            entry.symbol.upper(),
-            entry.trade_type,
-            entry.direction,
-            entry.entry_price,
-            entry.exit_price,
-            entry.quantity,
-            entry.entry_date,
-            entry.exit_date,
-            entry.setup,
-            entry.thesis,
-            entry.emotion,
-            entry.lessons,
-            entry.tags
-        ))
+    entry_id = await db.fetchval("""
+        INSERT INTO trade_journal
+        (symbol, trade_type, direction, entry_price, exit_price, quantity,
+         entry_date, exit_date, setup, thesis, emotion, lessons, tags)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        RETURNING id
+    """,
+        entry.symbol.upper(),
+        entry.trade_type,
+        entry.direction,
+        entry.entry_price,
+        entry.exit_price,
+        entry.quantity,
+        entry.entry_date,
+        entry.exit_date,
+        entry.setup,
+        entry.thesis,
+        entry.emotion,
+        entry.lessons,
+        entry.tags
+    )
 
-        entry_id = cursor.fetchone()[0]
-        conn.commit()
-
-        return {
-            "id": entry_id,
-            "symbol": entry.symbol.upper(),
-            "message": "Trade journal entry created successfully"
-        }
+    return {
+        "id": entry_id,
+        "symbol": entry.symbol.upper(),
+        "message": "Trade journal entry created successfully"
+    }
 
 
 # ============ Positions Endpoints (Already Real) ============
@@ -152,7 +153,7 @@ async def get_positions(
         return await service.get_positions()
     except Exception as e:
         logger.error(f"Error getting positions: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_service_error(e, "Robinhood")
 
 @router.get("/summary")
 async def get_summary(
@@ -166,7 +167,7 @@ async def get_summary(
         return positions.get("summary", {})
     except Exception as e:
         logger.error(f"Error getting summary: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_service_error(e, "Robinhood")
 
 @router.post("/sync")
 async def sync_portfolio(
@@ -186,7 +187,74 @@ async def sync_portfolio(
         }
     except Exception as e:
         logger.error(f"Error syncing portfolio: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_service_error(e, "Robinhood")
+
+
+# ============ Cached Positions (Database-backed, Non-blocking) ============
+
+@router.get("/positions/cached")
+async def get_cached_positions() -> Dict[str, Any]:
+    """
+    Get positions from database cache - INSTANT, NEVER BLOCKS.
+
+    This endpoint reads from the local database cache instead of calling
+    Robinhood API directly. The cache is refreshed automatically every
+    30 minutes by a background sync service.
+
+    Use this endpoint for the UI to ensure instant loading.
+    Falls back to live API if cache is stale (>35 minutes old).
+    """
+    try:
+        sync_service = get_positions_sync_service()
+        return await sync_service.get_cached_positions()
+    except Exception as e:
+        logger.error(f"Error getting cached positions: {e}")
+        # Fall back to live API if cache fails
+        logger.warning("Falling back to live API due to cache error")
+        service = get_portfolio_service()
+        positions = await service.get_positions()
+        positions["_cache_info"] = {"cached": False, "fallback": True, "error": str(e)}
+        return positions
+
+
+@router.get("/sync/status")
+async def get_sync_status() -> Dict[str, Any]:
+    """
+    Get the status of the positions sync service.
+
+    Returns:
+    - running: Whether the sync service is active
+    - last_sync: Timestamp of last successful sync
+    - cache_age_seconds: How old the current cache is
+    - next_sync_in_seconds: Time until next scheduled sync
+    - recent_syncs: History of recent sync operations
+    """
+    try:
+        sync_service = get_positions_sync_service()
+        return await sync_service.get_sync_status()
+    except Exception as e:
+        logger.error(f"Error getting sync status: {e}")
+        return {
+            "running": False,
+            "error": str(e),
+            "message": "Sync service not available"
+        }
+
+
+@router.post("/sync/trigger")
+async def trigger_sync() -> Dict[str, Any]:
+    """
+    Manually trigger a position sync.
+
+    Use this after making trades to immediately update the cache.
+    """
+    try:
+        sync_service = get_positions_sync_service()
+        result = await sync_service.sync_now()
+        return result
+    except Exception as e:
+        logger.error(f"Error triggering sync: {e}")
+        safe_internal_error(e, "trigger sync")
 
 
 # ============ Agent Analysis ============
@@ -213,7 +281,7 @@ async def agent_analyze(request: AgentRequest):
         return result_state.get("result", {})
     except Exception as e:
         logger.error(f"Error in agent analysis: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "analyze portfolio")
 
 
 # ============ Risk Dashboard - Real Calculation ============
@@ -327,7 +395,7 @@ async def get_risk_metrics(
 
     except Exception as e:
         logger.error(f"Error calculating risk metrics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "calculate risk metrics")
 
 
 # ============ Trade Journal - Database Storage ============
@@ -355,10 +423,10 @@ async def get_journal_entries(
 ):
     """
     Get trade journal entries from database.
-    Uses asyncio.to_thread() for non-blocking DB access.
+    Uses async database operations for thread-safe, non-blocking access.
     """
     try:
-        return await asyncio.to_thread(_fetch_journal_entries_sync, limit, symbol, status)
+        return await _fetch_journal_entries_async(limit, symbol, status)
     except Exception as e:
         logger.error(f"Error fetching journal entries: {e}")
         return {
@@ -375,16 +443,43 @@ async def get_journal_entries(
         }
 
 @router.post("/journal")
-async def create_journal_entry(entry: JournalEntry):
+async def create_journal_entry(entry: JournalEntry, request: Request):
     """
     Create a new trade journal entry in database.
-    Uses asyncio.to_thread() for non-blocking DB access.
+    Uses async database operations for thread-safe, non-blocking access.
     """
+    audit = get_audit_logger()
     try:
-        return await asyncio.to_thread(_create_journal_entry_sync, entry)
+        result = await _create_journal_entry_async(entry)
+
+        # Log successful trade journal entry
+        await audit.log(
+            AuditEventType.POSITION_OPENED if entry.direction == "long" else AuditEventType.POSITION_CLOSED,
+            action=f"Journal entry created: {entry.direction} {entry.quantity} {entry.symbol}",
+            resource_type="trade_journal",
+            resource_id=str(result.get("id")),
+            details={
+                "symbol": entry.symbol,
+                "quantity": entry.quantity,
+                "direction": entry.direction,
+                "trade_type": entry.trade_type,
+                "entry_price": entry.entry_price,
+            },
+            ip_address=request.client.host if request.client else None,
+        )
+
+        return result
     except Exception as e:
         logger.error(f"Error creating journal entry: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        await audit.log(
+            AuditEventType.POSITION_OPENED,
+            action=f"Journal entry creation failed: {entry.symbol}",
+            resource_type="trade_journal",
+            details={"symbol": entry.symbol, "error": str(e)},
+            success=False,
+            error_message=str(e),
+        )
+        safe_internal_error(e, "create journal entry")
 
 
 # ============ Dividends - Real Robinhood Data ============
@@ -417,7 +512,8 @@ async def get_dividends(
                 try:
                     instrument_data = rh.get_instrument_by_url(instrument_url)
                     sym = instrument_data.get("symbol", "UNKNOWN")
-                except:
+                except Exception as e:
+                    logger.debug(f"Failed to get instrument symbol: {e}")
                     sym = "UNKNOWN"
             else:
                 sym = "UNKNOWN"
@@ -433,8 +529,8 @@ async def get_dividends(
                     pay_dt = datetime.fromisoformat(pay_date.replace("Z", "+00:00"))
                     if year and pay_dt.year != year:
                         continue
-                except:
-                    pass
+                except (ValueError, TypeError):
+                    pass  # Continue with dividend if date parsing fails
 
             amount = float(div.get("amount", 0))
 
@@ -476,7 +572,7 @@ async def get_dividends(
 
     except Exception as e:
         logger.error(f"Error fetching dividends: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_service_error(e, "Robinhood")
 
 
 # ============ Tax Lots - Real Robinhood Data ============
@@ -555,10 +651,10 @@ async def get_tax_lots(
 
     except Exception as e:
         logger.error(f"Error fetching tax lots: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_service_error(e, "Robinhood")
 
 
-# ============ Alert Management - Database Storage ============
+# ============ Alert Management - Async Database Storage ============
 
 class AlertCreate(BaseModel):
     name: str
@@ -571,39 +667,37 @@ class AlertCreate(BaseModel):
 async def get_alerts():
     """
     Get price alerts from database.
+    Uses async database operations for thread-safe, non-blocking access.
     """
     try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
+        db = await get_database()
 
-            cursor.execute("""
-                SELECT id, name, symbol, condition, value, status,
-                       created_at, triggered_at, notification_channels
-                FROM price_alerts
-                ORDER BY created_at DESC
-            """)
+        rows = await db.fetch("""
+            SELECT id, name, symbol, condition, value, status,
+                   created_at, triggered_at, notification_channels
+            FROM price_alerts
+            ORDER BY created_at DESC
+        """)
 
-            rows = cursor.fetchall()
-
-            alerts = [
-                {
-                    "id": row[0],
-                    "name": row[1],
-                    "symbol": row[2],
-                    "condition": row[3],
-                    "value": float(row[4]) if row[4] else 0,
-                    "status": row[5],
-                    "created_at": str(row[6]) if row[6] else None,
-                    "triggered_at": str(row[7]) if row[7] else None,
-                    "notification_channels": row[8] if row[8] else []
-                }
-                for row in rows
-            ]
-
-            return {
-                "alerts": alerts,
-                "generated_at": datetime.now().isoformat()
+        alerts = [
+            {
+                "id": row['id'],
+                "name": row['name'],
+                "symbol": row['symbol'],
+                "condition": row['condition'],
+                "value": float(row['value']) if row['value'] else 0,
+                "status": row['status'],
+                "created_at": str(row['created_at']) if row['created_at'] else None,
+                "triggered_at": str(row['triggered_at']) if row['triggered_at'] else None,
+                "notification_channels": row['notification_channels'] if row['notification_channels'] else []
             }
+            for row in rows
+        ]
+
+        return {
+            "alerts": alerts,
+            "generated_at": datetime.now().isoformat()
+        }
 
     except Exception as e:
         logger.error(f"Error fetching alerts: {e}")
@@ -615,83 +709,98 @@ async def get_alerts():
         }
 
 @router.post("/alerts")
-async def create_alert(alert: AlertCreate):
+async def create_alert(alert: AlertCreate, request: Request):
     """
     Create a new price alert in database.
+    Uses async database operations for thread-safe, non-blocking access.
     """
+    audit = get_audit_logger()
     try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
+        db = await get_database()
 
-            cursor.execute("""
-                INSERT INTO price_alerts
-                (name, symbol, condition, value, status, notification_channels, created_at)
-                VALUES (%s, %s, %s, %s, 'active', %s, NOW())
-                RETURNING id
-            """, (
-                alert.name,
-                alert.symbol.upper(),
-                alert.condition,
-                alert.value,
-                alert.notification_channels
-            ))
+        new_id = await db.fetchval("""
+            INSERT INTO price_alerts
+            (name, symbol, condition, value, status, notification_channels, created_at)
+            VALUES ($1, $2, $3, $4, 'active', $5, NOW())
+            RETURNING id
+        """,
+            alert.name,
+            alert.symbol.upper(),
+            alert.condition,
+            alert.value,
+            alert.notification_channels
+        )
 
-            new_id = cursor.fetchone()[0]
-
-            return {
-                "id": new_id,
-                "created": True,
-                "status": "active",
+        # Log alert creation
+        await audit.log(
+            AuditEventType.ALERT_CREATED,
+            action=f"Price alert created: {alert.symbol} {alert.condition} {alert.value}",
+            resource_type="price_alert",
+            resource_id=str(new_id),
+            details={
+                "name": alert.name,
                 "symbol": alert.symbol,
-                "message": "Alert created successfully"
-            }
+                "condition": alert.condition,
+                "value": alert.value,
+                "notification_channels": alert.notification_channels,
+            },
+            ip_address=request.client.host if request.client else None,
+        )
+
+        return {
+            "id": new_id,
+            "created": True,
+            "status": "active",
+            "symbol": alert.symbol,
+            "message": "Alert created successfully"
+        }
 
     except Exception as e:
         logger.error(f"Error creating alert: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "create alert")
 
 @router.patch("/alerts/{alert_id}")
 async def update_alert(alert_id: str, status: str = Query(...)):
     """
     Update alert status in database.
+    Uses async database operations for thread-safe, non-blocking access.
     """
     try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
+        db = await get_database()
 
-            cursor.execute("""
-                UPDATE price_alerts SET status = %s WHERE id = %s
-            """, (status, alert_id))
+        await db.execute("""
+            UPDATE price_alerts SET status = $1 WHERE id = $2
+        """, status, int(alert_id))
 
-            return {
-                "id": alert_id,
-                "status": status,
-                "updated_at": datetime.now().isoformat()
-            }
+        return {
+            "id": alert_id,
+            "status": status,
+            "updated_at": datetime.now().isoformat()
+        }
 
     except Exception as e:
         logger.error(f"Error updating alert: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "update alert")
 
 @router.delete("/alerts/{alert_id}")
 async def delete_alert(alert_id: str):
     """
     Delete an alert from database.
+    Uses async database operations for thread-safe, non-blocking access.
     """
     try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
+        db = await get_database()
 
-            cursor.execute("DELETE FROM price_alerts WHERE id = %s", (alert_id,))
+        await db.execute("DELETE FROM price_alerts WHERE id = $1", int(alert_id))
 
-            return {
-                "id": alert_id,
-                "deleted": True
-            }
+        return {
+            "id": alert_id,
+            "deleted": True
+        }
 
     except Exception as e:
         logger.error(f"Error deleting alert: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "delete alert")
 
 
 # ============ Metadata & AI Recommendations ============
@@ -709,7 +818,7 @@ async def get_symbol_metadata(
         return metadata_service.get_symbol_metadata(symbol.upper(), force_refresh)
     except Exception as e:
         logger.error(f"Error getting metadata for {symbol}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "fetch symbol metadata")
 
 
 @router.get("/metadata")
@@ -740,7 +849,7 @@ async def get_positions_metadata(
         }
     except Exception as e:
         logger.error(f"Error getting positions metadata: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "fetch positions metadata")
 
 
 @router.get("/recommendations")
@@ -798,7 +907,7 @@ async def get_position_recommendations(
         }
     except Exception as e:
         logger.error(f"Error getting recommendations: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "generate recommendations")
 
 
 @router.get("/recommendations/{symbol}")
@@ -848,7 +957,7 @@ async def get_symbol_recommendation(
         raise
     except Exception as e:
         logger.error(f"Error getting recommendation for {symbol}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "generate recommendation")
 
 
 # ============ Enhanced Positions with Metadata ============
@@ -918,7 +1027,7 @@ async def get_enriched_positions(
         }
     except Exception as e:
         logger.error(f"Error getting enriched positions: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "enrich positions")
 
 
 # ============ LLM-Powered Deep Analysis ============
@@ -1107,7 +1216,7 @@ async def get_deep_analysis(
         raise
     except Exception as e:
         logger.error(f"Error in deep analysis for {symbol}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "perform deep analysis")
 
 
 @router.get("/portfolio-analysis")
@@ -1239,7 +1348,7 @@ Focus on actionable insights and prioritize by urgency.
 
     except Exception as e:
         logger.error(f"Error in portfolio analysis: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "analyze portfolio")
 
 
 # ============ Advanced AI-Powered Analytics ============
@@ -1321,7 +1430,7 @@ async def get_advanced_risk_metrics(
 
     except Exception as e:
         logger.error(f"Error calculating risk metrics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "calculate risk metrics")
 
 
 @router.get("/analytics/probability")
@@ -1355,7 +1464,7 @@ async def get_probability_metrics(
 
     except Exception as e:
         logger.error(f"Error calculating probability metrics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "calculate probability metrics")
 
 
 @router.get("/analytics/consensus/{symbol}")
@@ -1432,7 +1541,7 @@ async def get_multi_agent_consensus(
         raise
     except Exception as e:
         logger.error(f"Error generating consensus for {symbol}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "generate consensus")
 
 
 @router.get("/analytics/alerts")
@@ -1478,7 +1587,7 @@ async def get_position_alerts(
 
     except Exception as e:
         logger.error(f"Error generating alerts: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "generate alerts")
 
 
 @router.get("/analytics/stream")
@@ -1609,4 +1718,4 @@ async def get_analytics_dashboard(
 
     except Exception as e:
         logger.error(f"Error generating analytics dashboard: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "generate analytics dashboard")

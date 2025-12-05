@@ -103,7 +103,7 @@ class LivePredictionAdjuster:
         }
     }
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._momentum_history: Dict[str, List[Tuple[datetime, int]]] = {}
 
     def adjust_prediction(

@@ -91,7 +91,7 @@ class DatabaseConfig:
 
     host: str = "localhost"
     port: int = 5432
-    database: str = "magnus"  # AVA trading platform database
+    database: str = "ava"  # AVA trading platform database
     user: str = "postgres"
     password: str = "postgres"
 
@@ -294,6 +294,75 @@ class AsyncDatabaseManager:
                 logger.error("database_connection_failed", error=str(e))
                 self._connected = False
                 raise
+
+    async def warmup_pool(self, target_connections: Optional[int] = None) -> int:
+        """
+        Warm up the connection pool by pre-establishing connections.
+
+        This prevents cold-start latency on first requests after startup.
+
+        Args:
+            target_connections: Number of connections to establish.
+                              Defaults to min_pool_size.
+
+        Returns:
+            Number of connections successfully warmed up.
+        """
+        if not self._connected or not self._pool:
+            logger.warning("pool_warmup_skipped", reason="not_connected")
+            return 0
+
+        target = target_connections or self.config.min_pool_size
+        warmed = 0
+
+        logger.info("pool_warmup_starting", target=target)
+
+        # Acquire and release connections to force pool to establish them
+        connections = []
+        try:
+            for i in range(target):
+                try:
+                    conn = await asyncio.wait_for(
+                        self._pool.acquire(),
+                        timeout=self.config.connect_timeout
+                    )
+                    connections.append(conn)
+                    warmed += 1
+                except Exception as e:
+                    logger.warning(f"pool_warmup_connection_failed", index=i, error=str(e))
+                    break
+
+            # Execute a simple query on each connection to ensure it's ready
+            for conn in connections:
+                try:
+                    await conn.execute("SELECT 1")
+                except Exception:
+                    pass
+
+        finally:
+            # Release all connections back to pool (with error handling for each)
+            release_errors = 0
+            for conn in connections:
+                try:
+                    await self._pool.release(conn)
+                except Exception as e:
+                    release_errors += 1
+                    logger.error("pool_warmup_release_failed", error=str(e))
+
+            if release_errors > 0:
+                logger.warning(
+                    "pool_warmup_release_issues",
+                    failed=release_errors,
+                    total=len(connections)
+                )
+
+        self._update_pool_stats()
+        logger.info(
+            "pool_warmup_complete",
+            warmed=warmed,
+            pool_size=self._pool.get_size()
+        )
+        return warmed
 
     async def _setup_connection(self, conn: Connection) -> None:
         """Configure each new connection."""
@@ -688,25 +757,50 @@ class AsyncDatabaseManager:
 # =============================================================================
 
 _db_instance: Optional[AsyncDatabaseManager] = None
+# Thread-safe lock - initialized at module load time to prevent race conditions
+# Note: asyncio.Lock() is safe to create outside of an event loop in Python 3.10+
+# For older Python, the lock is created on first use within the event loop
 _db_lock: Optional[asyncio.Lock] = None
+_db_lock_init_lock = None  # Fallback for older Python versions
 
 
 def _get_lock() -> asyncio.Lock:
-    """Get or create the asyncio lock within the running event loop."""
-    global _db_lock
-    if _db_lock is None:
-        _db_lock = asyncio.Lock()
+    """
+    Get or create the asyncio lock in a thread-safe manner.
+
+    This handles the edge case where the lock needs to be created
+    within an event loop context for Python < 3.10.
+    """
+    global _db_lock, _db_lock_init_lock
+    if _db_lock is not None:
+        return _db_lock
+
+    # Double-checked locking pattern for thread safety
+    if _db_lock_init_lock is None:
+        import threading
+        _db_lock_init_lock = threading.Lock()
+
+    with _db_lock_init_lock:
+        if _db_lock is None:
+            _db_lock = asyncio.Lock()
     return _db_lock
 
 
 async def get_database() -> AsyncDatabaseManager:
-    """Get or create the global database manager."""
+    """
+    Get or create the global database manager.
+
+    Thread-safe singleton pattern using double-checked locking.
+    """
     global _db_instance
-    if _db_instance is None:
-        async with _get_lock():
-            if _db_instance is None:
-                _db_instance = AsyncDatabaseManager()
-                await _db_instance.connect()
+    if _db_instance is not None:
+        return _db_instance
+
+    async with _get_lock():
+        # Double-check after acquiring lock
+        if _db_instance is None:
+            _db_instance = AsyncDatabaseManager()
+            await _db_instance.connect()
     return _db_instance
 
 

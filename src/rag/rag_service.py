@@ -405,9 +405,54 @@ class RAGService:
 
         return min(confidence, 1.0)
 
+    def _needs_deep_reasoning(self, query: str) -> bool:
+        """
+        Detect if a query requires deep reasoning (DeepSeek R1 32B).
+
+        Routes to R1 for:
+        - Multi-step reasoning questions
+        - Hypothesis testing
+        - Portfolio optimization
+        - What-if scenarios
+        - Complex comparisons
+        - Strategy analysis
+        """
+        import re
+        query_lower = query.lower()
+
+        # Reasoning indicators that benefit from DeepSeek R1's chain-of-thought
+        reasoning_patterns = [
+            r'\b(think|reason|analyze)\s+(through|deeply|step)',
+            r'\b(hypothesis|prove|derive|logical)',
+            r'\b(why\s+would|what\s+if|implications|consequences)',
+            r'\b(portfolio|allocation|optimize|rebalance)',
+            r'\b(scenario|simulat|stress\s+test|hypothetical)',
+            r'\b(compare\s+and\s+contrast|weigh\s+(the\s+)?pros)',
+            r'\b(should\s+i|would\s+it\s+be\s+better)',
+            r'\b(multi-step|chain\s+of|reasoning)',
+            r'\b(risk.*(adjust|allocat)|diversif)',
+            r'\b(optimal|best\s+strategy|recommend)',
+        ]
+
+        for pattern in reasoning_patterns:
+            if re.search(pattern, query_lower, re.IGNORECASE):
+                return True
+
+        # Also check for complex question markers
+        complex_markers = ['compare', 'contrast', 'evaluate', 'assess the', 'determine whether',
+                          'optimize', 'should i', 'best approach', 'tradeoffs', 'trade-offs']
+        for marker in complex_markers:
+            if marker in query_lower:
+                return True
+
+        return False
+
     def _generate_answer(self, query: str, documents: List[RetrievedDocument], complexity: str = 'medium') -> str:
         """
         Generate answer using Magnus Local LLM
+
+        For complex queries, uses DeepSeek R1 32B's chain-of-thought reasoning
+        for improved multi-step analysis and hypothesis testing.
         """
         if not documents:
             return "I don't have enough information to answer that question."
@@ -416,12 +461,20 @@ class RAGService:
             return "Magnus Local LLM is not connected. I found relevant documents but cannot generate an answer."
 
         # Map complexity to TaskComplexity
+        # Use DeepSeek R1 32B for complex queries requiring reasoning
         complexity_map = {
             'simple': self.TaskComplexity.FAST,
             'medium': self.TaskComplexity.BALANCED,
-            'complex': self.TaskComplexity.COMPLEX
+            'complex': self.TaskComplexity.REASONING,  # Use DeepSeek R1 for complex queries
+            'reasoning': self.TaskComplexity.REASONING  # Explicit reasoning request
         }
-        task_complexity = complexity_map.get(complexity, self.TaskComplexity.BALANCED)
+
+        # Auto-detect if query needs reasoning (multi-step, hypothesis, what-if)
+        if self._needs_deep_reasoning(query):
+            task_complexity = self.TaskComplexity.REASONING
+            logger.info("Query requires deep reasoning - using DeepSeek R1 32B")
+        else:
+            task_complexity = complexity_map.get(complexity, self.TaskComplexity.BALANCED)
 
         # Build context
         context_parts = []
@@ -606,6 +659,296 @@ Keep answers concise, professional, and actionable."""
             'embedding_model': self.embedding_model.get_sentence_embedding_dimension(),
             'metrics': self.get_metrics()
         }
+
+    # =========================================================================
+    # Knowledge Base Sync Methods
+    # =========================================================================
+
+    def sync_from_database(self, source_type: str = "all") -> Dict[str, Any]:
+        """
+        Sync knowledge base from database sources.
+
+        Args:
+            source_type: Type of data to sync ('earnings', 'discord', 'xtrades', 'news', 'all')
+
+        Returns:
+            Sync statistics
+        """
+        logger.info(f"Starting knowledge base sync: {source_type}")
+        stats = {
+            'earnings_synced': 0,
+            'discord_synced': 0,
+            'xtrades_synced': 0,
+            'news_synced': 0,
+            'errors': []
+        }
+
+        try:
+            conn = psycopg2.connect(**self.db_config)
+
+            if source_type in ['all', 'earnings']:
+                stats['earnings_synced'] = self._sync_earnings_transcripts(conn)
+
+            if source_type in ['all', 'discord']:
+                stats['discord_synced'] = self._sync_discord_signals(conn)
+
+            if source_type in ['all', 'xtrades']:
+                stats['xtrades_synced'] = self._sync_xtrades_messages(conn)
+
+            if source_type in ['all', 'news']:
+                stats['news_synced'] = self._sync_news_articles(conn)
+
+            conn.close()
+
+        except Exception as e:
+            logger.error(f"Database sync error: {e}")
+            stats['errors'].append(str(e))
+
+        total_synced = (stats['earnings_synced'] + stats['discord_synced'] +
+                       stats['xtrades_synced'] + stats['news_synced'])
+        logger.info(f"Knowledge base sync complete: {total_synced} documents added")
+
+        return stats
+
+    def _sync_earnings_transcripts(self, conn) -> int:
+        """Sync earnings transcripts from database"""
+        try:
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+            # Get recent earnings transcripts not yet indexed
+            cursor.execute("""
+                SELECT symbol, report_date, transcript_text, report_type
+                FROM earnings_transcripts
+                WHERE transcript_text IS NOT NULL
+                AND indexed_at IS NULL
+                ORDER BY report_date DESC
+                LIMIT 100
+            """)
+
+            rows = cursor.fetchall()
+            if not rows:
+                logger.info("No new earnings transcripts to sync")
+                return 0
+
+            documents = []
+            metadatas = []
+            ids = []
+
+            for row in rows:
+                doc_id = f"earnings_{row['symbol']}_{row['report_date']}"
+                content = f"Earnings Report - {row['symbol']} ({row['report_date']})\n{row['transcript_text']}"
+
+                documents.append(content)
+                metadatas.append({
+                    'source': 'earnings_transcript',
+                    'symbol': row['symbol'],
+                    'date': str(row['report_date']),
+                    'report_type': row['report_type'] or 'quarterly',
+                    'category': 'earnings'
+                })
+                ids.append(doc_id)
+
+            # Add to collection
+            if documents:
+                self.add_documents(documents, metadatas, ids)
+
+                # Mark as indexed
+                cursor.execute("""
+                    UPDATE earnings_transcripts
+                    SET indexed_at = NOW()
+                    WHERE symbol IN %s AND indexed_at IS NULL
+                """, (tuple(row['symbol'] for row in rows),))
+                conn.commit()
+
+            logger.info(f"Synced {len(documents)} earnings transcripts")
+            return len(documents)
+
+        except Exception as e:
+            logger.error(f"Error syncing earnings: {e}")
+            return 0
+
+    def _sync_discord_signals(self, conn) -> int:
+        """Sync Discord premium signals from database"""
+        try:
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+            # Get recent Discord signals not yet indexed
+            cursor.execute("""
+                SELECT id, channel_name, message_content, author_name, created_at
+                FROM discord_messages
+                WHERE message_content IS NOT NULL
+                AND (channel_name ILIKE '%premium%' OR channel_name ILIKE '%signal%')
+                AND indexed_at IS NULL
+                ORDER BY created_at DESC
+                LIMIT 200
+            """)
+
+            rows = cursor.fetchall()
+            if not rows:
+                logger.info("No new Discord signals to sync")
+                return 0
+
+            documents = []
+            metadatas = []
+            ids = []
+
+            for row in rows:
+                doc_id = f"discord_{row['id']}"
+                content = f"Discord Signal from {row['author_name']} ({row['channel_name']})\n{row['message_content']}"
+
+                documents.append(content)
+                metadatas.append({
+                    'source': 'discord',
+                    'channel': row['channel_name'],
+                    'author': row['author_name'],
+                    'date': str(row['created_at']),
+                    'category': 'signals'
+                })
+                ids.append(doc_id)
+
+            if documents:
+                self.add_documents(documents, metadatas, ids)
+
+                # Mark as indexed
+                cursor.execute("""
+                    UPDATE discord_messages
+                    SET indexed_at = NOW()
+                    WHERE id IN %s
+                """, (tuple(row['id'] for row in rows),))
+                conn.commit()
+
+            logger.info(f"Synced {len(documents)} Discord signals")
+            return len(documents)
+
+        except Exception as e:
+            logger.error(f"Error syncing Discord: {e}")
+            return 0
+
+    def _sync_xtrades_messages(self, conn) -> int:
+        """Sync XTrades trader messages from database"""
+        try:
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+            # Get recent XTrades messages not yet indexed
+            cursor.execute("""
+                SELECT id, trader_name, message, symbol, action, timestamp
+                FROM xtrades_messages
+                WHERE message IS NOT NULL
+                AND indexed_at IS NULL
+                ORDER BY timestamp DESC
+                LIMIT 200
+            """)
+
+            rows = cursor.fetchall()
+            if not rows:
+                logger.info("No new XTrades messages to sync")
+                return 0
+
+            documents = []
+            metadatas = []
+            ids = []
+
+            for row in rows:
+                doc_id = f"xtrades_{row['id']}"
+                symbol_info = f" - {row['symbol']}" if row['symbol'] else ""
+                action_info = f" [{row['action']}]" if row['action'] else ""
+                content = f"XTrades Alert from {row['trader_name']}{symbol_info}{action_info}\n{row['message']}"
+
+                documents.append(content)
+                metadatas.append({
+                    'source': 'xtrades',
+                    'trader': row['trader_name'],
+                    'symbol': row['symbol'],
+                    'action': row['action'],
+                    'date': str(row['timestamp']),
+                    'category': 'trade_alert'
+                })
+                ids.append(doc_id)
+
+            if documents:
+                self.add_documents(documents, metadatas, ids)
+
+                cursor.execute("""
+                    UPDATE xtrades_messages
+                    SET indexed_at = NOW()
+                    WHERE id IN %s
+                """, (tuple(row['id'] for row in rows),))
+                conn.commit()
+
+            logger.info(f"Synced {len(documents)} XTrades messages")
+            return len(documents)
+
+        except Exception as e:
+            logger.error(f"Error syncing XTrades: {e}")
+            return 0
+
+    def _sync_news_articles(self, conn) -> int:
+        """Sync news articles from database"""
+        try:
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+            # Get recent news not yet indexed
+            cursor.execute("""
+                SELECT id, title, content, source, symbols, published_at
+                FROM news_articles
+                WHERE content IS NOT NULL
+                AND indexed_at IS NULL
+                ORDER BY published_at DESC
+                LIMIT 100
+            """)
+
+            rows = cursor.fetchall()
+            if not rows:
+                logger.info("No new news articles to sync")
+                return 0
+
+            documents = []
+            metadatas = []
+            ids = []
+
+            for row in rows:
+                doc_id = f"news_{row['id']}"
+                symbols = row['symbols'] if row['symbols'] else []
+                content = f"News: {row['title']}\nSource: {row['source']}\n{row['content']}"
+
+                documents.append(content)
+                metadatas.append({
+                    'source': row['source'],
+                    'title': row['title'],
+                    'symbols': symbols,
+                    'date': str(row['published_at']),
+                    'category': 'news'
+                })
+                ids.append(doc_id)
+
+            if documents:
+                self.add_documents(documents, metadatas, ids)
+
+                cursor.execute("""
+                    UPDATE news_articles
+                    SET indexed_at = NOW()
+                    WHERE id IN %s
+                """, (tuple(row['id'] for row in rows),))
+                conn.commit()
+
+            logger.info(f"Synced {len(documents)} news articles")
+            return len(documents)
+
+        except Exception as e:
+            logger.error(f"Error syncing news: {e}")
+            return 0
+
+
+# Singleton instance
+_rag_service: Optional[RAGService] = None
+
+
+def get_rag_service() -> RAGService:
+    """Get the singleton RAG service instance"""
+    global _rag_service
+    if _rag_service is None:
+        _rag_service = RAGService()
+    return _rag_service
 
 
 if __name__ == "__main__":

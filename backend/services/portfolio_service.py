@@ -39,12 +39,12 @@ class PortfolioService:
     CACHE_TTL_PORTFOLIO = 60
     CACHE_TTL_INSTRUMENTS = 3600  # Instruments rarely change
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.settings = get_settings()
         self._logged_in = False
         self._cache = get_cache()
 
-    def _ensure_login(self):
+    def _ensure_login(self) -> None:
         """Ensure Robinhood is logged in."""
         if self._logged_in:
             return
@@ -144,7 +144,7 @@ class PortfolioService:
             logger.error(f"Error fetching positions: {e}")
             raise
 
-    async def invalidate_positions_cache(self):
+    async def invalidate_positions_cache(self) -> None:
         """Invalidate positions cache (call after trades)."""
         await self._cache.delete("portfolio:positions:v1")
         logger.info("Positions cache invalidated")

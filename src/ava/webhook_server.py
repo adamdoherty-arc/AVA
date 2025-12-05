@@ -443,7 +443,7 @@ if __name__ == "__main__":
     import uvicorn
 
     logger.info("Starting webhook server in development mode...")
-    logger.info(f"Listening on http://0.0.0.0:8000")
+    logger.info(f"Listening on http://0.0.0.0:8002")
     logger.info(f"Webhook URL: POST /webhook/{TELEGRAM_BOT_TOKEN}")
 
     uvicorn.run(

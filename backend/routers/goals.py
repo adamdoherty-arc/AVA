@@ -17,6 +17,7 @@ from src.ava.services.goal_tracking_service import (
     GoalProgress,
     GoalStatus
 )
+from backend.infrastructure.errors import safe_internal_error
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +104,7 @@ async def get_monthly_goal(user_id: str = "default_user"):
         raise
     except Exception as e:
         logger.error(f"Error getting monthly goal: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "get monthly goal")
 
 
 @router.get("/weekly-progress")
@@ -117,7 +118,7 @@ async def get_weekly_progress(user_id: str = "default_user"):
 
     except Exception as e:
         logger.error(f"Error getting weekly progress: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "get weekly progress")
 
 
 @router.get("/trends")
@@ -131,7 +132,7 @@ async def get_performance_trends(user_id: str = "default_user"):
 
     except Exception as e:
         logger.error(f"Error getting trends: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "get performance trends")
 
 
 @router.get("/all")
@@ -145,7 +146,7 @@ async def get_all_goals(user_id: str = "default_user"):
 
     except Exception as e:
         logger.error(f"Error getting all goals: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "get all goals")
 
 
 @router.put("/target")
@@ -180,7 +181,7 @@ async def update_goal_target(
         raise
     except Exception as e:
         logger.error(f"Error updating goal target: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "update goal target")
 
 
 @router.post("/record-income")
@@ -218,7 +219,7 @@ async def record_income(
         raise
     except Exception as e:
         logger.error(f"Error recording income: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "record income")
 
 
 @router.get("/summary")
@@ -239,7 +240,7 @@ async def get_goal_summary(user_id: str = "default_user"):
 
     except Exception as e:
         logger.error(f"Error getting goal summary: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "get goal summary")
 
 
 @router.get("/status-badge")

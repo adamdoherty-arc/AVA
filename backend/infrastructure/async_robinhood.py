@@ -52,7 +52,7 @@ class AsyncRobinhood:
     All methods are non-blocking and safe to use in async context.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._logged_in = False
         self._login_lock = asyncio.Lock()
         self._last_login_attempt: Optional[datetime] = None

@@ -1,7 +1,15 @@
 import requests
 import sys
 
-BASE_URL = "http://localhost:8001/api"
+# Import centralized config for port
+try:
+    from backend.config import settings
+    SERVER_PORT = settings.SERVER_PORT
+except ImportError:
+    # Fallback if running standalone
+    SERVER_PORT = 8002
+
+BASE_URL = f"http://localhost:{SERVER_PORT}/api"
 
 def test_endpoint(method, endpoint, payload=None, expected_status=200):
     url = f"{BASE_URL}{endpoint}"
@@ -10,7 +18,7 @@ def test_endpoint(method, endpoint, payload=None, expected_status=200):
             response = requests.get(url)
         elif method == "POST":
             response = requests.post(url, json=payload)
-        
+
         if response.status_code == expected_status:
             print(f"[PASS] {method} {endpoint} - ({response.status_code})")
             return True
@@ -23,8 +31,8 @@ def test_endpoint(method, endpoint, payload=None, expected_status=200):
         return False
 
 def run_tests():
-    print("Starting Backend API Verification...")
-    
+    print(f"Starting Backend API Verification on port {SERVER_PORT}...")
+
     # 1. Health Check
     if not test_endpoint("GET", "/health"):
         print("Backend seems to be down or unreachable.")

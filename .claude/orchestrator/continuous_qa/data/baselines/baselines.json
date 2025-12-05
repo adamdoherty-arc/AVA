@@ -1,0 +1,57 @@
+{
+  "game-cards": {
+    "feature_name": "game-cards",
+    "test_count": 7,
+    "pass_rate": 28.571428571428573,
+    "issue_count": 5.0,
+    "critical_count": 1.0,
+    "high_count": 2.0,
+    "avg_duration_ms": 10889.486026763916,
+    "last_updated": "2025-12-05T17:21:01.070899",
+    "sample_count": 2
+  },
+  "positions": {
+    "feature_name": "positions",
+    "test_count": 10,
+    "pass_rate": 60.0,
+    "issue_count": 17.0,
+    "critical_count": 0.0,
+    "high_count": 7.000000000000001,
+    "avg_duration_ms": 10470.877361297607,
+    "last_updated": "2025-12-05T17:21:01.071631",
+    "sample_count": 2
+  },
+  "options-analysis": {
+    "feature_name": "options-analysis",
+    "test_count": 6,
+    "pass_rate": 33.33333333333333,
+    "issue_count": 4.0,
+    "critical_count": 1.0,
+    "high_count": 1.0,
+    "avg_duration_ms": 10766.138982772827,
+    "last_updated": "2025-12-05T17:21:01.072093",
+    "sample_count": 2
+  },
+  "premium-scanner": {
+    "feature_name": "premium-scanner",
+    "test_count": 7,
+    "pass_rate": 57.142857142857146,
+    "issue_count": 3.0000000000000004,
+    "critical_count": 1.0,
+    "high_count": 1.0,
+    "avg_duration_ms": 12824.732160568237,
+    "last_updated": "2025-12-05T17:21:01.078115",
+    "sample_count": 2
+  },
+  "dashboard": {
+    "feature_name": "dashboard",
+    "test_count": 7,
+    "pass_rate": 57.142857142857146,
+    "issue_count": 3.0000000000000004,
+    "critical_count": 0.0,
+    "high_count": 0.0,
+    "avg_duration_ms": 2124.5090007781982,
+    "last_updated": "2025-12-05T17:21:01.082242",
+    "sample_count": 2
+  }
+}

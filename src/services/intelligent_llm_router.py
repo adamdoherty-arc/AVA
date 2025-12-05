@@ -42,6 +42,9 @@ class TaskCategory(Enum):
     CODE_GEN = "code_generation"             # "Write a Python function"
     CREATIVE = "creative"                    # "Write a market summary"
     PREDICTION = "prediction"                # "Will this stock go up?"
+    DEEP_REASONING = "deep_reasoning"        # Complex multi-step reasoning, hypothesis testing
+    PORTFOLIO_OPTIMIZATION = "portfolio_opt" # Portfolio allocation, risk scenarios
+    WHAT_IF_ANALYSIS = "what_if"             # What-if scenarios, market simulations
 
 
 class ProviderTier(Enum):
@@ -51,6 +54,7 @@ class ProviderTier(Enum):
     STANDARD = "standard"          # OpenAI GPT-3.5, Claude Haiku
     PREMIUM = "premium"            # GPT-4, Claude Sonnet
     ENTERPRISE = "enterprise"      # GPT-4 Turbo, Claude Opus
+    REASONING = "reasoning"        # DeepSeek R1 32B - specialized deep reasoning (LOCAL FREE)
 
 
 class IntelligentLLMRouter:
@@ -129,6 +133,16 @@ class IntelligentLLMRouter:
         (QueryComplexity.ADVANCED, TaskCategory.CODE_GEN): ProviderTier.PREMIUM,
         (QueryComplexity.ADVANCED, TaskCategory.STRATEGY): ProviderTier.PREMIUM,
         (QueryComplexity.ADVANCED, TaskCategory.ANALYSIS): ProviderTier.PREMIUM,
+
+        # Deep reasoning queries -> REASONING tier (DeepSeek R1 32B - LOCAL FREE!)
+        # These tasks benefit from R1's chain-of-thought reasoning capabilities
+        (QueryComplexity.ADVANCED, TaskCategory.DEEP_REASONING): ProviderTier.REASONING,
+        (QueryComplexity.ADVANCED, TaskCategory.PORTFOLIO_OPTIMIZATION): ProviderTier.REASONING,
+        (QueryComplexity.ADVANCED, TaskCategory.WHAT_IF_ANALYSIS): ProviderTier.REASONING,
+        (QueryComplexity.COMPLEX, TaskCategory.DEEP_REASONING): ProviderTier.REASONING,
+        (QueryComplexity.COMPLEX, TaskCategory.PORTFOLIO_OPTIMIZATION): ProviderTier.REASONING,
+        (QueryComplexity.COMPLEX, TaskCategory.WHAT_IF_ANALYSIS): ProviderTier.REASONING,
+        (QueryComplexity.MODERATE, TaskCategory.DEEP_REASONING): ProviderTier.REASONING,
     }
 
     # Provider tier mappings
@@ -137,17 +151,20 @@ class IntelligentLLMRouter:
         ProviderTier.CHEAP: ["deepseek", "gemini"],  # Very cheap
         ProviderTier.STANDARD: ["openai"],  # GPT-3.5 Turbo
         ProviderTier.PREMIUM: ["anthropic"],  # Claude Sonnet
-        ProviderTier.ENTERPRISE: ["openai"]  # GPT-4 (fallback only)
+        ProviderTier.ENTERPRISE: ["openai"],  # GPT-4 (fallback only)
+        ProviderTier.REASONING: ["ollama-r1"],  # DeepSeek R1 32B for deep reasoning (LOCAL)
     }
 
     # Default models per provider
     PROVIDER_MODELS = {
-        "ollama": "qwen2.5:7b",       # Local, fast
-        "groq": "llama-3.1-70b",      # Free, high quality
-        "deepseek": "deepseek-chat",  # $0.14/$0.28 per 1M tokens
-        "gemini": "gemini-pro",       # Google's model
-        "openai": "gpt-3.5-turbo",    # Standard quality
-        "anthropic": "claude-sonnet-4", # High quality
+        "ollama": "qwen2.5:32b-instruct-q4_K_M",  # Local, balanced quality
+        "ollama-r1": "deepseek-r1:32b",           # DeepSeek R1 32B - deep reasoning (R1-0528)
+        "ollama-coder": "qwen2.5-coder:32b",     # Local coding specialist
+        "groq": "llama-3.3-70b-versatile",       # Free, high quality
+        "deepseek": "deepseek-chat",             # $0.14/$0.28 per 1M tokens
+        "gemini": "gemini-pro",                  # Google's model
+        "openai": "gpt-3.5-turbo",               # Standard quality
+        "anthropic": "claude-sonnet-4",          # High quality
     }
 
     def __init__(self, available_providers: List[str]):
@@ -205,6 +222,20 @@ class IntelligentLLMRouter:
         # Greeting
         if re.search(r'\b(hi|hello|hey|good\s+(morning|afternoon|evening))\b', prompt_lower):
             return TaskCategory.GREETING
+
+        # Deep reasoning - route to DeepSeek R1 32B (check FIRST - highest priority)
+        if re.search(r'\b(think\s+(through|deeply|step\s+by\s+step)|reason\s+(about|through)|hypothesis|prove|derive|logical)\b', prompt_lower):
+            return TaskCategory.DEEP_REASONING
+        if re.search(r'\b(why\s+would|what\s+if|implications|consequences|chain\s+of|multi-step)\b', prompt_lower):
+            return TaskCategory.DEEP_REASONING
+
+        # Portfolio optimization - route to DeepSeek R1 32B
+        if re.search(r'\b(portfolio|allocation|optimize|rebalance|risk.*(adjust|allocat)|diversif)\b', prompt_lower):
+            return TaskCategory.PORTFOLIO_OPTIMIZATION
+
+        # What-if analysis - route to DeepSeek R1 32B
+        if re.search(r'\b(what\s+if|scenario|simulat|stress\s+test|hypothetical|if\s+.*\s+then)\b', prompt_lower):
+            return TaskCategory.WHAT_IF_ANALYSIS
 
         # Code generation
         if re.search(r'\b(write|create|generate|implement)\b.*\b(code|function|script|class)\b', prompt_lower):

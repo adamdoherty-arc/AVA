@@ -1,3 +1,4 @@
+import os
 """
 HTTP Client Wrapper for SpecAgents
 
@@ -41,7 +42,7 @@ class SpecHttpClient:
 
     def __init__(
         self,
-        base_url: str = "http://localhost:8002/api",
+        base_url: str = os.getenv("API_BASE_URL", "http://localhost:8002/api"),
         timeout: float = 30.0,
         max_retries: int = 3,
         retry_delay: float = 1.0,

@@ -190,7 +190,7 @@ class YFinanceBatchFetcher:
         self._yf = None  # Lazy-loaded yfinance module
 
     @property
-    def yf(self):
+    def yf(self) -> None:
         """Lazy-load yfinance module once."""
         if self._yf is None:
             import yfinance

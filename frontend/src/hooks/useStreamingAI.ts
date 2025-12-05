@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react'
+import { BACKEND_URL } from '@/config/api'
 
 interface StreamingOptions {
     onChunk?: (chunk: string) => void
@@ -18,7 +19,7 @@ interface StreamingState {
  * Provides real-time text generation with abort capability
  */
 export function useStreamingAI(apiUrl?: string) {
-    const baseUrl = apiUrl || import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const baseUrl = apiUrl || import.meta.env.VITE_API_URL || BACKEND_URL
     const [state, setState] = useState<StreamingState>({
         isStreaming: false,
         response: '',

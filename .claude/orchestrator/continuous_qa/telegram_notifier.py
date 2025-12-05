@@ -14,14 +14,21 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 import logging
 
-# Add src to path to import existing notifier
-src_path = Path(__file__).parent.parent.parent.parent / "src"
-sys.path.insert(0, str(src_path))
+# Add project root to path for imports
+# Use absolute path based on actual file location
+_THIS_FILE = Path(__file__).resolve()
+_PROJECT_ROOT = _THIS_FILE.parent.parent.parent.parent
+sys.path.insert(0, str(_PROJECT_ROOT))
 
+# Import from src.telegram_notifier explicitly to avoid circular import
+# (this file is also named telegram_notifier.py)
 try:
-    from telegram_notifier import TelegramNotifier as BaseTelegramNotifier
+    from src.telegram_notifier import TelegramNotifier as BaseTelegramNotifier
     TELEGRAM_AVAILABLE = True
-except ImportError:
+except ImportError as e:
+    # Log the actual error for debugging
+    logging.getLogger(__name__).error(f"Failed to import TelegramNotifier: {e}")
+    logging.getLogger(__name__).error(f"Project root: {_PROJECT_ROOT}")
     TELEGRAM_AVAILABLE = False
     BaseTelegramNotifier = None
 
@@ -66,12 +73,33 @@ class QATelegramNotifier:
 
         try:
             self._notifier = BaseTelegramNotifier()
+
+            # Enhanced diagnostic logging
+            bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
+            chat_id = os.getenv('TELEGRAM_CHAT_ID')
+            tg_enabled = os.getenv('TELEGRAM_ENABLED', 'false').lower()
+
+            logger.info(
+                f"Telegram config diagnostic: "
+                f"TELEGRAM_ENABLED={tg_enabled}, "
+                f"BOT_TOKEN={'set' if bot_token else 'MISSING'}, "
+                f"CHAT_ID={'set' if chat_id else 'MISSING'}, "
+                f"base_notifier_enabled={self._notifier.enabled if self._notifier else 'N/A'}"
+            )
+
             if self._notifier.enabled:
-                logger.info("QA Telegram notifier initialized")
+                logger.info("QA Telegram notifier initialized successfully - notifications ACTIVE")
             else:
-                logger.info("Telegram notifications disabled in config")
+                if not bot_token:
+                    logger.warning("Telegram disabled: TELEGRAM_BOT_TOKEN not set in .env")
+                elif not chat_id:
+                    logger.warning("Telegram disabled: TELEGRAM_CHAT_ID not set in .env")
+                elif tg_enabled != 'true':
+                    logger.warning(f"Telegram disabled: TELEGRAM_ENABLED={tg_enabled} (set to 'true' to enable)")
+                else:
+                    logger.warning("Telegram disabled for unknown reason - check .env configuration")
         except Exception as e:
-            logger.error(f"Failed to initialize Telegram notifier: {e}")
+            logger.error(f"Failed to initialize Telegram notifier: {e}", exc_info=True)
             self._notifier = None
 
     def _load_alert_history(self) -> None:
@@ -307,23 +335,38 @@ class QATelegramNotifier:
     # Message Formatting
     # =========================================================================
 
+    def _escape_markdown(self, text: str) -> str:
+        """Escape special Markdown characters to prevent parse errors."""
+        if not text:
+            return text
+        # Escape characters that break Telegram Markdown: _ * ` [ ]
+        for char in ['_', '*', '`', '[', ']']:
+            text = text.replace(char, '\\' + char)
+        return text
+
     def _format_critical_alert(self, message: str, module: str,
                                details: Dict = None) -> str:
         """Format a critical alert message."""
+        # Escape user-provided content to prevent Markdown parse errors
+        safe_message = self._escape_markdown(message)
+        safe_module = self._escape_markdown(module) if module else ""
+
         text = (
             f"\U0001F6A8 *MAGNUS QA CRITICAL ALERT* \U0001F6A8\n\n"
-            f"\U0001F4A5 *Issue:* {message}\n"
+            f"\U0001F4A5 *Issue:* {safe_message}\n"
         )
 
         if module:
-            text += f"\U0001F4E6 *Module:* `{module}`\n"
+            text += f"\U0001F4E6 *Module:* {safe_module}\n"
 
-        text += f"\U0001F553 *Time:* `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`\n"
+        text += f"\U0001F553 *Time:* {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
 
         if details:
             text += "\n\U0001F4CB *Details:*\n"
             for key, value in details.items():
-                text += f"  \u2022 {key}: `{value}`\n"
+                safe_key = self._escape_markdown(str(key))
+                safe_value = self._escape_markdown(str(value))
+                text += f"  - {safe_key}: {safe_value}\n"
 
         text += "\n_Immediate attention required!_"
 
@@ -331,7 +374,7 @@ class QATelegramNotifier:
 
     def _format_cycle_summary(self, summary: Dict[str, Any]) -> str:
         """Format a QA cycle summary message."""
-        run_id = summary.get('run_id', 'Unknown')
+        run_id = self._escape_markdown(str(summary.get('run_id', 'Unknown')))
         duration = summary.get('duration_seconds', 0)
         checks = summary.get('checks_performed', 0)
         found = summary.get('issues_found', 0)
@@ -352,15 +395,15 @@ class QATelegramNotifier:
 
         text = (
             f"{status_emoji} *Magnus QA Cycle Complete*\n\n"
-            f"\U0001F3F7 *Run:* `{run_id}`\n"
-            f"\U0001F4CA *Status:* {status_text}\n\n"
-            f"\U0001F4C8 *Results:*\n"
-            f"  \u2022 Checks: `{checks}`\n"
-            f"  \u2022 Issues Found: `{found}`\n"
-            f"  \u2022 Issues Fixed: `{fixed}`\n"
-            f"  \u2022 Critical: `{critical}`\n\n"
-            f"\U0001F3AF *Health Score:* `{health:.1f}/100`\n"
-            f"\U0001F553 *Duration:* `{duration:.1f}s`\n"
+            f"Run: {run_id}\n"
+            f"Status: {status_text}\n\n"
+            f"*Results:*\n"
+            f"  - Checks: {checks}\n"
+            f"  - Issues Found: {found}\n"
+            f"  - Issues Fixed: {fixed}\n"
+            f"  - Critical: {critical}\n\n"
+            f"Health Score: {health:.1f}/100\n"
+            f"Duration: {duration:.1f}s\n"
         )
 
         return text
@@ -370,7 +413,7 @@ class QATelegramNotifier:
         """Format a daily summary message."""
         text = (
             f"\U0001F4CA *Magnus Daily QA Summary*\n"
-            f"\U0001F4C5 `{datetime.now().strftime('%Y-%m-%d')}`\n\n"
+            f"{datetime.now().strftime('%Y-%m-%d')}\n\n"
         )
 
         # Count by category
@@ -379,7 +422,7 @@ class QATelegramNotifier:
             cat = a.get('category', 'other')
             by_category[cat] = by_category.get(cat, 0) + 1
 
-        text += "\U0001F4CB *Activity:*\n"
+        text += "*Activity:*\n"
         category_emojis = {
             'auto_fix': '\U0001F527',
             'enhancement': '\U0001F680',
@@ -388,15 +431,17 @@ class QATelegramNotifier:
         }
 
         for cat, count in sorted(by_category.items()):
-            emoji = category_emojis.get(cat, '\u2022')
-            text += f"  {emoji} {cat.replace('_', ' ').title()}: `{count}`\n"
+            emoji = category_emojis.get(cat, '-')
+            safe_cat = self._escape_markdown(cat.replace('_', ' ').title())
+            text += f"  {emoji} {safe_cat}: {count}\n"
 
         # Recent accomplishments
         recent = accomplishments[-5:]  # Last 5
         if recent:
-            text += "\n\U0001F3C6 *Recent Accomplishments:*\n"
+            text += "\n*Recent Accomplishments:*\n"
             for a in recent:
-                text += f"  \u2713 {a.get('message', 'N/A')}\n"
+                safe_msg = self._escape_markdown(str(a.get('message', 'N/A')))[:100]
+                text += f"  - {safe_msg}\n"
 
         # Health trend
         if health_trend:
@@ -410,7 +455,7 @@ class QATelegramNotifier:
                 'declining': '\U0001F4C9',
             }.get(trend, '\U0001F4CA')
 
-            text += f"\n\U0001F3AF *Health:* `{current:.1f}` {trend_emoji} (was `{previous:.1f}`)\n"
+            text += f"\nHealth: {current:.1f} {trend_emoji} (was {previous:.1f})\n"
 
         return text
 

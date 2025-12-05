@@ -140,7 +140,7 @@ class AITradeAnalyzer:
 
         self.logger = logger.bind(component="AITradeAnalyzer")
 
-    def _get_llm(self):
+    def _get_llm(self) -> None:
         """Get or create the LLM instance."""
         if self._llm is not None:
             return self._llm
@@ -194,7 +194,7 @@ class AITradeAnalyzer:
         except Exception:
             return False
 
-    def _get_extraction_chain(self):
+    def _get_extraction_chain(self) -> None:
         """Get or create the trade extraction chain."""
         if self._extraction_chain is None:
             prompt = ChatPromptTemplate.from_template(TRADE_EXTRACTION_PROMPT)
@@ -202,7 +202,7 @@ class AITradeAnalyzer:
             self._extraction_chain = prompt | self._get_llm() | parser
         return self._extraction_chain
 
-    def _get_sentiment_chain(self):
+    def _get_sentiment_chain(self) -> None:
         """Get or create the sentiment analysis chain."""
         if self._sentiment_chain is None:
             prompt = ChatPromptTemplate.from_template(SENTIMENT_ANALYSIS_PROMPT)
@@ -210,7 +210,7 @@ class AITradeAnalyzer:
             self._sentiment_chain = prompt | self._get_llm() | parser
         return self._sentiment_chain
 
-    def _get_risk_chain(self):
+    def _get_risk_chain(self) -> None:
         """Get or create the risk assessment chain."""
         if self._risk_chain is None:
             prompt = ChatPromptTemplate.from_template(RISK_ASSESSMENT_PROMPT)

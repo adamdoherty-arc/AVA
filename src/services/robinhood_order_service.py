@@ -133,7 +133,7 @@ class RobinhoodOrderService:
 
         logger.info(f"Order service initialized (paper_trading={paper_trading})")
 
-    def _ensure_logged_in(self):
+    def _ensure_logged_in(self) -> None:
         """Ensure Robinhood client is logged in"""
         if not self.client.logged_in:
             if not self.client.login():

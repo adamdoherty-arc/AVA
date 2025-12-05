@@ -170,7 +170,7 @@ class AlertService:
 
         logger.info(f"AlertService initialized (Telegram: {self.telegram is not None and self.telegram.enabled}, Email: {self.email_enabled})")
 
-    def _get_db_connection(self):
+    def _get_db_connection(self) -> None:
         """Get a database connection."""
         return psycopg2.connect(**self.db_config)
 

@@ -43,7 +43,7 @@ def convert_value(val):
 class StockETFPopulator:
     """Populate stocks and ETFs universe tables with market data"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.db_config = {
             'host': os.getenv('DB_HOST', 'localhost'),
             'port': os.getenv('DB_PORT', '5432'),
@@ -53,7 +53,7 @@ class StockETFPopulator:
         }
         self.conn = psycopg2.connect(**self.db_config)
 
-    def create_tables(self):
+    def create_tables(self) -> None:
         """Create stocks_universe and etfs_universe tables"""
         cur = self.conn.cursor()
 
@@ -527,7 +527,7 @@ class StockETFPopulator:
         finally:
             cur.close()
 
-    def get_symbols_from_watchlists(self):
+    def get_symbols_from_watchlists(self) -> None:
         """Get unique stock symbols from TradingView watchlists"""
         cur = self.conn.cursor()
         try:
@@ -549,7 +549,7 @@ class StockETFPopulator:
         finally:
             cur.close()
 
-    def populate_from_watchlists(self):
+    def populate_from_watchlists(self) -> None:
         """Populate stocks and ETFs tables from TradingView watchlists"""
         symbols = self.get_symbols_from_watchlists()
         if not symbols:
@@ -592,7 +592,7 @@ class StockETFPopulator:
         logger.info(f"Stocks: {stocks_count}, ETFs: {etfs_count}")
         logger.info(f"Failed: {len(failed)}")
 
-    def populate_common_etfs(self):
+    def populate_common_etfs(self) -> None:
         """Populate common ETFs that traders use"""
         common_etfs = [
             # Major Index ETFs
@@ -635,7 +635,7 @@ class StockETFPopulator:
 
         logger.info("Common ETFs population complete!")
 
-    def populate_sp500_stocks(self):
+    def populate_sp500_stocks(self) -> None:
         """Populate S&P 500 stocks"""
         try:
             sp500_url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
@@ -665,7 +665,7 @@ class StockETFPopulator:
         except Exception as e:
             logger.error(f"Error fetching S&P 500 list: {e}")
 
-    def close(self):
+    def close(self) -> None:
         """Close database connection"""
         if self.conn:
             self.conn.close()

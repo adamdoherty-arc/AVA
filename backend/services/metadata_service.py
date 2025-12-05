@@ -38,7 +38,7 @@ class MetadataService:
     CACHE_TTL_METADATA = 3600   # 1 hour for company metadata
     CACHE_TTL_CALENDAR = 1800   # 30 minutes for earnings calendar
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Try to use distributed cache
         try:
             from backend.infrastructure.cache import get_cache

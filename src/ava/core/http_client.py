@@ -169,7 +169,7 @@ class ServiceClient:
 
     Usage:
         class KalshiService(ServiceClient):
-            def __init__(self):
+            def __init__(self) -> None:
                 super().__init__(
                     base_url="https://api.kalshi.com/v2",
                     service_name="kalshi"

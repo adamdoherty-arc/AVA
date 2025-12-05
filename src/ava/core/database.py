@@ -66,7 +66,7 @@ class AsyncDatabaseManager:
         self._session_factory = None
         self._initialized = False
 
-    async def initialize(self):
+    async def initialize(self) -> None:
         """Initialize database connection pool"""
         if self._initialized:
             return
@@ -104,7 +104,7 @@ class AsyncDatabaseManager:
             logger.error(f"Database initialization failed: {e}")
             raise
 
-    async def shutdown(self):
+    async def shutdown(self) -> None:
         """Shutdown database connections"""
         if self._engine:
             await self._engine.dispose()
@@ -112,7 +112,7 @@ class AsyncDatabaseManager:
             logger.info("Database connections closed")
 
     @asynccontextmanager
-    async def session(self):
+    async def session(self) -> None:
         """Get database session context manager"""
         if not self._initialized:
             await self.initialize()

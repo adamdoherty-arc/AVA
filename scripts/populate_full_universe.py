@@ -44,7 +44,7 @@ def convert_value(val):
 class FullUniversePopulator:
     """Populate complete stocks and ETFs universe"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.db_config = {
             'host': os.getenv('DB_HOST', 'localhost'),
             'port': os.getenv('DB_PORT', '5432'),
@@ -56,7 +56,7 @@ class FullUniversePopulator:
         self.processed_stocks: Set[str] = set()
         self.processed_etfs: Set[str] = set()
 
-    def get_existing_symbols(self):
+    def get_existing_symbols(self) -> None:
         """Get already processed symbols from database"""
         cur = self.conn.cursor()
         try:
@@ -713,7 +713,7 @@ class FullUniversePopulator:
         logger.info(f"Added {count} ETFs from {source}")
         return count
 
-    def run_full_population(self):
+    def run_full_population(self) -> None:
         """Run the full population process"""
         self.get_existing_symbols()
 
@@ -754,7 +754,7 @@ class FullUniversePopulator:
         logger.info(f"COMPLETE: {stock_count} stocks, {etf_count} ETFs")
         logger.info("=" * 60)
 
-    def close(self):
+    def close(self) -> None:
         if self.conn:
             self.conn.close()
 

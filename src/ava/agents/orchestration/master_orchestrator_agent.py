@@ -360,13 +360,13 @@ class DatabaseManager:
 
     __slots__ = ('_pool', '_lock', '_prepared', '_config')
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._pool = None
         self._lock = asyncio.Lock()
         self._prepared: Dict[str, Any] = {}
         self._config = OrchestratorConfig
 
-    async def get_pool(self):
+    async def get_pool(self) -> None:
         """Get or create connection pool with warm-up"""
         if self._pool is not None:
             return self._pool
@@ -399,7 +399,7 @@ class DatabaseManager:
 
         return self._pool
 
-    async def _warm_up_pool(self):
+    async def _warm_up_pool(self) -> None:
         """Pre-warm connections and prepare common statements"""
         if not self._pool:
             return
@@ -486,7 +486,7 @@ class DatabaseManager:
                     for row in rows:
                         yield dict(row)
 
-    async def close(self):
+    async def close(self) -> None:
         """Close connection pool"""
         if self._pool:
             await self._pool.close()
@@ -502,7 +502,7 @@ class CacheManager:
 
     __slots__ = ('_local', '_redis', '_redis_available', '_prefix')
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._local = TTLCache[Any](
             max_size=OrchestratorConfig.LOCAL_CACHE_MAX_SIZE,
             ttl=OrchestratorConfig.CACHE_TTL_SECONDS
@@ -516,7 +516,7 @@ class CacheManager:
         data = f"{namespace}:{':'.join(str(a) for a in args)}"
         return f"{self._prefix}{fnv1a_hash(data)}"
 
-    async def _get_redis(self):
+    async def _get_redis(self) -> None:
         """Lazy Redis connection"""
         if self._redis_available is False:
             return None
@@ -682,7 +682,7 @@ class MasterOrchestratorAgent:
         '_classifier', '_semaphore'
     )
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.name = "master_orchestrator_agent"
         self.description = "Central intelligence that knows everything about AVA"
         self.metadata = {
@@ -1095,7 +1095,7 @@ class MasterOrchestratorAgent:
             return await self._db.execute(sql, *params)
         return await self._db.execute(sql)
 
-    async def close(self):
+    async def close(self) -> None:
         """Cleanup resources"""
         await self._db.close()
         self._cache._local.clear()

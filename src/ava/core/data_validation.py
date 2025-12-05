@@ -172,7 +172,7 @@ class ValidatedOptionData(BaseModel):
         return v
 
     @model_validator(mode='after')
-    def calculate_mark_if_missing(self):
+    def calculate_mark_if_missing(self) -> None:
         if self.mark == 0 and (self.bid > 0 or self.ask > 0):
             self.mark = (self.bid + self.ask) / 2
         return self
@@ -224,7 +224,7 @@ class ValidatedStockData(BaseModel):
     timestamp: Optional[datetime] = None
 
     @model_validator(mode='after')
-    def calculate_change(self):
+    def calculate_change(self) -> None:
         if self.previous_close > 0 and self.change == 0:
             self.change = self.price - self.previous_close
             self.change_pct = (self.change / self.previous_close) * 100

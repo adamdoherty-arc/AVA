@@ -1,3 +1,4 @@
+import os
 """
 Example Usage of Research API
 
@@ -9,8 +10,8 @@ import requests
 from datetime import datetime
 
 
-# Base URL
-BASE_URL = "http://localhost:8000"
+# Base URL - uses centralized port 8002
+BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8002").rstrip("/api")
 
 
 def example_get_research(symbol: str):

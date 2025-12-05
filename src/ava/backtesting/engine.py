@@ -68,7 +68,7 @@ class BacktestConfig:
     monte_carlo_runs: int = 0        # 0 = no Monte Carlo
     random_seed: Optional[int] = 42
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if isinstance(self.start_date, str):
             self.start_date = date.fromisoformat(self.start_date)
         if isinstance(self.end_date, str):
@@ -360,7 +360,7 @@ class BacktestEngine:
         logger.info(f"Backtest complete: {len(self.trades)} trades")
         return result
 
-    def _reset(self):
+    def _reset(self) -> None:
         """Reset engine state for new backtest"""
         self.trades = []
         self.equity_curve = []

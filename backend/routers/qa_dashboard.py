@@ -3,19 +3,27 @@ QA Dashboard API Routes
 
 Provides API endpoints to monitor and manage the Continuous QA system.
 Supports both file-based logging and PostgreSQL database storage.
+
+MODERNIZED: Uses async file I/O to prevent blocking the event loop.
 """
 
 import json
 import sys
-import logging
 import asyncio
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Set
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
+from backend.infrastructure.errors import safe_internal_error
+from backend.utils.async_file_io import (
+    async_read_json,
+    async_read_file,
+    async_file_exists
+)
+import structlog
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Add paths
 PROJECT_ROOT = Path(__file__).parent.parent.parent
@@ -89,10 +97,10 @@ class IssueStatusUpdate(BaseModel):
 
 @router.get("/status", response_model=Dict[str, Any])
 async def get_qa_status():
-    """Get current QA system status."""
+    """Get current QA system status. Uses async file I/O."""
     # Check both locations for status.json
     status_file = DATA_DIR / "status.json"
-    if not status_file.exists():
+    if not await async_file_exists(status_file):
         status_file = LOGS_DIR / "status.json"
 
     default_status = {
@@ -107,76 +115,78 @@ async def get_qa_status():
         "critical_failures": 0,
     }
 
-    if status_file.exists():
+    if await async_file_exists(status_file):
         try:
-            with open(status_file, 'r') as f:
-                status = json.load(f)
-                # Map fields from actual file to expected format
-                mapped_status = {
-                    "is_running": status.get("is_currently_running", False),
-                    "last_run_time": status.get("last_run"),
-                    "next_run_time": status.get("next_run"),
-                    "health_score": status.get("health_score", 0),
-                    "total_cycles": status.get("current_cycle", 0),
-                    "total_issues_found": status.get("last_accomplishments_count", 0),
-                    "total_issues_fixed": status.get("last_accomplishments_count", 0),
-                    "last_run_duration_seconds": 0,
-                    "critical_failures": 0,
-                    "run_id": status.get("last_run_id"),
-                }
-                return {**default_status, **mapped_status}
+            status = await async_read_json(status_file, default={})
+            # Map fields from actual file to expected format
+            mapped_status = {
+                "is_running": status.get("is_currently_running", False),
+                "last_run_time": status.get("last_run"),
+                "next_run_time": status.get("next_run"),
+                "health_score": status.get("health_score", 0),
+                "total_cycles": status.get("current_cycle", 0),
+                "total_issues_found": status.get("last_accomplishments_count", 0),
+                "total_issues_fixed": status.get("last_accomplishments_count", 0),
+                "last_run_duration_seconds": 0,
+                "critical_failures": 0,
+                "run_id": status.get("last_run_id"),
+            }
+            return {**default_status, **mapped_status}
         except Exception as e:
+            logger.warning("qa_status_read_error", error=str(e))
             return {**default_status, "error": str(e)}
 
     return default_status
 
 
+async def _async_read_jsonl(file_path: Path, limit: int = None) -> List[Dict]:
+    """Read JSONL file asynchronously."""
+    if not await async_file_exists(file_path):
+        return []
+
+    try:
+        content = await async_read_file(str(file_path))
+        entries = []
+        lines = content.strip().split('\n') if content else []
+        if limit:
+            lines = lines[-limit:]
+        for line in lines:
+            if line.strip():
+                try:
+                    entries.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+        return entries
+    except Exception as e:
+        logger.warning("jsonl_read_error", file=str(file_path), error=str(e))
+        return []
+
+
 @router.get("/health-history")
 async def get_health_history(days: int = 7):
-    """Get health score history."""
+    """Get health score history. Uses async file I/O."""
     # Check both locations
     health_file = DATA_DIR / "health_history.jsonl"
-    if not health_file.exists():
+    if not await async_file_exists(health_file):
         health_file = LOGS_DIR / "health_history.jsonl"
 
-    history = []
-    if health_file.exists():
-        try:
-            with open(health_file, 'r') as f:
-                for line in f:
-                    if line.strip():
-                        entry = json.loads(line)
-                        history.append(entry)
-        except Exception as e:
-            return {"error": str(e), "history": []}
+    history = await _async_read_jsonl(health_file)
+    if not history:
+        return {"history": []}
 
-    # Return last N days worth
-    return {"history": history[-days * 24:]}  # Assuming ~hourly runs
+    # Return last N days worth (assuming ~hourly runs)
+    return {"history": history[-days * 24:]}
 
 
 @router.get("/accomplishments")
 async def get_accomplishments(limit: int = 50):
-    """Get recent accomplishments."""
+    """Get recent accomplishments. Uses async file I/O."""
     # Check both locations
     accomplishments_file = DATA_DIR / "accomplishments.jsonl"
-    if not accomplishments_file.exists():
+    if not await async_file_exists(accomplishments_file):
         accomplishments_file = LOGS_DIR / "accomplishments.jsonl"
 
-    accomplishments = []
-    if accomplishments_file.exists():
-        try:
-            with open(accomplishments_file, 'r') as f:
-                lines = f.readlines()
-                # Get last N lines
-                for line in lines[-limit:]:
-                    if line.strip():
-                        try:
-                            entry = json.loads(line)
-                            accomplishments.append(entry)
-                        except json.JSONDecodeError:
-                            continue
-        except Exception as e:
-            return {"error": str(e), "accomplishments": []}
+    accomplishments = await _async_read_jsonl(accomplishments_file, limit=limit)
 
     # Reverse to show newest first
     accomplishments.reverse()
@@ -198,16 +208,14 @@ async def get_accomplishments(limit: int = 50):
 
 @router.get("/patterns")
 async def get_learned_patterns():
-    """Get learned patterns and statistics."""
+    """Get learned patterns and statistics. Uses async file I/O."""
     patterns_file = DATA_DIR / "learned_patterns.json"
 
-    if not patterns_file.exists():
+    if not await async_file_exists(patterns_file):
         return {"patterns": [], "statistics": {}}
 
     try:
-        with open(patterns_file, 'r') as f:
-            data = json.load(f)
-
+        data = await async_read_json(patterns_file, default={})
         patterns = data.get('patterns', [])
 
         # Calculate statistics
@@ -234,20 +242,20 @@ async def get_learned_patterns():
             }
         }
     except Exception as e:
+        logger.warning("patterns_read_error", error=str(e))
         return {"error": str(e), "patterns": []}
 
 
 @router.get("/hot-spots")
 async def get_hot_spots():
-    """Get files that frequently have issues."""
+    """Get files that frequently have issues. Uses async file I/O."""
     patterns_file = DATA_DIR / "learned_patterns.json"
 
-    if not patterns_file.exists():
+    if not await async_file_exists(patterns_file):
         return {"hot_spots": []}
 
     try:
-        with open(patterns_file, 'r') as f:
-            data = json.load(f)
+        data = await async_read_json(patterns_file, default={})
 
         # Aggregate files across patterns
         file_issues = {}
@@ -270,11 +278,11 @@ async def get_hot_spots():
         hot_spots = [
             {
                 'file': f,
-                'issue_count': data['count'],
-                'severity_score': data['severity_score'],
-                'patterns': list(data['patterns'])[:5],
+                'issue_count': fdata['count'],
+                'severity_score': fdata['severity_score'],
+                'patterns': list(fdata['patterns'])[:5],
             }
-            for f, data in file_issues.items()
+            for f, fdata in file_issues.items()
         ]
 
         hot_spots.sort(key=lambda x: x['severity_score'], reverse=True)
@@ -282,32 +290,19 @@ async def get_hot_spots():
         return {"hot_spots": hot_spots[:20]}
 
     except Exception as e:
+        logger.warning("hot_spots_read_error", error=str(e))
         return {"error": str(e), "hot_spots": []}
 
 
 @router.get("/enhancements")
 async def get_enhancement_log(limit: int = 50):
-    """Get recent enhancement log."""
+    """Get recent enhancement log. Uses async file I/O."""
     # Check both locations
     enhancements_file = LOGS_DIR / "enhancements.jsonl"
-    if not enhancements_file.exists():
+    if not await async_file_exists(enhancements_file):
         enhancements_file = DATA_DIR / "enhancements.jsonl"
 
-    enhancements = []
-    if enhancements_file.exists():
-        try:
-            with open(enhancements_file, 'r') as f:
-                lines = f.readlines()
-                for line in lines[-limit:]:
-                    if line.strip():
-                        try:
-                            entry = json.loads(line)
-                            enhancements.append(entry)
-                        except json.JSONDecodeError:
-                            continue
-        except Exception as e:
-            return {"error": str(e), "enhancements": []}
-
+    enhancements = await _async_read_jsonl(enhancements_file, limit=limit)
     enhancements.reverse()
 
     # Group by category
@@ -345,23 +340,24 @@ async def trigger_qa_run(background_tasks: BackgroundTasks):
             "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "trigger QA run")
 
 
 @router.get("/config")
 async def get_qa_config():
-    """Get QA system configuration."""
+    """Get QA system configuration. Uses async file I/O."""
     config_file = QA_DIR / "config" / "qa_config.yaml"
 
-    if not config_file.exists():
+    if not await async_file_exists(config_file):
         return {"config": {}, "error": "Config file not found"}
 
     try:
         import yaml
-        with open(config_file, 'r') as f:
-            config = yaml.safe_load(f)
+        content = await async_read_file(str(config_file))
+        config = yaml.safe_load(content)
         return {"config": config}
     except Exception as e:
+        logger.warning("config_read_error", error=str(e))
         return {"error": str(e), "config": {}}
 
 
@@ -441,7 +437,7 @@ async def get_db_run_details(run_id: int):
         raise
     except Exception as e:
         logger.error(f"Error fetching run details: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "fetch QA run details")
 
 
 @router.get("/db/issues")
@@ -503,7 +499,7 @@ async def get_db_issue_details(issue_id: int):
         raise
     except Exception as e:
         logger.error(f"Error fetching issue details: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "fetch issue details")
 
 
 @router.patch("/db/issues/{issue_id}/status")
@@ -542,7 +538,7 @@ async def update_db_issue_status(
         raise
     except Exception as e:
         logger.error(f"Error updating issue status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "update issue status")
 
 
 @router.get("/db/health-history")
@@ -1067,7 +1063,7 @@ async def get_db_status():
 class ConnectionManager:
     """Manages WebSocket connections for real-time QA updates."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.active_connections: Set[WebSocket] = set()
         self._broadcast_task: Optional[asyncio.Task] = None
 
@@ -1111,7 +1107,7 @@ class ConnectionManager:
         for conn in dead_connections:
             self.disconnect(conn)
 
-    async def _periodic_broadcast(self):
+    async def _periodic_broadcast(self) -> None:
         """Periodically broadcast QA status updates."""
         while self.active_connections:
             try:

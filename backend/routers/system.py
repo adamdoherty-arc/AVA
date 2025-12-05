@@ -3,6 +3,7 @@ from typing import Optional
 from datetime import datetime
 import psutil
 import os
+from backend.config import settings
 
 router = APIRouter(prefix="/api/system", tags=["system"])
 
@@ -89,8 +90,8 @@ async def get_services():
     """Get list of system services"""
     return {
         "services": [
-            {"id": "api", "name": "API Server", "status": "running", "port": 8002, "uptime": "2h 34m"},
-            {"id": "frontend", "name": "Frontend", "status": "running", "port": 5175, "uptime": "2h 34m"},
+            {"id": "api", "name": "API Server", "status": "running", "port": settings.SERVER_PORT, "uptime": "2h 34m"},
+            {"id": "frontend", "name": "Frontend", "status": "running", "port": settings.FRONTEND_PORT, "uptime": "2h 34m"},
             {"id": "database", "name": "PostgreSQL", "status": "running", "port": 5432, "uptime": "5h 12m"},
             {"id": "redis", "name": "Redis Cache", "status": "running", "port": 6379, "uptime": "5h 12m"},
             {"id": "scheduler", "name": "Task Scheduler", "status": "running", "port": None, "uptime": "2h 34m"},
@@ -155,4 +156,64 @@ async def get_monitoring_metrics():
             {"name": "High Memory Usage", "severity": "warning", "triggered_at": "2024-11-25T09:00:00Z"},
             {"name": "API Latency Spike", "severity": "info", "triggered_at": "2024-11-25T08:30:00Z"}
         ]
+    }
+
+
+@router.get("/errors/analytics")
+async def get_error_analytics():
+    """
+    Get AI-powered error analytics.
+
+    Returns error classification trends, correlation data, and resolution hints.
+    Uses the ErrorClassifier for intelligent error categorization.
+    """
+    from backend.infrastructure.errors import get_error_classifier
+
+    classifier = get_error_classifier()
+    trends = classifier.get_error_trends()
+
+    # Get resolution hints for top error codes
+    hints = {}
+    for code_name in trends.get("by_code", {}).keys():
+        from backend.infrastructure.errors import ErrorCode
+        try:
+            code = ErrorCode[code_name]
+            hints[code_name] = classifier.get_resolution_hints(code)
+        except (KeyError, ValueError):
+            pass
+
+    return {
+        "trends": trends,
+        "resolution_hints": hints,
+        "classification_patterns": list(classifier.ERROR_PATTERNS.keys()),
+        "generated_at": datetime.now().isoformat()
+    }
+
+
+@router.get("/errors/{error_id}/correlate")
+async def correlate_error(error_id: str):
+    """
+    Find errors correlated to a specific error ID.
+
+    Uses temporal and categorical correlation to identify related issues.
+    """
+    from backend.infrastructure.errors import get_error_classifier
+
+    classifier = get_error_classifier()
+    correlated = classifier.find_correlated_errors(error_id)
+
+    return {
+        "error_id": error_id,
+        "correlated_errors": [
+            {
+                "error_id": e["error_id"],
+                "timestamp": e["timestamp"].isoformat(),
+                "code": e["code"].name,
+                "exception_type": e["exception_type"],
+                "message": e["message"][:200]
+            }
+            for e in correlated
+        ],
+        "correlation_window_seconds": classifier._correlation_window,
+        "generated_at": datetime.now().isoformat()
     }

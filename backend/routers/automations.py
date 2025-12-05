@@ -26,10 +26,17 @@ from datetime import datetime, timedelta
 from pydantic import BaseModel, Field
 from enum import Enum
 import logging
+from backend.infrastructure.errors import safe_internal_error
 
 # Import the control service
 import sys
-sys.path.insert(0, '/Users/adam/code/AVA')
+import os
+
+# Use environment variable or relative path (not hardcoded user-specific path)
+project_root = os.getenv('AVA_PROJECT_PATH', os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 from src.services.automation_control_service import (
     get_automation_control_service,
     ExecutionStatus
@@ -150,7 +157,7 @@ async def list_automations(
 
     except Exception as e:
         logger.error(f"Error listing automations: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "list automations")
 
 
 @router.get("/dashboard")
@@ -177,7 +184,7 @@ async def get_dashboard(
 
     except Exception as e:
         logger.error(f"Error getting dashboard: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "fetch dashboard")
 
 
 @router.get("/categories")
@@ -207,7 +214,7 @@ async def get_categories() -> Dict[str, Any]:
 
     except Exception as e:
         logger.error(f"Error getting categories: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "fetch categories")
 
 
 @router.get("/history")
@@ -255,7 +262,7 @@ async def get_all_history(
 
     except Exception as e:
         logger.error(f"Error getting execution history: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "fetch execution history")
 
 
 @router.get("/{automation_name}")
@@ -282,7 +289,7 @@ async def get_automation(automation_name: str) -> Dict[str, Any]:
         raise
     except Exception as e:
         logger.error(f"Error getting automation {automation_name}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "fetch automation")
 
 
 @router.get("/{automation_name}/history")
@@ -332,7 +339,7 @@ async def get_automation_history(
         raise
     except Exception as e:
         logger.error(f"Error getting history for {automation_name}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "fetch automation history")
 
 
 @router.patch("/{automation_name}")
@@ -374,7 +381,7 @@ async def update_automation_state(
         raise
     except Exception as e:
         logger.error(f"Error updating automation {automation_name}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "update automation")
 
 
 @router.post("/{automation_name}/run")
@@ -424,7 +431,7 @@ async def trigger_automation(
         raise
     except Exception as e:
         logger.error(f"Error triggering automation {automation_name}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "trigger automation")
 
 
 @router.post("/bulk")
@@ -454,7 +461,7 @@ async def bulk_update_state(update: BulkStateUpdate) -> Dict[str, Any]:
 
     except Exception as e:
         logger.error(f"Error in bulk update: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "perform bulk update")
 
 
 @router.post("/bulk/enable-all")
@@ -496,7 +503,7 @@ async def enable_all_automations() -> Dict[str, Any]:
 
     except Exception as e:
         logger.error(f"Error enabling all automations: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "enable all automations")
 
 
 @router.post("/bulk/disable-all")
@@ -539,7 +546,7 @@ async def disable_all_automations() -> Dict[str, Any]:
 
     except Exception as e:
         logger.error(f"Error disabling all automations: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "disable all automations")
 
 
 @router.delete("/history/cleanup")
@@ -550,20 +557,20 @@ async def cleanup_old_history(
     Delete old execution history logs.
 
     Danger Zone operation - permanently removes old execution logs.
+    Uses async database for non-blocking operation.
     """
-    try:
-        control = get_automation_control_service()
+    from backend.infrastructure.database import get_database
 
-        # Use direct database access for cleanup
-        with control._get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    DELETE FROM automation_executions
-                    WHERE started_at < NOW() - INTERVAL '%s days'
-                    RETURNING id
-                """, (days,))
-                deleted_count = cur.rowcount
-                conn.commit()
+    try:
+        db = await get_database()
+        # Use interval arithmetic with async database
+        # Note: PostgreSQL interval syntax uses string concatenation for dynamic intervals
+        result = await db.execute(f"""
+            DELETE FROM automation_executions
+            WHERE started_at < NOW() - INTERVAL '{days} days'
+        """)
+        # Parse the DELETE count from result string "DELETE N"
+        deleted_count = int(result.split()[-1]) if result else 0
 
         return {
             "status": "success",
@@ -572,8 +579,8 @@ async def cleanup_old_history(
         }
 
     except Exception as e:
-        logger.error(f"Error cleaning up history: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("cleanup_history_error", error=str(e), days=days)
+        safe_internal_error(e, "clean up history")
 
 
 # ============================================================================
@@ -626,7 +633,7 @@ async def analyze_failure(
 
     except Exception as e:
         logger.error(f"Error in AI failure analysis: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "analyze automation failure")
 
 
 @router.get("/ai/health-prediction")
@@ -653,7 +660,7 @@ async def get_health_prediction(
 
     except Exception as e:
         logger.error(f"Error in health prediction: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "predict health")
 
 
 @router.get("/ai/recommendations")
@@ -677,7 +684,7 @@ async def get_recommendations(
 
     except Exception as e:
         logger.error(f"Error getting recommendations: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "generate recommendations")
 
 
 @router.post("/ai/ask")
@@ -698,7 +705,7 @@ async def ask_ai(request: AIQuestionRequest) -> Dict[str, Any]:
 
     except Exception as e:
         logger.error(f"Error in AI question: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "answer AI question")
 
 
 @router.get("/ai/insights")
@@ -750,4 +757,4 @@ async def get_ai_insights(
 
     except Exception as e:
         logger.error(f"Error getting AI insights: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "generate AI insights")

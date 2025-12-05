@@ -15,13 +15,15 @@
  * @updated 2025-11-29
  */
 
-import axios, {
+import axios from 'axios';
+import type {
   AxiosError,
   AxiosInstance,
   AxiosRequestConfig,
   AxiosResponse,
   InternalAxiosRequestConfig,
 } from 'axios';
+import { API_FULL_URL } from '@/config/api';
 
 // =============================================================================
 // Types
@@ -431,7 +433,7 @@ export class APIClient {
 // =============================================================================
 
 export const apiClient = new APIClient({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8002/api',
+  baseURL: API_FULL_URL,  // Uses centralized config from @/config/api
   timeout: 30000,
   retries: 3,
   enableCache: true,

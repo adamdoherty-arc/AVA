@@ -26,6 +26,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
 import psycopg2
 from psycopg2.extras import RealDictCursor
+from contextlib import contextmanager
 from dotenv import load_dotenv
 
 from src.ava.core.llm_engine import LLMClient, LLMProvider
@@ -119,6 +120,22 @@ class AutonomousAgent:
         logger.info(f"   Require approval: {require_approval}")
         logger.info(f"   Auto-commit: {auto_commit}")
         logger.info(f"   Budget limit: ${budget_limit_usd}")
+
+    @contextmanager
+    def _get_db_connection(self) -> None:
+        """Safe database connection context manager - prevents connection leaks."""
+        conn = None
+        try:
+            conn = psycopg2.connect(self.db_url)
+            yield conn
+            conn.commit()
+        except Exception:
+            if conn:
+                conn.rollback()
+            raise
+        finally:
+            if conn:
+                conn.close()
 
     def run_forever(self) -> None:
         """
@@ -227,34 +244,30 @@ class AutonomousAgent:
         4. Not too complex (skip 'epic' complexity for now)
         """
         try:
-            conn = psycopg2.connect(self.db_url)
-            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            with self._get_db_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                    cursor.execute("""
+                        SELECT
+                            id, title, description, category, priority,
+                            complexity, feature_area, estimated_hours,
+                            ai_priority_score, depends_on_enhancement_ids
+                        FROM ci_enhancements
+                        WHERE status IN ('proposed', 'approved')
+                          AND (complexity IS NULL OR complexity != 'epic')
+                          AND (depends_on_enhancement_ids IS NULL OR array_length(depends_on_enhancement_ids, 1) = 0)
+                        ORDER BY
+                            CASE priority
+                                WHEN 'critical' THEN 1
+                                WHEN 'high' THEN 2
+                                WHEN 'medium' THEN 3
+                                WHEN 'low' THEN 4
+                            END,
+                            ai_priority_score DESC NULLS LAST,
+                            created_at ASC
+                        LIMIT 1
+                    """)
 
-            cursor.execute("""
-                SELECT
-                    id, title, description, category, priority,
-                    complexity, feature_area, estimated_hours,
-                    ai_priority_score, depends_on_enhancement_ids
-                FROM ci_enhancements
-                WHERE status IN ('proposed', 'approved')
-                  AND (complexity IS NULL OR complexity != 'epic')
-                  AND (depends_on_enhancement_ids IS NULL OR array_length(depends_on_enhancement_ids, 1) = 0)
-                ORDER BY
-                    CASE priority
-                        WHEN 'critical' THEN 1
-                        WHEN 'high' THEN 2
-                        WHEN 'medium' THEN 3
-                        WHEN 'low' THEN 4
-                    END,
-                    ai_priority_score DESC NULLS LAST,
-                    created_at ASC
-                LIMIT 1
-            """)
-
-            task = cursor.fetchone()
-
-            cursor.close()
-            conn.close()
+                    task = cursor.fetchone()
 
             if task:
                 logger.info(f"\n📋 Next Task Selected:")
@@ -399,41 +412,36 @@ Begin implementation. Work autonomously and make reasonable decisions.
                            notes: Optional[str] = None):
         """Update task status in database"""
         try:
-            conn = psycopg2.connect(self.db_url)
-            cursor = conn.cursor()
+            with self._get_db_connection() as conn:
+                with conn.cursor() as cursor:
+                    updates = ["status = %s", "updated_at = NOW()"]
+                    params = [status]
 
-            updates = ["status = %s", "updated_at = NOW()"]
-            params = [status]
+                    if status == 'in_progress' and not actual_hours:
+                        updates.append("started_at = NOW()")
 
-            if status == 'in_progress' and not actual_hours:
-                updates.append("started_at = NOW()")
+                    if status == 'completed':
+                        updates.append("completed_at = NOW()")
+                        updates.append("completion_percentage = 100")
 
-            if status == 'completed':
-                updates.append("completed_at = NOW()")
-                updates.append("completion_percentage = 100")
+                    if actual_hours:
+                        updates.append("actual_hours = %s")
+                        params.append(actual_hours)
 
-            if actual_hours:
-                updates.append("actual_hours = %s")
-                params.append(actual_hours)
+                    # Add notes to description if provided
+                    if notes:
+                        updates.append("description = description || %s")
+                        params.append(f"\n\n---\n**Autonomous Agent Note ({datetime.now().strftime('%Y-%m-%d %H:%M')}):**\n{notes}")
 
-            # Add notes to description if provided
-            if notes:
-                updates.append("description = description || %s")
-                params.append(f"\n\n---\n**Autonomous Agent Note ({datetime.now().strftime('%Y-%m-%d %H:%M')}):**\n{notes}")
+                    params.append(task_id)
 
-            params.append(task_id)
+                    query = f"""
+                        UPDATE ci_enhancements
+                        SET {', '.join(updates)}
+                        WHERE id = %s
+                    """
 
-            query = f"""
-                UPDATE ci_enhancements
-                SET {', '.join(updates)}
-                WHERE id = %s
-            """
-
-            cursor.execute(query, params)
-            conn.commit()
-
-            cursor.close()
-            conn.close()
+                    cursor.execute(query, params)
 
             logger.info(f"✓ Task {task_id} status updated to: {status}")
 

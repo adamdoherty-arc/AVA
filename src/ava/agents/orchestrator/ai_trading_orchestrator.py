@@ -231,13 +231,13 @@ class AITradingOrchestrator:
             "deep_analyses": 0
         }
 
-    async def initialize(self):
+    async def initialize(self) -> None:
         """Initialize orchestrator and cache"""
         if self._cache:
             await self._cache.initialize()
         logger.info("AI Trading Orchestrator initialized")
 
-    async def shutdown(self):
+    async def shutdown(self) -> None:
         """Shutdown orchestrator"""
         if self._cache:
             await self._cache.shutdown()

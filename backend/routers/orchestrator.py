@@ -9,6 +9,8 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 from pydantic import BaseModel, Field
 import logging
+from backend.infrastructure.rate_limiter import rate_limited, RateLimitExceeded
+from backend.infrastructure.errors import safe_internal_error
 
 logger = logging.getLogger(__name__)
 
@@ -169,7 +171,7 @@ async def get_orchestrator_agent():
                 logger.info("MasterOrchestratorAgent initialized (thread-safe)")
             except Exception as e:
                 logger.error(f"Failed to initialize MasterOrchestratorAgent: {e}")
-                raise HTTPException(status_code=500, detail=f"Failed to initialize orchestrator: {e}")
+                safe_internal_error(e, "initialize orchestrator")
 
     return _orchestrator_agent
 
@@ -221,9 +223,11 @@ async def health_check() -> Dict[str, Any]:
 
 
 @router.post("/query", response_model=QueryResponse)
+@rate_limited(requests=10, window=60)  # 10 requests per minute - AI operation
 async def natural_language_query(request: QueryRequest) -> QueryResponse:
     """
     Process a natural language query about AVA.
+    Rate limited to 10 requests per minute.
 
     This is the main entry point for asking questions about the codebase.
 
@@ -254,7 +258,7 @@ async def natural_language_query(request: QueryRequest) -> QueryResponse:
 
     except Exception as e:
         logger.error(f"Query error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "process query")
 
 
 @router.post("/search", response_model=List[SearchResult])
@@ -287,7 +291,7 @@ async def semantic_search(request: SearchRequest) -> List[SearchResult]:
 
     except Exception as e:
         logger.error(f"Search error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "semantic search")
 
 
 @router.get("/features", response_model=List[FeatureSummary])
@@ -316,7 +320,7 @@ async def list_features(
 
     except Exception as e:
         logger.error(f"List features error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "list features")
 
 
 @router.get("/features/{feature_name}")
@@ -349,7 +353,7 @@ async def get_feature_details(feature_name: str) -> Dict[str, Any]:
         raise
     except Exception as e:
         logger.error(f"Get feature error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "get feature details")
 
 
 @router.post("/dependencies", response_model=DependencyResponse)
@@ -409,7 +413,7 @@ async def analyze_dependencies(request: DependencyRequest) -> DependencyResponse
         raise
     except Exception as e:
         logger.error(f"Dependency analysis error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "analyze dependencies")
 
 
 @router.post("/efficiency-gaps", response_model=List[EfficiencyGap])
@@ -450,7 +454,7 @@ async def find_efficiency_gaps(request: EfficiencyGapRequest) -> List[Efficiency
 
     except Exception as e:
         logger.error(f"Efficiency gaps error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "find efficiency gaps")
 
 
 @router.post("/impact", response_model=ImpactResponse)
@@ -479,7 +483,7 @@ async def analyze_impact(request: ImpactRequest) -> ImpactResponse:
 
     except Exception as e:
         logger.error(f"Impact analysis error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "analyze impact")
 
 
 @router.post("/enhancements")
@@ -508,7 +512,7 @@ async def suggest_enhancements(request: EnhancementRequest) -> Dict[str, Any]:
         raise
     except Exception as e:
         logger.error(f"Enhancement suggestions error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "suggest enhancements")
 
 
 @router.get("/categories", response_model=List[CategorySummary])
@@ -535,7 +539,7 @@ async def get_category_summary() -> List[CategorySummary]:
 
     except Exception as e:
         logger.error(f"Category summary error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "get category summary")
 
 
 @router.get("/attention-needed")
@@ -553,7 +557,7 @@ async def get_features_needing_attention() -> List[Dict[str, Any]]:
 
     except Exception as e:
         logger.error(f"Attention needed error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "get features needing attention")
 
 
 @router.get("/agents", response_model=List[AgentInfo])
@@ -588,7 +592,7 @@ async def list_agents(
 
     except Exception as e:
         logger.error(f"List agents error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "list agents")
 
 
 @router.get("/integrations")
@@ -613,7 +617,7 @@ async def list_integrations() -> Dict[str, Any]:
 
     except Exception as e:
         logger.error(f"List integrations error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "list integrations")
 
 
 # =============================================================================
@@ -626,9 +630,11 @@ class BatchQueryRequest(BaseModel):
 
 
 @router.post("/batch-query")
+@rate_limited(requests=3, window=60)  # 3 requests per minute - very expensive batch operation
 async def batch_query(request: BatchQueryRequest) -> List[QueryResponse]:
     """
     Execute multiple queries in batch.
+    Rate limited to 3 requests per minute due to high computational cost.
 
     Useful for running several related queries at once.
     """
@@ -656,4 +662,4 @@ async def batch_query(request: BatchQueryRequest) -> List[QueryResponse]:
 
     except Exception as e:
         logger.error(f"Batch query error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "batch query")

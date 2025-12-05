@@ -1,19 +1,20 @@
-import { useState, useEffect, memo } from 'react'
+import { useState, useEffect, memo, useMemo, useCallback } from 'react'
 import { usePositions, useResearch, useRefreshResearch, useSymbolMetadata, useSymbolRecommendation } from '../hooks/useMagnusApi'
 import { toast } from 'sonner'
 import {
     AlertCircle, RefreshCw, TrendingUp, TrendingDown, DollarSign,
     Briefcase, Target, Clock, Activity, ExternalLink, ChevronDown, ChevronUp,
     PieChart, ArrowUpRight, ArrowDownRight, Brain, Calendar,
-    Building2, BarChart3, Lightbulb, AlertTriangle
+    Building2, BarChart3, Lightbulb, AlertTriangle, WifiOff, ServerCrash
 } from 'lucide-react'
 import { SyncStatusPanel } from '../components/SyncStatusPanel'
 import { PieChart as RechartsPie, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
+import { isTimeoutError, formatErrorMessage, type EnhancedError } from '../lib/axios'
 
 const COLORS = ['#10B981', '#3B82F6', '#8B5CF6']
 
 export default function Positions() {
-    const { data: positions, isLoading, error } = usePositions()
+    const { data: positions, isLoading, error, refetch, isFetching } = usePositions()
     const [activeTab, setActiveTab] = useState<'stocks' | 'options'>('stocks')
     const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null)
     const [expandedOptions, setExpandedOptions] = useState<Set<string>>(new Set())
@@ -28,11 +29,37 @@ export default function Positions() {
     const stocks = positions?.stocks || []
     const options = positions?.options || []
 
-    const totalStockValue = stocks.reduce((sum: number, s: StockPosition) => sum + s.current_value, 0)
-    const totalOptionValue = options.reduce((sum: number, o: OptionPosition) => sum + Math.abs(o.current_value), 0)
-    const totalPL = [...stocks, ...options].reduce((sum: number, p: StockPosition | OptionPosition) => sum + p.pl, 0)
-    // Theta from backend is already per-contract ($), just multiply by quantity
-    const totalTheta = options.reduce((sum: number, o: OptionPosition) => sum + (o.greeks?.theta || 0) * o.quantity, 0)
+    // Memoize expensive portfolio calculations to prevent recalculation on every render
+    const { totalStockValue, totalOptionValue, totalPL, dailyTheta, totalThetaToCompletion, avgDTE } = useMemo(() => {
+        const stockValue = stocks.reduce((sum: number, s: StockPosition) => sum + s.current_value, 0);
+        const optionValue = options.reduce((sum: number, o: OptionPosition) => sum + Math.abs(o.current_value), 0);
+        const pl = [...stocks, ...options].reduce((sum: number, p: StockPosition | OptionPosition) => sum + p.pl, 0);
+
+        // Daily theta: sum of (theta per contract * quantity) for all options
+        // Theta is negative for short options (good for sellers), we show absolute value
+        const daily = options.reduce((sum: number, o: OptionPosition) =>
+            sum + Math.abs(o.greeks?.theta || 0) * Math.abs(o.quantity), 0);
+
+        // Total theta to completion: sum of (daily theta * DTE) for all options
+        // This represents total time value that will decay if options expire worthless
+        const toCompletion = options.reduce((sum: number, o: OptionPosition) =>
+            sum + Math.abs(o.greeks?.theta || 0) * Math.abs(o.quantity) * (o.dte || 0), 0);
+
+        // Average DTE weighted by position value
+        const totalOptionAbsValue = options.reduce((sum: number, o: OptionPosition) => sum + Math.abs(o.current_value), 0);
+        const weightedDTE = totalOptionAbsValue > 0
+            ? options.reduce((sum: number, o: OptionPosition) => sum + (o.dte || 0) * Math.abs(o.current_value), 0) / totalOptionAbsValue
+            : 0;
+
+        return {
+            totalStockValue: stockValue,
+            totalOptionValue: optionValue,
+            totalPL: pl,
+            dailyTheta: daily,
+            totalThetaToCompletion: toCompletion,
+            avgDTE: Math.round(weightedDTE),
+        };
+    }, [stocks, options])
 
     // Effect to select first stock
     useEffect(() => {
@@ -40,6 +67,26 @@ export default function Positions() {
             setSelectedSymbol(positions.stocks[0].symbol)
         }
     }, [positions, selectedSymbol])
+
+    // Memoize allocation data for pie chart - MUST be before early returns
+    const allocationData = useMemo(() => [
+        { name: 'Stocks', value: totalStockValue },
+        { name: 'Options', value: totalOptionValue },
+        { name: 'Cash', value: summary.buying_power }
+    ].filter(d => d.value > 0), [totalStockValue, totalOptionValue, summary.buying_power])
+
+    // Memoize toggle callback to prevent child re-renders - MUST be before early returns
+    const toggleOptionExpanded = useCallback((symbol: string) => {
+        setExpandedOptions(prev => {
+            const newExpanded = new Set(prev)
+            if (newExpanded.has(symbol)) {
+                newExpanded.delete(symbol)
+            } else {
+                newExpanded.add(symbol)
+            }
+            return newExpanded
+        })
+    }, [])
 
     // Early returns AFTER all hooks
     if (isLoading) {
@@ -49,39 +96,79 @@ export default function Positions() {
                     <div className="absolute inset-0 rounded-full border-4 border-slate-700"></div>
                     <div className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
                 </div>
-                <p className="text-slate-400">Loading positions...</p>
+                <p className="text-slate-400">Loading positions from Robinhood...</p>
+                <p className="text-xs text-slate-500 mt-2">This may take a moment during market hours</p>
             </div>
         )
     }
 
     if (error) {
+        const enhancedError = error as EnhancedError;
+        const isTimeout = isTimeoutError(error);
+        const isNetworkError = enhancedError.isNetworkError;
+        const isCircuitOpen = enhancedError.isCircuitOpen;
+
+        // Choose appropriate icon based on error type
+        const ErrorIcon = isNetworkError ? WifiOff : isCircuitOpen ? ServerCrash : AlertCircle;
+        const bgColor = isCircuitOpen ? 'border-amber-500/30 bg-amber-500/5' : 'border-red-500/30 bg-red-500/5';
+        const textColor = isCircuitOpen ? 'text-amber-400' : 'text-red-400';
+
         return (
-            <div className="glass-card p-6 border-red-500/30 bg-red-500/5">
-                <div className="flex items-center gap-3 text-red-400">
-                    <AlertCircle className="w-6 h-6" />
-                    <div>
+            <div className={`glass-card p-6 ${bgColor}`}>
+                <div className={`flex items-start gap-3 ${textColor}`}>
+                    <ErrorIcon className="w-6 h-6 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
                         <h3 className="font-semibold">Failed to Load Positions</h3>
-                        <p className="text-sm text-red-400/80">Make sure the backend is running and Robinhood is connected.</p>
+
+                        {isCircuitOpen ? (
+                            <>
+                                <p className="text-sm text-amber-400/80 mt-1">
+                                    Too many failed requests. Service temporarily paused.
+                                </p>
+                                <p className="text-sm text-slate-400 mt-2">
+                                    The system will automatically retry in 30 seconds.
+                                </p>
+                            </>
+                        ) : isTimeout ? (
+                            <>
+                                <p className="text-sm text-red-400/80 mt-1">
+                                    Request timed out. Robinhood API may be slow during market hours.
+                                </p>
+                                <p className="text-sm text-slate-400 mt-2">
+                                    Try again - subsequent requests are often faster due to caching.
+                                </p>
+                            </>
+                        ) : isNetworkError ? (
+                            <>
+                                <p className="text-sm text-red-400/80 mt-1">
+                                    Network error. Please check your internet connection.
+                                </p>
+                                <p className="text-sm text-slate-400 mt-2">
+                                    Make sure the backend server is running on port 8002.
+                                </p>
+                            </>
+                        ) : (
+                            <p className="text-sm text-red-400/80 mt-1">
+                                {formatErrorMessage(error)}
+                            </p>
+                        )}
+
+                        <button
+                            onClick={() => refetch()}
+                            disabled={isFetching}
+                            className={`mt-4 flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                isCircuitOpen
+                                    ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-400'
+                                    : 'bg-red-500/20 hover:bg-red-500/30 text-red-400'
+                            }`}
+                        >
+                            <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
+                            {isFetching ? 'Retrying...' : 'Retry'}
+                        </button>
                     </div>
                 </div>
             </div>
         )
-    }
-
-    const allocationData = [
-        { name: 'Stocks', value: totalStockValue },
-        { name: 'Options', value: totalOptionValue },
-        { name: 'Cash', value: summary.buying_power }
-    ].filter(d => d.value > 0)
-
-    const toggleOptionExpanded = (symbol: string) => {
-        const newExpanded = new Set(expandedOptions)
-        if (newExpanded.has(symbol)) {
-            newExpanded.delete(symbol)
-        } else {
-            newExpanded.add(symbol)
-        }
-        setExpandedOptions(newExpanded)
     }
 
     return (
@@ -101,7 +188,7 @@ export default function Positions() {
             </header>
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
                 <StatCard
                     title="Total Equity"
                     value={formatCurrency(summary.total_equity)}
@@ -126,11 +213,19 @@ export default function Positions() {
                 />
                 <StatCard
                     title="Daily Theta"
-                    value={formatCurrency(totalTheta)}
-                    subtitle="Premium decay"
+                    value={formatCurrency(dailyTheta)}
+                    subtitle="Per day income"
                     icon={<Clock className="w-5 h-5" />}
                     iconColor="text-purple-400"
                     iconBg="bg-purple-500/20"
+                />
+                <StatCard
+                    title="Total to Expiry"
+                    value={formatCurrency(totalThetaToCompletion)}
+                    subtitle={`~${avgDTE} avg DTE`}
+                    icon={<Target className="w-5 h-5" />}
+                    iconColor="text-cyan-400"
+                    iconBg="bg-cyan-500/20"
                 />
                 <StatCard
                     title="Positions"

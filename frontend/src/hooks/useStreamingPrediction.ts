@@ -3,7 +3,7 @@
  * Real-time SSE streaming for AI prediction analysis with token-by-token reasoning
  */
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 
 export type StreamEventType =
   | 'start'
@@ -434,6 +434,16 @@ export function useLiveGameStream(gameId: string, sport: string = 'NFL') {
       abortControllerRef.current = null;
     }
     setIsConnected(false);
+  }, []);
+
+  // Cleanup on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    };
   }, []);
 
   return {

@@ -1,5 +1,7 @@
-import { createContext, useContext, useReducer, ReactNode, useCallback } from 'react'
+import { createContext, useContext, useReducer, useCallback } from 'react'
+import type { ReactNode } from 'react'
 import { axiosInstance } from '../lib/axios'
+import { BACKEND_URL } from '@/config/api'
 
 // Types
 interface AIAgent {
@@ -172,7 +174,7 @@ export function AIProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'SET_ERROR', payload: null })
 
         try {
-            const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/chat/stream`, {
+            const response = await fetch(`${import.meta.env.VITE_API_URL || BACKEND_URL}/chat/stream`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

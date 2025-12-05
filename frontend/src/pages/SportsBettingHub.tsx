@@ -105,13 +105,39 @@ export default function SportsBettingHub() {
         onError: (err) => toast.error(`AI Error: ${err}`)
     })
 
-    // Combined data fetch - reduces 3 API calls to 1 for massive performance improvement
+    // Fetch data using v2 endpoints which have proper async handling
     const { data: allSportsData, isLoading: dataLoading, refetch: refetchAll, dataUpdatedAt } = useQuery({
         queryKey: ['sports-all-data'],
         queryFn: async () => {
             lastSyncRef.current = new Date()
-            const { data } = await axiosInstance.get('/sports/all-data?limit=50')
-            return data
+            // Fetch from multiple v2 endpoints in parallel for reliability
+            const [liveRes, upcomingRes, betsRes] = await Promise.all([
+                axiosInstance.get('/sports/v2/games/live?sports=NFL,NBA,NCAAF,NCAAB').catch(() => ({ data: [] })),
+                axiosInstance.get('/sports/v2/games/upcoming?sports=NFL,NBA,NCAAF,NCAAB&limit=50').catch(() => ({ data: [] })),
+                axiosInstance.get('/sports/v2/best-bets?min_edge=1.0&limit=20').catch(() => ({ data: { opportunities: [] } }))
+            ])
+            // Normalize field names from API (snake_case) to frontend (camelCase)
+            const normalizeGame = (g: any) => ({
+                ...g,
+                isLive: g.is_live || false,
+                gameTime: g.game_time,
+                homeTeam: g.home_team,
+                awayTeam: g.away_team,
+                homeScore: g.home_score || 0,
+                awayScore: g.away_score || 0,
+                gameStatus: g.game_status,
+                timeRemaining: g.time_remaining,
+            })
+            return {
+                live_games: (liveRes.data || []).map(normalizeGame),
+                upcoming_games: (upcomingRes.data || []).map(normalizeGame),
+                best_bets: betsRes.data.opportunities || [],
+                summary: {
+                    total_live: liveRes.data?.length || 0,
+                    total_upcoming: upcomingRes.data?.length || 0,
+                    total_best_bets: betsRes.data.opportunities?.length || 0
+                }
+            }
         },
         refetchInterval: autoSync ? LIVE_GAME_REFRESH_MS : false,
         staleTime: 3000
@@ -1214,6 +1240,8 @@ interface Game {
     id: string
     home_team: string
     away_team: string
+    homeTeam?: string  // Alternative camelCase format
+    awayTeam?: string  // Alternative camelCase format
     home_score?: number
     away_score?: number
     league: string
@@ -1328,9 +1356,9 @@ const GameCard = memo(function GameCard({
 
     const aiSpread = game.ai_prediction?.spread
     const aiMoneyline = modelProb ? probabilityToMoneyline(modelProb) : null
-    const displaySpread = game.odds?.spread_home ?? aiSpread
-    const displayMoneyline = game.odds?.moneyline_home ?? aiMoneyline
-    const displayTotal = game.odds?.total
+    const displaySpread = game.odds?.spread_home != null ? parseFloat(String(game.odds.spread_home)) : aiSpread
+    const displayMoneyline = game.odds?.moneyline_home != null ? Number(game.odds.moneyline_home) : aiMoneyline
+    const displayTotal = game.odds?.over_under != null ? parseFloat(String(game.odds.over_under)) : undefined
     const isAISpread = game.odds?.spread_home == null && aiSpread != null
     const isAIMoneyline = game.odds?.moneyline_home == null && aiMoneyline != null
 

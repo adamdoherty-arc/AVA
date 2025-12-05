@@ -38,7 +38,7 @@ class AutomationAIAnalyzer:
     - Anomaly detection
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the AI analyzer."""
         self.llm = get_llm_service()
         self.control = get_automation_control_service()

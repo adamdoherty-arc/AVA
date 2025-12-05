@@ -181,7 +181,7 @@ class StockScoreService:
         (0, Recommendation.STRONG_SELL)
     ]
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._yf = get_async_yfinance()
         self._prediction_engine = get_prediction_engine()
         self._vol_predictor = get_vol_predictor()

@@ -167,7 +167,7 @@ class PortfolioServiceV2:
     METADATA_CACHE_TTL = 300  # 5 minutes
     SUMMARY_CACHE_TTL = 60   # 1 minute
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._logged_in = False
         self._cache = get_cache()
         self._rh_fetcher = get_robinhood_fetcher()
@@ -176,7 +176,7 @@ class PortfolioServiceV2:
         self._audit_trail = get_audit_trail()
         self._last_validation: Optional[ValidationResult] = None
 
-    async def _ensure_login(self):
+    async def _ensure_login(self) -> None:
         """Ensure Robinhood is logged in with circuit breaker protection."""
         if self._logged_in:
             return
@@ -632,7 +632,7 @@ class PortfolioServiceV2:
 
         return result
 
-    async def invalidate_cache(self):
+    async def invalidate_cache(self) -> None:
         """Invalidate all position caches."""
         await self._cache.invalidate_pattern("positions:*")
         logger.info("Position cache invalidated")

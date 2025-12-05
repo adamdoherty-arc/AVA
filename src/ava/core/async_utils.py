@@ -77,7 +77,7 @@ class RateLimiter:
                 wait_time = needed / (self.rate / self.per)
                 await asyncio.sleep(wait_time)
 
-    def _refill(self):
+    def _refill(self) -> None:
         """Refill tokens based on elapsed time"""
         now = time.monotonic()
         elapsed = now - self._last_update
@@ -89,7 +89,7 @@ class RateLimiter:
             self._tokens + elapsed * (self.rate / self.per)
         )
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> None:
         await self.acquire()
         return self
 
@@ -157,7 +157,7 @@ class CircuitBreaker:
         elif new_state == CircuitState.OPEN:
             self._success_count = 0
 
-    async def _record_success(self):
+    async def _record_success(self) -> None:
         """Record successful call"""
         async with self._lock:
             if self._state == CircuitState.HALF_OPEN:
@@ -165,7 +165,7 @@ class CircuitBreaker:
                 if self._success_count >= self.config.success_threshold:
                     await self._transition_to(CircuitState.CLOSED)
 
-    async def _record_failure(self):
+    async def _record_failure(self) -> None:
         """Record failed call"""
         async with self._lock:
             self._failure_count += 1
@@ -176,7 +176,7 @@ class CircuitBreaker:
             elif self._failure_count >= self.config.failure_threshold:
                 await self._transition_to(CircuitState.OPEN)
 
-    async def _check_state(self):
+    async def _check_state(self) -> None:
         """Check if circuit should transition"""
         async with self._lock:
             if self._state == CircuitState.OPEN:
@@ -431,12 +431,12 @@ class BatchCollector(Generic[T, R]):
         self._task: Optional[asyncio.Task] = None
         self._flush_event = asyncio.Event()
 
-    async def start(self):
+    async def start(self) -> None:
         """Start the collector"""
         self._running = True
         self._task = asyncio.create_task(self._process_loop())
 
-    async def stop(self):
+    async def stop(self) -> None:
         """Stop and flush remaining items"""
         self._running = False
         self._flush_event.set()
@@ -451,7 +451,7 @@ class BatchCollector(Generic[T, R]):
         if self._queue.qsize() >= self.batch_size:
             self._flush_event.set()
 
-    async def _process_loop(self):
+    async def _process_loop(self) -> None:
         """Main processing loop"""
         while self._running or not self._queue.empty():
             try:
@@ -524,7 +524,7 @@ class SemaphorePool:
         def __init__(self, semaphore: asyncio.Semaphore):
             self.semaphore = semaphore
 
-        async def __aenter__(self):
+        async def __aenter__(self) -> None:
             await self.semaphore.acquire()
             return self
 

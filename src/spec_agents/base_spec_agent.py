@@ -13,6 +13,7 @@ Provides:
 
 import logging
 import asyncio
+import os
 from abc import ABC, abstractmethod
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
@@ -359,9 +360,9 @@ class BaseSpecAgent(ABC):
     5. Reports issues to the orchestrator
     """
 
-    # Class-level configuration
-    API_BASE_URL = "http://localhost:8002/api"
-    FRONTEND_URL = "http://localhost:5173"
+    # Class-level configuration - uses environment variables with defaults
+    API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8002/api")
+    FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5181")
     SPECS_DIR = Path(".claude/specs")
 
     def __init__(

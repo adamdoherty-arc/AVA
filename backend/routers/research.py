@@ -2,7 +2,7 @@
 Research Router - Real sector analysis and AI-powered research
 NO MOCK DATA - All endpoints use real market data and agents
 """
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Request
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 import logging
@@ -10,6 +10,8 @@ import yfinance as yf
 import numpy as np
 from pydantic import BaseModel
 from backend.services.research_service import get_research_service, ResearchService
+from backend.infrastructure.rate_limiter import rate_limited, RateLimitExceeded
+from backend.infrastructure.errors import safe_internal_error
 
 logger = logging.getLogger(__name__)
 
@@ -49,9 +51,11 @@ class TechnicalRequest(BaseModel):
     context: dict = {}
 
 @router.post("/agent/technical")
+@rate_limited(requests=10, window=60)  # 10 requests per minute - AI operation
 async def agent_technical(request: TechnicalRequest):
     """
     Perform technical analysis using the AI Technical Agent.
+    Rate limited to 10 requests per minute.
     """
     try:
         from src.ava.agents.analysis.technical_agent import TechnicalAnalysisAgent
@@ -67,7 +71,7 @@ async def agent_technical(request: TechnicalRequest):
         logger.warning(f"Technical Agent not available: {e}")
         return {"error": "Technical Agent not available", "symbol": request.symbol}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "run technical analysis agent")
 
 
 # ============ Sector Analysis Endpoints ============
@@ -447,9 +451,11 @@ class MultiAgentRequest(BaseModel):
     focus_areas: List[str] = []  # ['fundamentals', 'technicals', 'sentiment', 'news']
 
 @router.post("/multi-agent")
+@rate_limited(requests=5, window=60)  # 5 requests per minute - expensive AI operation
 async def run_multi_agent_research(request: MultiAgentRequest):
     """
     Run multi-agent deep research on a query using real agents.
+    Rate limited to 5 requests per minute due to AI processing costs.
     """
     try:
         from src.ava.core.agent_initializer import get_registry
@@ -630,7 +636,7 @@ async def refresh_research(
     try:
         return await service.analyze_symbol(symbol, force_refresh=True)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "refresh research")
 
 
 @router.get("/{symbol}")
@@ -646,4 +652,4 @@ async def get_research(
     try:
         return await service.analyze_symbol(symbol, force_refresh)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "get research")

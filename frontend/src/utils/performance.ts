@@ -115,7 +115,7 @@ class PerformanceCollector {
         }
 
         // Log in development
-        if (process.env.NODE_ENV === 'development') {
+        if (import.meta.env.DEV) {
             console.debug(`[Performance] ${name}: ${duration.toFixed(2)}ms`, metadata)
         }
     }
@@ -251,7 +251,7 @@ export function onRenderCallback(
     profilerData.push(data)
 
     // Log slow renders in development
-    if (process.env.NODE_ENV === 'development' && actualDuration > 16) {
+    if (import.meta.env.DEV && actualDuration > 16) {
         console.warn(
             `[Slow Render] ${id} (${phase}): ${actualDuration.toFixed(2)}ms`,
             data
@@ -481,7 +481,7 @@ export function generatePerformanceReport(): PerformanceReport {
 export function sendPerformanceReport(endpoint?: string): void {
     const report = generatePerformanceReport()
 
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
         console.table(report.webVitals)
         console.log('[Performance Report]', report)
         return

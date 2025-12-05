@@ -43,7 +43,7 @@ class SportsUpdate:
 class ConnectionManager:
     """Manages WebSocket connections with channel subscriptions"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Active connections: client_id -> websocket
         self.connections: Dict[str, WebSocket] = {}
 
@@ -242,7 +242,7 @@ class SportsBroadcaster:
     Handles real-time updates for live games, odds, and predictions.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.manager = ConnectionManager()
         self._previous_scores: Dict[str, Dict] = {}  # Track score changes
         self._previous_odds: Dict[str, Dict] = {}     # Track odds changes

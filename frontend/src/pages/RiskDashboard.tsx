@@ -249,7 +249,7 @@ export default function RiskDashboard() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {data.positions_at_risk.map((pos, idx) => (
+                                    {(data.positions_at_risk ?? []).map((pos, idx) => (
                                         <tr key={idx} className={idx % 2 === 0 ? "bg-slate-800/20" : ""}>
                                             <td className="p-3 font-mono font-bold text-primary">{pos.symbol}</td>
                                             <td className="p-3 text-right font-mono">${(pos.position_size ?? 0).toLocaleString()}</td>

@@ -121,7 +121,7 @@ export function useSessionStorage<T>(
 // ============================================
 
 export function usePrevious<T>(value: T): T | undefined {
-    const ref = useRef<T>()
+    const ref = useRef<T | undefined>(undefined)
     useEffect(() => {
         ref.current = value
     }, [value])
@@ -177,8 +177,8 @@ export const usePrefersReducedMotion = () => useMediaQuery('(prefers-reduced-mot
 
 export function useClickOutside<T extends HTMLElement>(
     handler: () => void
-): React.RefObject<T> {
-    const ref = useRef<T>(null)
+): React.RefObject<T | null> {
+    const ref = useRef<T | null>(null)
 
     useEffect(() => {
         const listener = (event: MouseEvent | TouchEvent) => {
@@ -270,9 +270,9 @@ interface UseInViewOptions {
 
 export function useInView<T extends HTMLElement>(
     options: UseInViewOptions = {}
-): [React.RefObject<T>, boolean] {
+): [React.RefObject<T | null>, boolean] {
     const { threshold = 0, root = null, rootMargin = '0px', triggerOnce = false } = options
-    const ref = useRef<T>(null)
+    const ref = useRef<T | null>(null)
     const [inView, setInView] = useState(false)
 
     useEffect(() => {

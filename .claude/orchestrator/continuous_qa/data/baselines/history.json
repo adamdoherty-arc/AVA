@@ -1,0 +1,92 @@
+[
+  {
+    "timestamp": "2025-12-05T16:51:17.845979",
+    "feature_name": "game-cards",
+    "pass_rate": 28.57142857142857,
+    "issue_count": 5,
+    "critical_count": 1,
+    "high_count": 2,
+    "duration_ms": 11470.602989196777
+  },
+  {
+    "timestamp": "2025-12-05T16:51:17.846631",
+    "feature_name": "positions",
+    "pass_rate": 60.0,
+    "issue_count": 17,
+    "critical_count": 0,
+    "high_count": 7,
+    "duration_ms": 11092.592716217041
+  },
+  {
+    "timestamp": "2025-12-05T16:51:17.852364",
+    "feature_name": "options-analysis",
+    "pass_rate": 33.33333333333333,
+    "issue_count": 4,
+    "critical_count": 1,
+    "high_count": 1,
+    "duration_ms": 11406.86321258545
+  },
+  {
+    "timestamp": "2025-12-05T16:51:17.856371",
+    "feature_name": "premium-scanner",
+    "pass_rate": 57.14285714285714,
+    "issue_count": 3,
+    "critical_count": 1,
+    "high_count": 1,
+    "duration_ms": 12668.179750442505
+  },
+  {
+    "timestamp": "2025-12-05T16:51:17.856790",
+    "feature_name": "dashboard",
+    "pass_rate": 57.14285714285714,
+    "issue_count": 3,
+    "critical_count": 0,
+    "high_count": 0,
+    "duration_ms": 2155.052423477173
+  },
+  {
+    "timestamp": "2025-12-05T17:21:01.070900",
+    "feature_name": "game-cards",
+    "pass_rate": 28.57142857142857,
+    "issue_count": 5,
+    "critical_count": 1,
+    "high_count": 2,
+    "duration_ms": 8565.01817703247
+  },
+  {
+    "timestamp": "2025-12-05T17:21:01.071633",
+    "feature_name": "positions",
+    "pass_rate": 60.0,
+    "issue_count": 17,
+    "critical_count": 0,
+    "high_count": 7,
+    "duration_ms": 7984.015941619873
+  },
+  {
+    "timestamp": "2025-12-05T17:21:01.072094",
+    "feature_name": "options-analysis",
+    "pass_rate": 33.33333333333333,
+    "issue_count": 4,
+    "critical_count": 1,
+    "high_count": 1,
+    "duration_ms": 8203.242063522339
+  },
+  {
+    "timestamp": "2025-12-05T17:21:01.078116",
+    "feature_name": "premium-scanner",
+    "pass_rate": 57.14285714285714,
+    "issue_count": 3,
+    "critical_count": 1,
+    "high_count": 1,
+    "duration_ms": 13450.941801071167
+  },
+  {
+    "timestamp": "2025-12-05T17:21:01.082244",
+    "feature_name": "dashboard",
+    "pass_rate": 57.14285714285714,
+    "issue_count": 3,
+    "critical_count": 0,
+    "high_count": 0,
+    "duration_ms": 2002.3353099822998
+  }
+]

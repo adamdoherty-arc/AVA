@@ -1,14 +1,18 @@
 """
 Integration Test Router - Test all API integrations
 NO MOCK DATA - All tests verify real connections
+
+Updated: 2025-12-04 - Migrated to async database pattern
 """
 from fastapi import APIRouter, HTTPException
 from typing import Dict, Any, List
 from datetime import datetime
-import logging
+import structlog
 import asyncio
 
-logger = logging.getLogger(__name__)
+from backend.infrastructure.database import get_database
+
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(
     prefix="/api/test",
@@ -50,11 +54,9 @@ async def run_all_tests():
 
     # ============ Database Tests ============
     async def test_database():
-        from src.database.connection_pool import get_db_connection
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT 1")
-            return cursor.fetchone()[0]
+        db = await get_database()
+        result = await db.fetchval("SELECT 1")
+        return result
 
     results.append(await test_endpoint("PostgreSQL Database", test_database))
 
@@ -76,23 +78,16 @@ async def run_all_tests():
 
     # ============ TradingView Database Tests ============
     async def test_tradingview_watchlists():
-        from src.database.connection_pool import get_db_connection
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM tradingview_watchlists")
-            count = cursor.fetchone()[0]
-            return f"{count} watchlists"
+        db = await get_database()
+        row = await db.fetchrow("SELECT COUNT(*) as count FROM tradingview_watchlists")
+        return f"{row['count']} watchlists"
 
     async def test_tradingview_symbols():
-        from src.database.connection_pool import get_db_connection
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            # Get symbols from watchlist_symbols table instead
-            cursor.execute("""
-                SELECT COUNT(DISTINCT symbol) FROM tradingview_watchlist_symbols
-            """)
-            count = cursor.fetchone()[0]
-            return f"{count} unique symbols"
+        db = await get_database()
+        row = await db.fetchrow("""
+            SELECT COUNT(DISTINCT symbol) as count FROM tradingview_watchlist_symbols
+        """)
+        return f"{row['count']} unique symbols"
 
     results.append(await test_endpoint("TradingView Watchlists", test_tradingview_watchlists))
     results.append(await test_endpoint("TradingView Symbols", test_tradingview_symbols))
@@ -157,12 +152,9 @@ async def run_all_tests():
 
     # ============ Sports Data Tests ============
     async def test_nfl_database():
-        from src.database.connection_pool import get_db_connection
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM nfl_games WHERE season = 2024")
-            count = cursor.fetchone()[0]
-            return f"{count} games"
+        db = await get_database()
+        row = await db.fetchrow("SELECT COUNT(*) as count FROM nfl_games WHERE season = 2024")
+        return f"{row['count']} games"
 
     async def test_nfl_predictor():
         from src.prediction_agents.nfl_predictor import NFLPredictor
@@ -175,12 +167,9 @@ async def run_all_tests():
 
     # ============ Kalshi Tests ============
     async def test_kalshi_database():
-        from src.database.connection_pool import get_db_connection
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM kalshi_markets WHERE status = 'open'")
-            count = cursor.fetchone()[0]
-            return f"{count} open markets"
+        db = await get_database()
+        row = await db.fetchrow("SELECT COUNT(*) as count FROM kalshi_markets WHERE status = 'open'")
+        return f"{row['count']} open markets"
 
     results.append(await test_endpoint("Kalshi Database", test_kalshi_database))
 
@@ -237,16 +226,14 @@ async def test_database_connections():
     """Test all database connections"""
     results = []
 
-    # PostgreSQL
+    # PostgreSQL (Async)
     try:
-        from src.database.connection_pool import get_db_connection
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT version()")
-            version = cursor.fetchone()[0]
-            results.append({"name": "PostgreSQL", "status": "pass", "version": version[:50]})
+        db = await get_database()
+        row = await db.fetchrow("SELECT version()")
+        version = row["version"]
+        results.append({"name": "PostgreSQL (Async)", "status": "pass", "version": version[:50]})
     except Exception as e:
-        results.append({"name": "PostgreSQL", "status": "fail", "error": str(e)})
+        results.append({"name": "PostgreSQL (Async)", "status": "fail", "error": str(e)})
 
     return {"database_tests": results, "timestamp": datetime.now().isoformat()}
 
@@ -279,24 +266,21 @@ async def test_robinhood_connection():
 async def test_tradingview_data():
     """Test TradingView data in database"""
     try:
-        from src.database.connection_pool import get_db_connection
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
+        db = await get_database()
 
-            # Get watchlists
-            cursor.execute("SELECT id, name, symbol_count FROM tradingview_watchlists ORDER BY name")
-            watchlists = cursor.fetchall()
+        # Get watchlists
+        watchlists = await db.fetch("SELECT id, name, symbol_count FROM tradingview_watchlists ORDER BY name")
 
-            # Get symbol count
-            cursor.execute("SELECT COUNT(DISTINCT symbol) FROM tradingview_symbols")
-            symbol_count = cursor.fetchone()[0]
+        # Get symbol count
+        row = await db.fetchrow("SELECT COUNT(DISTINCT symbol) as count FROM tradingview_symbols")
+        symbol_count = row["count"]
 
-            return {
-                "status": "connected",
-                "watchlists": [{"id": w[0], "name": w[1], "symbols": w[2]} for w in watchlists],
-                "total_symbols": symbol_count,
-                "timestamp": datetime.now().isoformat()
-            }
+        return {
+            "status": "connected",
+            "watchlists": [{"id": w["id"], "name": w["name"], "symbols": w["symbol_count"]} for w in watchlists],
+            "total_symbols": symbol_count,
+            "timestamp": datetime.now().isoformat()
+        }
     except Exception as e:
         return {
             "status": "error",
@@ -311,23 +295,21 @@ async def test_sports_data():
     results = {}
 
     try:
-        from src.database.connection_pool import get_db_connection
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
+        db = await get_database()
 
-            # NFL
-            cursor.execute("SELECT COUNT(*) FROM nfl_games WHERE season = 2024")
-            results["nfl_games_2024"] = cursor.fetchone()[0]
+        # NFL
+        row = await db.fetchrow("SELECT COUNT(*) as count FROM nfl_games WHERE season = 2024")
+        results["nfl_games_2024"] = row["count"]
 
-            # NBA
-            cursor.execute("SELECT COUNT(*) FROM nba_games WHERE season = '2024-25'")
-            results["nba_games_2024"] = cursor.fetchone()[0]
+        # NBA
+        row = await db.fetchrow("SELECT COUNT(*) as count FROM nba_games WHERE season = '2024-25'")
+        results["nba_games_2024"] = row["count"]
 
-            # Kalshi
-            cursor.execute("SELECT COUNT(*) FROM kalshi_markets WHERE status = 'open'")
-            results["kalshi_open_markets"] = cursor.fetchone()[0]
+        # Kalshi
+        row = await db.fetchrow("SELECT COUNT(*) as count FROM kalshi_markets WHERE status = 'open'")
+        results["kalshi_open_markets"] = row["count"]
 
-            results["status"] = "connected"
+        results["status"] = "connected"
 
     except Exception as e:
         results["status"] = "error"

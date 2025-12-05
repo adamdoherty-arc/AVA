@@ -2,20 +2,19 @@
 Predictions Router - API endpoints for prediction markets
 NO MOCK DATA - All endpoints use real Kalshi API and database
 
-Performance: Uses asyncio.to_thread() for non-blocking DB calls
+Performance: Uses async database pattern for non-blocking DB calls
 """
 from fastapi import APIRouter, Query, HTTPException
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
-import logging
-import asyncio
+import structlog
 from backend.services.prediction_service import prediction_service
 from backend.models.market import MarketResponse
+from backend.infrastructure.database import get_database, AsyncDatabaseManager
 from src.kalshi_db_manager import KalshiDBManager
 from src.prediction_agents.nfl_predictor import NFLPredictor
-from src.database.connection_pool import get_db_connection
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(
     prefix="/api/predictions",
@@ -39,30 +38,30 @@ def get_predictor():
     return _nfl_predictor
 
 
-# ============ Sync Helper Functions (run via asyncio.to_thread) ============
+# ============ Async Helper Functions ============
 
-def _fetch_kalshi_nfl_markets_sync(min_edge: float, min_volume: int, sort_by: str) -> Dict[str, Any]:
-    """Sync function to fetch Kalshi NFL markets - called via asyncio.to_thread()"""
+async def _fetch_kalshi_nfl_markets_async(min_edge: float, min_volume: int, sort_by: str) -> Dict[str, Any]:
+    """Async function to fetch Kalshi NFL markets from database"""
     predictor = get_predictor()
+    db = await get_database()
 
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT id, ticker, title, home_team, away_team, market_type,
-                   yes_price, no_price, volume, open_interest, close_time, game_time
-            FROM kalshi_markets
-            WHERE market_type = 'nfl' AND status IN ('open', 'active')
-            ORDER BY game_time ASC
-        """)
-        rows = cursor.fetchall()
+    rows = await db.fetch("""
+        SELECT id, ticker, title, home_team, away_team, market_type,
+               yes_price, no_price, volume, open_interest, close_time, game_time
+        FROM kalshi_markets
+        WHERE market_type = $1 AND status = ANY($2)
+        ORDER BY game_time ASC
+    """, 'nfl', ['open', 'active'])
 
     markets = []
     for row in rows:
-        market_id, home_team, away_team = row[0], row[3], row[4]
-        market_type = row[5]
-        yes_price = float(row[6]) if row[6] else 50
-        no_price = float(row[7]) if row[7] else 50
-        volume = int(row[8]) if row[8] else 0
+        market_id = row["id"]
+        home_team = row["home_team"]
+        away_team = row["away_team"]
+        market_type = row["market_type"]
+        yes_price = float(row["yes_price"]) if row["yes_price"] else 50
+        no_price = float(row["no_price"]) if row["no_price"] else 50
+        volume = int(row["volume"]) if row["volume"] else 0
 
         if volume < min_volume:
             continue
@@ -73,7 +72,7 @@ def _fetch_kalshi_nfl_markets_sync(min_edge: float, min_volume: int, sort_by: st
             ai_prob = prediction.get('win_probability', 0.5) * 100 if prediction else 50
             confidence = prediction.get('confidence', 0.7) * 100 if prediction else 60
         except Exception as e:
-            logger.error(f"Prediction error: {e}")
+            logger.error("prediction_error", error=str(e))
             ai_prob, confidence = 50, 60
 
         # Calculate edge
@@ -86,8 +85,8 @@ def _fetch_kalshi_nfl_markets_sync(min_edge: float, min_volume: int, sort_by: st
             continue
 
         markets.append({
-            "id": row[1] or f"kalshi_{market_id}",
-            "title": row[2],
+            "id": row["ticker"] or f"kalshi_{market_id}",
+            "title": row["title"],
             "home_team": home_team,
             "away_team": away_team,
             "market_type": market_type,
@@ -100,10 +99,10 @@ def _fetch_kalshi_nfl_markets_sync(min_edge: float, min_volume: int, sort_by: st
             "recommendation": recommendation,
             "confidence": round(confidence, 0),
             "volume": volume,
-            "open_interest": int(row[9]) if row[9] else 0,
-            "close_time": row[10].strftime("%Y-%m-%d %H:%M") if row[10] else "",
-            "expiry": row[10].strftime("%Y-%m-%d %H:%M") if row[10] else "",
-            "game_time": row[11].strftime("%Y-%m-%d %H:%M") if row[11] else "",
+            "open_interest": int(row["open_interest"]) if row["open_interest"] else 0,
+            "close_time": row["close_time"].strftime("%Y-%m-%d %H:%M") if row["close_time"] else "",
+            "expiry": row["close_time"].strftime("%Y-%m-%d %H:%M") if row["close_time"] else "",
+            "game_time": row["game_time"].strftime("%Y-%m-%d %H:%M") if row["game_time"] else "",
             "reasoning": f"AI model predicts {recommendation} with {edge}% edge"
         })
 
@@ -134,7 +133,7 @@ async def get_nfl_predictions(
     sort_by: str = Query("edge", description="Sort by: edge, volume, confidence")
 ):
     """Alias route for NFL predictions - used by frontend."""
-    return await asyncio.to_thread(_fetch_kalshi_nfl_markets_sync, min_edge, min_volume, sort_by)
+    return await _fetch_kalshi_nfl_markets_async(min_edge, min_volume, sort_by)
 
 
 @router.get("/markets", response_model=MarketResponse)
@@ -169,14 +168,14 @@ async def get_kalshi_nfl_markets(
 ):
     """
     Get Kalshi NFL prediction markets with AI edge detection from database.
-    Uses asyncio.to_thread() for non-blocking database access.
+    Uses async database pattern for non-blocking database access.
     """
     try:
-        result = await asyncio.to_thread(_fetch_kalshi_nfl_markets_sync, min_edge, min_volume, sort_by)
+        result = await _fetch_kalshi_nfl_markets_async(min_edge, min_volume, sort_by)
         result["generated_at"] = datetime.now().isoformat()
         return result
     except Exception as e:
-        logger.error(f"Error getting Kalshi NFL markets: {e}")
+        logger.error("kalshi_nfl_markets_error", error=str(e))
         return {
             "markets": [],
             "summary": {
@@ -194,43 +193,40 @@ async def get_kalshi_categories():
     Get available Kalshi market categories from database.
     """
     try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
+        db = await get_database()
 
-            cursor.execute("""
-                SELECT market_type, COUNT(*) as count
-                FROM kalshi_markets
-                WHERE status IN ('open', 'active')
-                GROUP BY market_type
-                ORDER BY count DESC
-            """)
+        rows = await db.fetch("""
+            SELECT market_type, COUNT(*) as count
+            FROM kalshi_markets
+            WHERE status = ANY($1)
+            GROUP BY market_type
+            ORDER BY count DESC
+        """, ['open', 'active'])
 
-            rows = cursor.fetchall()
+        icons = {
+            'nfl': 'football',
+            'nba': 'basketball',
+            'politics': 'landmark',
+            'economics': 'trending-up',
+            'weather': 'cloud',
+            'entertainment': 'film',
+            'crypto': 'bitcoin'
+        }
 
-            icons = {
-                'nfl': 'football',
-                'nba': 'basketball',
-                'politics': 'landmark',
-                'economics': 'trending-up',
-                'weather': 'cloud',
-                'entertainment': 'film',
-                'crypto': 'bitcoin'
-            }
+        categories = []
+        for row in rows:
+            cat_name = row["market_type"] or 'other'
+            categories.append({
+                "id": cat_name.lower(),
+                "name": cat_name.upper() if len(cat_name) <= 4 else cat_name.title(),
+                "active_markets": row["count"],
+                "icon": icons.get(cat_name.lower(), 'circle')
+            })
 
-            categories = []
-            for row in rows:
-                cat_name = row[0] or 'other'
-                categories.append({
-                    "id": cat_name.lower(),
-                    "name": cat_name.upper() if len(cat_name) <= 4 else cat_name.title(),
-                    "active_markets": row[1],
-                    "icon": icons.get(cat_name.lower(), 'circle')
-                })
-
-            return {"categories": categories, "generated_at": datetime.now().isoformat()}
+        return {"categories": categories, "generated_at": datetime.now().isoformat()}
 
     except Exception as e:
-        logger.error(f"Error getting categories: {e}")
+        logger.error("kalshi_categories_error", error=str(e))
         return {
             "categories": [],
             "message": "No Kalshi data available. Run sync to populate.",
@@ -248,59 +244,63 @@ async def get_kalshi_opportunities(
     Get top Kalshi opportunities across all categories from database.
     """
     try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
+        db = await get_database()
 
+        if category != "all":
             query = """
                 SELECT m.id, m.ticker, m.title, m.market_type, m.yes_price, m.no_price,
                        m.volume, m.close_time, p.confidence_score, p.edge_percentage,
                        p.predicted_outcome, p.recommended_action
                 FROM kalshi_markets m
                 LEFT JOIN kalshi_predictions p ON m.id = p.market_id
-                WHERE m.status IN ('open', 'active')
+                WHERE m.status = ANY($1) AND LOWER(m.market_type) = LOWER($2)
+                ORDER BY p.edge_percentage DESC NULLS LAST
+                LIMIT $3
             """
+            rows = await db.fetch(query, ['open', 'active'], category, limit * 2)
+        else:
+            query = """
+                SELECT m.id, m.ticker, m.title, m.market_type, m.yes_price, m.no_price,
+                       m.volume, m.close_time, p.confidence_score, p.edge_percentage,
+                       p.predicted_outcome, p.recommended_action
+                FROM kalshi_markets m
+                LEFT JOIN kalshi_predictions p ON m.id = p.market_id
+                WHERE m.status = ANY($1)
+                ORDER BY p.edge_percentage DESC NULLS LAST
+                LIMIT $2
+            """
+            rows = await db.fetch(query, ['open', 'active'], limit * 2)
 
-            params = []
-            if category != "all":
-                query += " AND LOWER(m.market_type) = LOWER(%s)"
-                params.append(category)
+        opportunities = []
+        for row in rows:
+            edge = float(row["edge_percentage"]) if row["edge_percentage"] else 0
+            if edge < min_edge:
+                continue
 
-            query += " ORDER BY p.edge_percentage DESC NULLS LAST LIMIT %s"
-            params.append(limit * 2)  # Get more to filter
+            opportunities.append({
+                "id": row["ticker"] or f"opp_{row['id']}",
+                "category": row["market_type"] or "Other",
+                "title": row["title"],
+                "yes_price": float(row["yes_price"]) if row["yes_price"] else 50,
+                "ai_probability": float(row["confidence_score"]) if row["confidence_score"] else 50,
+                "edge": round(edge, 1),
+                "confidence": round(float(row["confidence_score"]) if row["confidence_score"] else 60, 0),
+                "volume": int(row["volume"]) if row["volume"] else 0,
+                "recommendation": row["predicted_outcome"] or row["recommended_action"] or "HOLD",
+                "expiry": row["close_time"].strftime("%Y-%m-%d") if row["close_time"] else "",
+                "risk_level": "High" if edge > 15 else "Medium" if edge > 10 else "Low"
+            })
 
-            cursor.execute(query, params)
-            rows = cursor.fetchall()
+        opportunities = opportunities[:limit]
 
-            opportunities = []
-            for row in rows:
-                edge = float(row[9]) if row[9] else 0
-                if edge < min_edge:
-                    continue
-
-                opportunities.append({
-                    "id": row[1] or f"opp_{row[0]}",
-                    "category": row[3] or "Other",
-                    "title": row[2],
-                    "yes_price": float(row[4]) if row[4] else 50,
-                    "ai_probability": float(row[8]) if row[8] else 50,
-                    "edge": round(edge, 1),
-                    "confidence": round(float(row[8]) if row[8] else 60, 0),
-                    "volume": int(row[6]) if row[6] else 0,
-                    "recommendation": row[10] or row[11] or "HOLD",
-                    "expiry": row[7].strftime("%Y-%m-%d") if row[7] else "",
-                    "risk_level": "High" if edge > 15 else "Medium" if edge > 10 else "Low"
-                })
-
-            opportunities = opportunities[:limit]
-
-            return {
-                "opportunities": opportunities,
-                "total": len(opportunities),
-                "generated_at": datetime.now().isoformat()
-            }
+        return {
+            "opportunities": opportunities,
+            "total": len(opportunities),
+            "generated_at": datetime.now().isoformat()
+        }
 
     except Exception as e:
-        logger.error(f"Error getting opportunities: {e}")
+        logger.error("kalshi_opportunities_error", error=str(e))
         return {
             "opportunities": [],
             "total": 0,

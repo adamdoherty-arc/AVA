@@ -23,7 +23,7 @@ class EfficiencyAnalyzer:
     def __init__(self, pool: asyncpg.Pool):
         self.pool = pool
 
-    async def analyze_all_features(self):
+    async def analyze_all_features(self) -> None:
         """Analyze all features and populate ratings"""
         async with self.pool.acquire() as conn:
             # Get all features with their source files

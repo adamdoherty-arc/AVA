@@ -45,7 +45,7 @@ def convert_value(val):
 class AllUSStocksPopulator:
     """Populate ALL US stocks universe"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.db_config = {
             'host': os.getenv('DB_HOST', 'localhost'),
             'port': os.getenv('DB_PORT', '5432'),
@@ -57,7 +57,7 @@ class AllUSStocksPopulator:
         self.processed_stocks: Set[str] = set()
         self.failed_symbols: Set[str] = set()
 
-    def get_existing_symbols(self):
+    def get_existing_symbols(self) -> None:
         """Get already processed symbols from database"""
         cur = self.conn.cursor()
         try:
@@ -363,7 +363,7 @@ class AllUSStocksPopulator:
         )
         return added
 
-    def run(self):
+    def run(self) -> None:
         """Run the full population process"""
         logger.info("=" * 60)
         logger.info("POPULATING ALL US STOCKS")
@@ -392,7 +392,7 @@ class AllUSStocksPopulator:
         logger.info(f"COMPLETE: {total_count} total stocks, {options_count} with options")
         logger.info("=" * 60)
 
-    def close(self):
+    def close(self) -> None:
         if self.conn:
             self.conn.close()
 

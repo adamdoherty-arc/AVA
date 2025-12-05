@@ -107,7 +107,7 @@ class AutomationControlService:
             self._sync_states_to_redis()
 
     @contextmanager
-    def _get_db_connection(self):
+    def _get_db_connection(self) -> None:
         """Get a database connection from the pool."""
         if not self._db_pool:
             raise Exception("Database pool not initialized")

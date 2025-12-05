@@ -1,6 +1,9 @@
 """
 XTrades Router - API endpoints for XTrades watchlists
-NO MOCK DATA - All endpoints use real database via XtradesDBManager
+NO MOCK DATA - All endpoints use real database
+
+Primary data source: Discord channel 990343144241500232 (XTrades alerts)
+Fallback: XtradesDBManager (legacy profile scraping)
 """
 
 from fastapi import APIRouter, HTTPException, Query
@@ -8,8 +11,11 @@ from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 from datetime import datetime, timedelta
 import logging
+import re
 
 from src.xtrades_db_manager import XtradesDBManager
+from backend.infrastructure.database import get_database
+from backend.infrastructure.errors import safe_internal_error
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +23,9 @@ router = APIRouter(
     prefix="/api/xtrades",
     tags=["xtrades"]
 )
+
+# XTrades Discord channel ID - Primary source for watchlist
+XTRADES_CHANNEL_ID = 990343144241500232
 
 
 class ProfileCreate(BaseModel):
@@ -43,31 +52,108 @@ def get_xtrades_manager():
 
 
 
+async def extract_tickers_from_discord(content: str) -> List[str]:
+    """Extract stock tickers from Discord message content"""
+    tickers = set()
+
+    # $TICKER format (most common in Discord)
+    dollar_tickers = re.findall(r'\$([A-Z]{1,5})\b', content.upper())
+    tickers.update(dollar_tickers)
+
+    # Common words to filter out
+    common_words = {'DD', 'CEO', 'FDA', 'IPO', 'ATH', 'ATL', 'BUY', 'SELL', 'CALL', 'PUT',
+                   'THE', 'FOR', 'AND', 'NOT', 'ARE', 'BUT', 'ALL', 'CAN', 'HAS', 'HER',
+                   'HIM', 'HIS', 'HOW', 'ITS', 'MAY', 'NEW', 'NOW', 'OLD', 'OUR', 'OUT',
+                   'OWN', 'SAY', 'SHE', 'TOO', 'USE', 'WAY', 'WHO', 'BOY', 'DID', 'GET',
+                   'LET', 'SAW', 'SET', 'TOP', 'TRY', 'WAS', 'DAY', 'MAN', 'RAN', 'WIN',
+                   'DTE', 'EXP', 'ITM', 'OTM', 'ATM', 'PDT', 'SEC', 'USD', 'PM', 'AM'}
+
+    # Standalone 2-5 letter uppercase (potential tickers)
+    standalone = re.findall(r'\b([A-Z]{2,5})\b', content.upper())
+    for ticker in standalone:
+        if ticker not in common_words:
+            tickers.add(ticker)
+
+    return list(tickers)
+
+
 @router.get("/watchlist")
-async def get_xtrades_watchlist():
+async def get_xtrades_watchlist(
+    days_back: int = Query(7, description="Days to look back for signals")
+):
     """
-    Get XTrades watchlist - symbols being tracked from followed profiles.
+    Get XTrades watchlist - symbols extracted from Discord channel 990343144241500232.
+
+    Primary source: Discord messages from XTrades channel
+    Fallback: Legacy profile-based trades (if Discord has no data)
     """
     try:
+        db = await get_database()
+
+        # Query Discord messages from XTrades channel
+        cutoff_date = datetime.now() - timedelta(days=days_back)
+
+        messages = await db.fetch("""
+            SELECT content, timestamp, author_name
+            FROM discord_messages
+            WHERE channel_id = $1
+            AND timestamp >= $2
+            ORDER BY timestamp DESC
+            LIMIT 500
+        """, XTRADES_CHANNEL_ID, cutoff_date)
+
+        # Extract tickers from Discord messages
+        symbols = set()
+        signal_count = 0
+
+        for msg in messages:
+            content = msg['content'] or ''
+            tickers = await extract_tickers_from_discord(content)
+            if tickers:
+                signal_count += 1
+                symbols.update(tickers)
+
+        if symbols:
+            return {
+                "symbols": sorted(list(symbols)),
+                "count": len(symbols),
+                "source": "discord",
+                "channel_id": str(XTRADES_CHANNEL_ID),
+                "messages_analyzed": len(messages),
+                "signals_found": signal_count,
+                "days_back": days_back,
+                "generated_at": datetime.now().isoformat()
+            }
+
+        # Fallback to legacy profile-based system if Discord has no data
+        logger.info("No Discord data found, falling back to legacy profiles")
         manager = get_xtrades_manager()
         profiles = manager.get_active_profiles()
-        
-        # Aggregate unique symbols from all profiles' trades
-        symbols = set()
+
         for profile in profiles:
             trades = manager.get_trades_by_profile(profile['id'], status='open', limit=50)
             for trade in trades:
                 if trade.get('symbol'):
                     symbols.add(trade['symbol'])
-        
+                elif trade.get('ticker'):
+                    symbols.add(trade['ticker'])
+
         return {
             "symbols": sorted(list(symbols)),
             "count": len(symbols),
-            "profiles_count": len(profiles)
+            "source": "legacy_profiles",
+            "profiles_count": len(profiles),
+            "generated_at": datetime.now().isoformat()
         }
+
     except Exception as e:
         logger.error(f"Error getting watchlist: {e}")
-        return {"symbols": [], "count": 0, "error": str(e)}
+        return {
+            "symbols": [],
+            "count": 0,
+            "error": str(e),
+            "generated_at": datetime.now().isoformat()
+        }
 
 @router.get("/trades")
 async def get_trades(
@@ -248,7 +334,7 @@ async def create_profile(profile: ProfileCreate):
 
     except Exception as e:
         logger.error(f"Error creating xtrades profile: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "create XTrades profile")
 
 
 @router.put("/profiles/{profile_id}")
@@ -281,7 +367,7 @@ async def update_profile(profile_id: int, update: ProfileUpdate):
         raise
     except Exception as e:
         logger.error(f"Error updating xtrades profile: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "update XTrades profile")
 
 
 @router.patch("/profiles/{profile_id}")
@@ -315,7 +401,7 @@ async def patch_profile(profile_id: int, update: ProfileUpdate):
         raise
     except Exception as e:
         logger.error(f"Error patching xtrades profile: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "patch XTrades profile")
 
 
 @router.get("/stats")
@@ -466,7 +552,7 @@ async def trigger_sync(profile_id: Optional[int] = None):
 
     except Exception as e:
         logger.error(f"Error triggering xtrades sync: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "trigger XTrades sync")
 
 
 @router.post("/profiles/{profile_id}/sync")
@@ -496,7 +582,7 @@ async def trigger_profile_sync(profile_id: int):
         raise
     except Exception as e:
         logger.error(f"Error triggering sync for profile {profile_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "trigger profile sync")
 
 
 @router.get("/sync/history")
@@ -614,7 +700,7 @@ async def get_profile_stats(profile_id: int):
         raise
     except Exception as e:
         logger.error(f"Error fetching profile stats: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "get profile stats")
 
 
 @router.get("/profiles/stats/all")
@@ -760,6 +846,277 @@ async def get_recent_activity(days: int = Query(7, description="Number of days t
         return {
             "trades": [],
             "total": 0,
+            "error": str(e),
+            "generated_at": datetime.now().isoformat()
+        }
+
+
+# ============================================================================
+# Discord-based XTrades Endpoints
+# Primary source: Discord channel 990343144241500232
+# ============================================================================
+
+@router.get("/discord/signals")
+async def get_discord_signals(
+    days_back: int = Query(7, description="Days to look back"),
+    min_confidence: int = Query(40, description="Minimum signal confidence 0-100"),
+    limit: int = Query(100, description="Maximum results")
+):
+    """
+    Get parsed trading signals from XTrades Discord channel.
+    Signals are extracted from Discord messages with ticker, price, and sentiment analysis.
+    """
+    try:
+        db = await get_database()
+        cutoff_date = datetime.now() - timedelta(days=days_back)
+
+        # Try to get from discord_trading_signals table first (pre-processed)
+        signals = await db.fetch("""
+            SELECT
+                s.message_id,
+                s.channel_id,
+                s.author,
+                s.timestamp,
+                s.content,
+                s.tickers,
+                s.primary_ticker,
+                s.setup_type,
+                s.sentiment,
+                s.entry,
+                s.target,
+                s.stop_loss,
+                s.option_strike,
+                s.option_type,
+                s.option_expiration,
+                s.confidence
+            FROM discord_trading_signals s
+            WHERE s.channel_id = $1
+            AND s.timestamp >= $2
+            AND s.confidence >= $3
+            ORDER BY s.timestamp DESC
+            LIMIT $4
+        """, XTRADES_CHANNEL_ID, cutoff_date, min_confidence, limit)
+
+        if signals:
+            formatted_signals = []
+            for sig in signals:
+                formatted_signals.append({
+                    "message_id": str(sig['message_id']),
+                    "author": sig['author'],
+                    "timestamp": sig['timestamp'].isoformat() if sig['timestamp'] else None,
+                    "content": sig['content'],
+                    "tickers": sig['tickers'] or [],
+                    "primary_ticker": sig['primary_ticker'],
+                    "setup_type": sig['setup_type'],
+                    "sentiment": sig['sentiment'],
+                    "entry": float(sig['entry']) if sig['entry'] else None,
+                    "target": float(sig['target']) if sig['target'] else None,
+                    "stop_loss": float(sig['stop_loss']) if sig['stop_loss'] else None,
+                    "option_strike": float(sig['option_strike']) if sig['option_strike'] else None,
+                    "option_type": sig['option_type'],
+                    "option_expiration": sig['option_expiration'],
+                    "confidence": sig['confidence']
+                })
+
+            return {
+                "signals": formatted_signals,
+                "total": len(formatted_signals),
+                "source": "discord_trading_signals",
+                "channel_id": str(XTRADES_CHANNEL_ID),
+                "days_back": days_back,
+                "min_confidence": min_confidence,
+                "generated_at": datetime.now().isoformat()
+            }
+
+        # Fallback: Parse raw messages on-the-fly
+        messages = await db.fetch("""
+            SELECT message_id, content, author_name, timestamp
+            FROM discord_messages
+            WHERE channel_id = $1
+            AND timestamp >= $2
+            ORDER BY timestamp DESC
+            LIMIT $3
+        """, XTRADES_CHANNEL_ID, cutoff_date, limit * 2)
+
+        signals = []
+        for msg in messages:
+            content = msg['content'] or ''
+            tickers = await extract_tickers_from_discord(content)
+            if tickers:
+                # Basic sentiment analysis
+                content_lower = content.lower()
+                bullish_words = ['bullish', 'long', 'call', 'buy', 'moon', 'breakout', 'strong', 'green']
+                bearish_words = ['bearish', 'short', 'put', 'sell', 'dump', 'breakdown', 'weak', 'red']
+                bullish_count = sum(1 for w in bullish_words if w in content_lower)
+                bearish_count = sum(1 for w in bearish_words if w in content_lower)
+                sentiment = 'bullish' if bullish_count > bearish_count else 'bearish' if bearish_count > bullish_count else 'neutral'
+
+                signals.append({
+                    "message_id": str(msg['message_id']),
+                    "author": msg['author_name'],
+                    "timestamp": msg['timestamp'].isoformat() if msg['timestamp'] else None,
+                    "content": content[:500],  # Truncate long content
+                    "tickers": tickers,
+                    "primary_ticker": tickers[0] if tickers else None,
+                    "sentiment": sentiment,
+                    "confidence": 50  # Default for on-the-fly parsing
+                })
+
+        return {
+            "signals": signals[:limit],
+            "total": len(signals[:limit]),
+            "source": "discord_messages_parsed",
+            "channel_id": str(XTRADES_CHANNEL_ID),
+            "days_back": days_back,
+            "generated_at": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Error fetching Discord signals: {e}")
+        return {
+            "signals": [],
+            "total": 0,
+            "error": str(e),
+            "generated_at": datetime.now().isoformat()
+        }
+
+
+@router.get("/discord/messages")
+async def get_discord_messages(
+    days_back: int = Query(7, description="Days to look back"),
+    limit: int = Query(100, description="Maximum results")
+):
+    """
+    Get raw messages from XTrades Discord channel.
+    """
+    try:
+        db = await get_database()
+        cutoff_date = datetime.now() - timedelta(days=days_back)
+
+        messages = await db.fetch("""
+            SELECT
+                m.message_id,
+                m.content,
+                m.author_name,
+                m.timestamp,
+                m.attachments,
+                m.embeds,
+                m.reactions,
+                c.channel_name
+            FROM discord_messages m
+            LEFT JOIN discord_channels c ON m.channel_id = c.channel_id
+            WHERE m.channel_id = $1
+            AND m.timestamp >= $2
+            ORDER BY m.timestamp DESC
+            LIMIT $3
+        """, XTRADES_CHANNEL_ID, cutoff_date, limit)
+
+        formatted_messages = []
+        for msg in messages:
+            formatted_messages.append({
+                "message_id": str(msg['message_id']),
+                "content": msg['content'],
+                "author": msg['author_name'],
+                "timestamp": msg['timestamp'].isoformat() if msg['timestamp'] else None,
+                "channel_name": msg['channel_name'],
+                "has_attachments": bool(msg['attachments']),
+                "has_embeds": bool(msg['embeds']),
+                "reactions": msg['reactions']
+            })
+
+        # Get channel sync status
+        channel_info = await db.fetchrow("""
+            SELECT channel_name, last_sync,
+                   (SELECT COUNT(*) FROM discord_messages WHERE channel_id = $1) as total_messages
+            FROM discord_channels
+            WHERE channel_id = $1
+        """, XTRADES_CHANNEL_ID)
+
+        return {
+            "messages": formatted_messages,
+            "total": len(formatted_messages),
+            "channel_id": str(XTRADES_CHANNEL_ID),
+            "channel_name": channel_info['channel_name'] if channel_info else "XTrades Channel",
+            "last_sync": channel_info['last_sync'].isoformat() if channel_info and channel_info['last_sync'] else None,
+            "total_in_db": channel_info['total_messages'] if channel_info else 0,
+            "days_back": days_back,
+            "generated_at": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Error fetching Discord messages: {e}")
+        return {
+            "messages": [],
+            "total": 0,
+            "error": str(e),
+            "generated_at": datetime.now().isoformat()
+        }
+
+
+@router.get("/discord/status")
+async def get_discord_channel_status():
+    """
+    Get status of XTrades Discord channel sync.
+    """
+    try:
+        db = await get_database()
+
+        # Get channel info
+        channel = await db.fetchrow("""
+            SELECT
+                c.channel_id,
+                c.channel_name,
+                c.server_name,
+                c.last_sync,
+                c.created_at
+            FROM discord_channels c
+            WHERE c.channel_id = $1
+        """, XTRADES_CHANNEL_ID)
+
+        if not channel:
+            return {
+                "configured": False,
+                "channel_id": str(XTRADES_CHANNEL_ID),
+                "message": "XTrades Discord channel not configured. Run add_discord_channels.py to set up.",
+                "generated_at": datetime.now().isoformat()
+            }
+
+        # Get message stats
+        stats = await db.fetchrow("""
+            SELECT
+                COUNT(*) as total_messages,
+                MIN(timestamp) as oldest_message,
+                MAX(timestamp) as newest_message,
+                COUNT(DISTINCT DATE(timestamp)) as days_with_messages
+            FROM discord_messages
+            WHERE channel_id = $1
+        """, XTRADES_CHANNEL_ID)
+
+        # Calculate message freshness
+        newest = stats['newest_message']
+        hours_since_last = None
+        if newest:
+            hours_since_last = (datetime.now() - newest.replace(tzinfo=None)).total_seconds() / 3600
+
+        return {
+            "configured": True,
+            "channel_id": str(XTRADES_CHANNEL_ID),
+            "channel_name": channel['channel_name'],
+            "server_name": channel['server_name'],
+            "last_sync": channel['last_sync'].isoformat() if channel['last_sync'] else None,
+            "total_messages": stats['total_messages'] or 0,
+            "oldest_message": stats['oldest_message'].isoformat() if stats['oldest_message'] else None,
+            "newest_message": stats['newest_message'].isoformat() if stats['newest_message'] else None,
+            "days_with_messages": stats['days_with_messages'] or 0,
+            "hours_since_last_message": round(hours_since_last, 1) if hours_since_last else None,
+            "needs_sync": hours_since_last is None or hours_since_last > 24,
+            "generated_at": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting Discord channel status: {e}")
+        return {
+            "configured": False,
             "error": str(e),
             "generated_at": datetime.now().isoformat()
         }

@@ -56,9 +56,9 @@ Usage:
 
 Integration:
     The GraphQL API runs as a FastAPI application and can be accessed at:
-    - GraphQL endpoint: http://localhost:8000/graphql
-    - GraphQL Playground: http://localhost:8000/graphql (browser)
-    - Schema introspection: http://localhost:8000/graphql?query={__schema...}
+    - GraphQL endpoint: http://localhost:8002/graphql
+    - GraphQL Playground: http://localhost:8002/graphql (browser)
+    - Schema introspection: http://localhost:8002/graphql?query={__schema...}
 """
 
 import logging

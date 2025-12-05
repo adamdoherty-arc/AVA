@@ -31,7 +31,7 @@ from dataclasses import dataclass
 import json
 
 # Infrastructure imports
-from backend.infrastructure.async_db import get_async_db, AsyncDatabasePool
+from backend.infrastructure.database import get_database, AsyncDatabaseManager
 from backend.infrastructure.circuit_breaker import (
     CircuitBreaker, circuit_protected, CircuitBreakerError
 )
@@ -247,8 +247,8 @@ class SportsInfrastructure:
     TTL_ODDS = 120            # 2 minutes for odds
     TTL_PREDICTIONS = 600     # 10 minutes for AI predictions
 
-    def __init__(self):
-        self._db: Optional[AsyncDatabasePool] = None
+    def __init__(self) -> None:
+        self._db: Optional[AsyncDatabaseManager] = None
         self._cache: Optional[RedisCache] = None
         self._ws_manager: Optional[WebSocketManager] = None
         self._initialized = False
@@ -260,7 +260,7 @@ class SportsInfrastructure:
 
         try:
             # Initialize async database
-            self._db = await get_async_db()
+            self._db = await get_database()
 
             # Initialize cache
             self._cache = get_cache()
@@ -278,7 +278,7 @@ class SportsInfrastructure:
             return False
 
     @property
-    def db(self) -> AsyncDatabasePool:
+    def db(self) -> AsyncDatabaseManager:
         """Get async database pool."""
         if not self._db:
             raise RuntimeError("Sports infrastructure not initialized")

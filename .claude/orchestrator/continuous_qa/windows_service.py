@@ -76,7 +76,7 @@ class MagnusQAService:
     def __init__(self) -> None:
         """Initialize the service."""
         self.running = False
-        self.interval_minutes = 20
+        self.interval_minutes = 10
 
     def start(self) -> None:
         """Start the service."""
@@ -165,12 +165,12 @@ def install_scheduled_task():
     xml_content = f'''<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
-    <Description>Magnus QA and Enhancement Service - Runs every 20 minutes</Description>
+    <Description>Magnus QA and Enhancement Service - Runs every 10 minutes</Description>
   </RegistrationInfo>
   <Triggers>
     <TimeTrigger>
       <Repetition>
-        <Interval>PT20M</Interval>
+        <Interval>PT10M</Interval>
         <StopAtDurationEnd>false</StopAtDurationEnd>
       </Repetition>
       <StartBoundary>{datetime.now().strftime("%Y-%m-%dT%H:%M:%S")}</StartBoundary>

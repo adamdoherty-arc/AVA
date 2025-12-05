@@ -3,7 +3,7 @@
 
 qa_system:
   enabled: true
-  schedule_interval_minutes: 20
+  schedule_interval_minutes: 10
   visible_console: false  # Set to true for debugging
 
   # Auto-fix settings

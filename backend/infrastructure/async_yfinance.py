@@ -47,11 +47,11 @@ class AsyncYFinance:
     All methods are non-blocking and safe to use in async context.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._yf = None
         self._available = True
 
-    def _ensure_import(self):
+    def _ensure_import(self) -> None:
         """Lazy import yfinance."""
         if self._yf is None:
             try:

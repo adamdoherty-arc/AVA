@@ -15,7 +15,7 @@ Magnus (AVA Trading Platform) is an advanced options trading platform with AI-po
 | Frontend | React 18 + TypeScript + Vite + TanStack Query |
 | Backend | FastAPI + Python 3.11+ |
 | Database | PostgreSQL 14+ with asyncpg (async) |
-| Cache | Redis |
+| Cache | Redis (optional, falls back to in-memory) |
 | AI/ML | OpenAI, Anthropic, Groq, Ollama (local) |
 
 ### Directory Structure
@@ -26,9 +26,8 @@ Magnus/
 │   ├── routers/          # API endpoints
 │   ├── services/         # Business logic
 │   ├── infrastructure/   # Database, cache, observability
-│   │   ├── database.py   # Async database (PRIMARY - use this)
+│   │   ├── database.py   # Async database (PRIMARY)
 │   │   └── cache.py      # Redis/in-memory cache
-│   ├── database/         # Legacy sync pool (DEPRECATED)
 │   └── models/           # Pydantic models
 ├── frontend/             # React frontend
 │   ├── src/
@@ -37,16 +36,16 @@ Magnus/
 │   │   ├── components/   # UI components
 │   │   └── pages/        # Route pages
 │   └── package.json
-├── src/                  # Legacy Python modules (standalone scripts)
-│   ├── database/         # Old sync database (being phased out)
+├── src/                  # Standalone Python scripts & utilities
+│   ├── database/         # Sync database for standalone scripts
 │   ├── prediction_agents/
 │   └── *.py              # Data managers, scanners
 └── .claude/              # Claude Code configuration
 ```
 
-## Database Patterns
+## Database Pattern (Async)
 
-### Primary Pattern (Async - USE THIS)
+All backend code uses async database access with asyncpg:
 
 ```python
 from backend.infrastructure.database import get_database, AsyncDatabaseManager
@@ -73,28 +72,15 @@ async def my_endpoint():
         await conn.execute("UPDATE ...", ...)
 ```
 
-### Legacy Pattern (Sync - DEPRECATED)
+### Key Points
 
-```python
-# DON'T use in new code - only for backward compatibility
-from backend.database.connection import db_pool
-
-with db_pool.get_connection() as conn:
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM table WHERE id = %s", (id,))
-    row = cursor.fetchone()
-    value = row[0]  # Index access
-```
-
-### Key Differences
-
-| Aspect | Async (New) | Sync (Legacy) |
-|--------|-------------|---------------|
-| Import | `backend.infrastructure.database` | `backend.database.connection` |
-| Placeholders | `$1, $2, $3` | `%s` |
-| Row Access | `row["column"]` | `row[0]` |
-| Functions | `async def` + `await` | `def` |
-| Logging | `structlog` | `logging` |
+| Aspect | Pattern |
+|--------|---------|
+| Import | `from backend.infrastructure.database import get_database` |
+| Placeholders | `$1, $2, $3` (asyncpg style) |
+| Row Access | `row["column"]` (dict access) |
+| Functions | `async def` + `await` |
+| Logging | `structlog` |
 
 ## Frontend Query Options
 
@@ -128,17 +114,78 @@ const AI_QUERY_OPTIONS = {
 
 | File | Purpose |
 |------|---------|
-| `backend/infrastructure/database.py` | Async database manager (PRIMARY) |
-| `backend/database/connection.py` | Legacy sync pool (DEPRECATED) |
+| `backend/infrastructure/database.py` | Async database manager |
 | `frontend/src/hooks/useMagnusApi.ts` | All React Query hooks |
-| `frontend/src/lib/axios.ts` | Axios instance with interceptors |
+| `frontend/src/lib/axios.ts` | Enhanced axios with auto-timeout & circuit breaker |
+| `frontend/src/lib/react-query.ts` | Smart cache warming & prefetching |
+| `frontend/src/components/APIErrorDisplay.tsx` | Reusable API error component |
 | `backend/main.py` | FastAPI app entry point |
+
+## Frontend API Infrastructure (2025-12-05)
+
+### Automatic Timeout Detection
+
+The axios interceptor automatically applies appropriate timeouts based on endpoint patterns:
+
+| Category | Timeout | Endpoints |
+|----------|---------|-----------|
+| FAST | 10s | `/health`, `/cache/*` |
+| STANDARD | 30s | Most endpoints |
+| SLOW | 60s | `/portfolio/positions`, `/scanner/watchlists`, `/robinhood/*` |
+| AI | 120s | `/ai/*`, `/chat/*`, `/recommendations`, `/predictions/*` |
+| SCAN | 180s | `/scanner/scan`, `/backtest`, `/stress-test` |
+
+**No manual timeout overrides needed** - the interceptor handles it automatically.
+
+### Circuit Breaker
+
+After 5 consecutive failures to an endpoint group, requests are automatically blocked for 30 seconds to prevent cascading failures.
+
+```typescript
+// Check circuit status
+import { getCircuitBreakerStatus } from '@/lib/axios';
+console.log(getCircuitBreakerStatus());
+// { portfolio: { failures: 3, isOpen: false }, scanner: { failures: 0, isOpen: false } }
+```
+
+### Error Handling
+
+Use the `APIErrorDisplay` component for consistent error handling:
+
+```tsx
+import { APIErrorDisplay } from '@/components';
+
+// Full display
+<APIErrorDisplay
+  error={error}
+  onRetry={() => refetch()}
+  isRetrying={isFetching}
+  title="Failed to Load Data"
+/>
+
+// Compact inline
+<APIErrorDisplay error={error} onRetry={refetch} compact />
+```
+
+### Cache Warming
+
+Pre-warm cache before navigation:
+
+```typescript
+import { warmCacheForRoute, invalidateCategory } from '@/lib/react-query';
+
+// Warm cache for a route
+await warmCacheForRoute('/positions');
+
+// Invalidate a category
+await invalidateCategory('portfolio'); // Clears positions, summary, enriched
+```
 
 ## Development Commands
 
 ```bash
 # Start backend (from Magnus/)
-cd backend && uvicorn main:app --reload --port 8000
+cd backend && uvicorn main:app --reload --port 8002
 
 # Start frontend (from Magnus/frontend/)
 npm run dev
@@ -150,61 +197,13 @@ pytest backend/tests/
 python -c "from backend.infrastructure.database import get_database"
 ```
 
-## Recent Migration (2025-12-04)
+## Database Pool Configuration
 
-All backend routers migrated from sync to async database:
-
-- scanner.py, sports.py, watchlist.py, analytics.py
-- briefings.py, options.py, agents.py, predictions.py
-- integration_test.py, universe_service.py
-- dashboard_service.py, prediction_service.py
-
-**Changes made:**
-1. `from src.database.connection_pool import` → `from backend.infrastructure.database import get_database`
-2. `import logging` → `import structlog`
-3. SQL: `%s` → `$1, $2, $3`
-4. Row: `row[0]` → `row["column_name"]`
-5. Functions: `def` → `async def`
-
-## Sync-on-Commit Guidelines
-
-**This file (CLAUDE.md) must be updated on every significant commit to stay current.**
-
-When committing changes, update this file to reflect:
-- New files or directory changes
-- API pattern changes
-- New dependencies
-- Breaking changes
-- Migration status
-
-## NO DUMMY DATA POLICY
-
-**CRITICAL**: This project has a strict NO DUMMY DATA policy. All data must come from real sources:
-- Real Robinhood API data
-- Real TradingView watchlists
-- Real market data (yfinance, etc.)
-- Real database queries
-
-Never return mock/fake data from API endpoints.
-
-## Observability
-
-```python
-import structlog
-logger = structlog.get_logger(__name__)
-
-# Structured logging
-logger.info("event_name", key1=value1, key2=value2)
-logger.error("error_event", error=str(e), context=ctx)
-```
-
-## Connection Pool Stats
-
-The legacy sync pool (if still needed) has:
+The async database pool settings:
 - Min connections: 5
 - Max connections: 50
 - Connection timeout: 10s
-- Query timeout: 30s
+- Query timeout: 30s (configurable)
 
 ## Environment Variables
 
@@ -219,32 +218,38 @@ REDIS_HOST=localhost
 REDIS_PORT=6379
 ```
 
-## Server Ports - HARDCODED
+## Server Ports - CENTRALIZED CONFIG
 
-**CRITICAL**: These ports are hardcoded throughout the codebase. Do NOT change without updating all files.
+**CRITICAL**: Ports are managed via centralized config files. Update the config, not individual files.
 
-| Service | Port | Notes |
-|---------|------|-------|
-| Backend API | 8000 | FastAPI server |
-| Frontend Dev | 5173 | Vite dev server |
-| PostgreSQL | 5432 | Database |
-| Redis | 6379 | Cache (optional - falls back to in-memory) |
+| Service | Port | Config File |
+|---------|------|-------------|
+| Backend API | 8002 | `backend/config.py` → `SERVER_PORT` |
+| Frontend Dev | 5181 | `frontend/vite.config.ts` → `server.port` |
+| PostgreSQL | 5432 | `backend/config.py` → `DB_PORT` |
+| Redis | 6379 | `backend/config.py` → `REDIS_PORT` |
 
-### Files with Port Configuration
+### Centralized Port Configuration
 
-- `backend/config.py` - SERVER_PORT, FRONTEND_PORT
-- `backend/main.py` - run_server() function
-- `frontend/vite.config.ts` - server.port, proxy target
-- `frontend/src/config/api.ts` - API_BASE_URL, API_HOST
-- `frontend/src/lib/api-client.ts` - apiClient baseURL
-- `frontend/src/hooks/useSportsWebSocket.ts` - WebSocket URL
-- `frontend/src/hooks/useMagnusApi.ts` - WebSocket URLs
+**Backend** (`backend/config.py`):
+```python
+SERVER_PORT: int = 8002  # Single source of truth
+FRONTEND_PORT: int = 5181
+```
+
+**Frontend** (`frontend/src/config/api.ts`):
+```typescript
+export const BACKEND_URL = 'http://localhost:8002';
+export const WS_URL = 'ws://localhost:8002';
+```
+
+All other files import from these central configs.
 
 ## API Base URLs
 
-- Backend: `http://localhost:8000/api`
-- Frontend: `http://localhost:5173`
-- WebSocket: `ws://localhost:8000/ws/*`
+- Backend: `http://localhost:8002/api`
+- Frontend: `http://localhost:5181`
+- WebSocket: `ws://localhost:8002/ws/*`
 
 ## Cache Behavior
 
@@ -305,4 +310,27 @@ const { totalSyncs, successRate, averageSyncDuration } = useSyncStats()
 
 ---
 
-*Last updated: 2025-12-04 - Added AI-powered Sync Status Panel with Zustand store*
+## NO DUMMY DATA POLICY
+
+**CRITICAL**: This project has a strict NO DUMMY DATA policy. All data must come from real sources:
+- Real Robinhood API data
+- Real TradingView watchlists
+- Real market data (yfinance, etc.)
+- Real database queries
+
+Never return mock/fake data from API endpoints.
+
+## Observability
+
+```python
+import structlog
+logger = structlog.get_logger(__name__)
+
+# Structured logging
+logger.info("event_name", key1=value1, key2=value2)
+logger.error("error_event", error=str(e), context=ctx)
+```
+
+---
+
+*Last updated: 2025-12-05 - Removed legacy sync database code, using async-only database pattern*

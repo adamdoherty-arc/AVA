@@ -116,7 +116,7 @@ class PortfolioDataValidator:
     MAX_BID_ASK_SPREAD_PCT = 20        # 20% max spread
     MAX_PRICE_DEVIATION_PCT = 50       # 50% from strike for options
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._validation_history: List[ValidationResult] = []
 
     def validate_position(self, position: Dict[str, Any]) -> ValidationResult:

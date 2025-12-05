@@ -3,6 +3,10 @@ Check modules for Magnus QA system.
 
 Available checks:
 - APIEndpointsCheck: Tests FastAPI endpoints for availability and data quality
+- APIConnectivityCheck: Tests external API connections (Robinhood, Kalshi, etc.)
+- DatabaseHealthCheck: Tests database health and performance
+- BackendHealthCheck: Tests backend router imports and AI clients
+- PerformanceCheck: Tests API response times and system resources
 - CodeQualityCheck: Checks code rules and style compliance
 - DummyDataDetectorCheck: Detects mock/dummy/fake data patterns
 - UIComponentsCheck: Tests React frontend build and components
@@ -19,6 +23,10 @@ from .base_check import (
     CheckRunner,
 )
 from .api_endpoints import APIEndpointsCheck
+from .api_connectivity import APIConnectivityCheck
+from .database_health import DatabaseHealthCheck
+from .backend_health import BackendHealthCheck
+from .performance_check import PerformanceCheck
 from .code_quality import CodeQualityCheck
 from .dummy_data_detector import DummyDataDetectorCheck
 from .ui_components import UIComponentsCheck
@@ -35,6 +43,10 @@ __all__ = [
     "CheckRunner",
     # Check modules
     "APIEndpointsCheck",
+    "APIConnectivityCheck",
+    "DatabaseHealthCheck",
+    "BackendHealthCheck",
+    "PerformanceCheck",
     "CodeQualityCheck",
     "DummyDataDetectorCheck",
     "UIComponentsCheck",

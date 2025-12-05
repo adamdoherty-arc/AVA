@@ -1,3 +1,4 @@
+import os
 """
 SpecAgent Supervisor - Integration with AVA chatbot
 
@@ -112,7 +113,7 @@ class SpecAgentSupervisor:
         """Get singleton instance"""
         return cls._instance
 
-    def __init__(self, base_url: str = "http://localhost:8000"):
+    def __init__(self, base_url: str = os.getenv("API_BASE_URL", "http://localhost:8002").rstrip("/api")):
         """
         Initialize SpecAgent Supervisor
 

@@ -2,7 +2,8 @@ import requests
 import sys
 import time
 
-BASE_URL = "http://localhost:8000"
+# Backend URL - uses centralized port 8002
+BASE_URL = "http://localhost:8002"
 
 def check_endpoint(name, url, method="GET", payload=None):
     print(f"Checking {name}...", end=" ")

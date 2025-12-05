@@ -96,7 +96,7 @@ class MockOptionsChain:
 class MockMarketData:
     """Mock market data provider"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.prices = {
             'SPY': 585.00,
             'QQQ': 495.00,

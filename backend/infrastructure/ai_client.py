@@ -115,6 +115,7 @@ class ModelTier(str, Enum):
     FAST = "fast"  # Quick, cheap responses
     BALANCED = "balanced"  # Good balance of speed/quality
     POWERFUL = "powerful"  # Best quality, slower/expensive
+    REASONING = "reasoning"  # DeepSeek R1 32B - deep reasoning, chain-of-thought (LOCAL FREE)
 
 
 # Default models per provider and tier
@@ -123,21 +124,25 @@ DEFAULT_MODELS: Dict[AIProvider, Dict[ModelTier, str]] = {
         ModelTier.FAST: "claude-3-5-haiku-20241022",
         ModelTier.BALANCED: "claude-sonnet-4-20250514",
         ModelTier.POWERFUL: "claude-sonnet-4-20250514",
+        ModelTier.REASONING: "claude-sonnet-4-20250514",  # Claude for reasoning fallback
     },
     AIProvider.OPENAI: {
         ModelTier.FAST: "gpt-4o-mini",
         ModelTier.BALANCED: "gpt-4o",
         ModelTier.POWERFUL: "gpt-4o",
+        ModelTier.REASONING: "gpt-4o",  # OpenAI reasoning fallback
     },
     AIProvider.GROQ: {
         ModelTier.FAST: "llama-3.1-8b-instant",
         ModelTier.BALANCED: "llama-3.3-70b-versatile",
         ModelTier.POWERFUL: "llama-3.3-70b-versatile",
+        ModelTier.REASONING: "llama-3.3-70b-versatile",  # Groq reasoning fallback
     },
     AIProvider.OLLAMA: {
-        ModelTier.FAST: "llama3.2",
-        ModelTier.BALANCED: "llama3.2",
-        ModelTier.POWERFUL: "llama3.2:70b",
+        ModelTier.FAST: "qwen2.5:14b-instruct-q4_K_M",          # Fast local model
+        ModelTier.BALANCED: "qwen2.5:32b-instruct-q4_K_M",      # Balanced local model
+        ModelTier.POWERFUL: "qwen2.5-coder:32b",                # Powerful coding model
+        ModelTier.REASONING: "deepseek-r1:32b",                 # DeepSeek R1 32B - deep reasoning (R1-0528)
     },
 }
 
@@ -152,6 +157,11 @@ TOKEN_PRICING: Dict[str, tuple[float, float]] = {
     # Groq (free tier, then paid)
     "llama-3.1-8b-instant": (0.05, 0.08),
     "llama-3.3-70b-versatile": (0.59, 0.79),
+    # Ollama Local Models (FREE - running locally)
+    "deepseek-r1:32b": (0.0, 0.0),               # DeepSeek R1 32B - deep reasoning (FREE LOCAL)
+    "qwen2.5:32b-instruct-q4_K_M": (0.0, 0.0),   # Qwen 2.5 32B (FREE LOCAL)
+    "qwen2.5:14b-instruct-q4_K_M": (0.0, 0.0),   # Qwen 2.5 14B (FREE LOCAL)
+    "qwen2.5-coder:32b": (0.0, 0.0),             # Qwen Coder 32B (FREE LOCAL)
 }
 
 

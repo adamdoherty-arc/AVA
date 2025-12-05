@@ -33,6 +33,7 @@ class TaskComplexity(Enum):
     BALANCED = "balanced"  # Most trading analysis, research
     COMPLEX = "complex"    # Deep multi-step analysis, research reports
     CODING = "coding"      # Code generation, debugging, refactoring
+    REASONING = "reasoning"  # Deep reasoning, hypothesis testing, complex problem solving
 
 
 class ModelTier(Enum):
@@ -41,6 +42,7 @@ class ModelTier(Enum):
     BALANCED = "qwen2.5:32b-instruct-q4_K_M"
     COMPLEX = "llama3.3:70b-instruct-q4_K_M"
     CODING = "qwen2.5-coder:32b"  # Specialized coding model
+    REASONING = "deepseek-r1:32b"  # DeepSeek R1 32B for deep reasoning (R1-0528 update)
 
 
 @dataclass
@@ -99,6 +101,18 @@ class MagnusLocalLLM:
             tokens_per_second=45,
             context_window=32768,
             use_cases=["code_generation", "code_review", "debugging", "refactoring", "documentation"]
+        ),
+        TaskComplexity.REASONING: ModelSpecs(
+            name="DeepSeek R1 32B",
+            tier=ModelTier.REASONING,
+            vram_gb=19.0,
+            tokens_per_second=25,
+            context_window=131072,
+            use_cases=[
+                "hypothesis_testing", "complex_reasoning", "multi_step_analysis",
+                "portfolio_optimization", "risk_scenario_analysis", "market_prediction",
+                "strategy_backtesting", "correlation_analysis", "what_if_scenarios"
+            ]
         )
     }
 
@@ -269,7 +283,10 @@ Strategy: Income generation through premium collection"""
 
                 # Try fallback to simpler model
                 if self.enable_fallback and attempt < self.max_retries - 1:
-                    if complexity == TaskComplexity.COMPLEX:
+                    if complexity == TaskComplexity.REASONING:
+                        complexity = TaskComplexity.COMPLEX
+                        logger.info("Falling back from REASONING to COMPLEX complexity")
+                    elif complexity == TaskComplexity.COMPLEX:
                         complexity = TaskComplexity.BALANCED
                         logger.info("Falling back to BALANCED complexity")
                     elif complexity == TaskComplexity.BALANCED:
@@ -401,6 +418,7 @@ Provide:
    ollama pull qwen2.5:32b-instruct-q4_K_M
    ollama pull qwen2.5:14b-instruct-q4_K_M
    ollama pull llama3.3:70b-instruct-q4_K_M
+   ollama pull deepseek-r1:32b
 
 5. Verify models are ready:
    ollama list
@@ -409,8 +427,9 @@ Provide:
 - Qwen 2.5 14B: ~9GB
 - Qwen 2.5 32B: ~20GB
 - Llama 3.3 70B: ~40GB
+- DeepSeek R1 32B: ~19GB (Deep Reasoning - R1-0528 update)
 
-Total disk space needed: ~70GB
+Total disk space needed: ~90GB
 
 ## Testing
 Run in PowerShell:

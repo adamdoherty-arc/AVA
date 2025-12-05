@@ -1,19 +1,118 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import { axiosInstance } from '@/lib/axios';
+import { WS_API_URL } from '@/config/api';
+
+// ============================================
+// SHARED QUERY OPTIONS - Resilient defaults
+// ============================================
+
+/**
+ * Default query options for all hooks to prevent cascading failures.
+ * These can be overridden per-hook as needed.
+ */
+const DEFAULT_QUERY_OPTIONS = {
+    retry: 1,                      // Only retry once on failure
+    retryDelay: 5000,             // Wait 5 seconds before retry
+    refetchOnWindowFocus: false,   // Don't refetch on window focus
+    networkMode: 'online' as const, // Only fetch when online
+};
+
+/** Polling query options for endpoints that refresh periodically */
+const POLLING_QUERY_OPTIONS = {
+    ...DEFAULT_QUERY_OPTIONS,
+    staleTime: 30000,             // Data fresh for 30 seconds
+    refetchInterval: 30000,       // Poll every 30 seconds
+};
+
+/** AI/Expensive query options for computationally expensive endpoints */
+const AI_QUERY_OPTIONS = {
+    ...DEFAULT_QUERY_OPTIONS,
+    staleTime: 300000,            // Data fresh for 5 minutes
+    retry: 0,                     // Don't retry expensive operations
+};
 
 // ============================================
 // PORTFOLIO HOOKS
 // ============================================
 
+/**
+ * Get positions from database cache - INSTANT loading, never blocks.
+ *
+ * The backend maintains a cache that syncs with Robinhood every 30 minutes.
+ * The UI always reads from cache for instant loading.
+ *
+ * For real-time live data, use useLivePositions() instead.
+ */
 export const usePositions = () => {
     return useQuery({
         queryKey: ['positions'],
         queryFn: async () => {
+            // Uses cached endpoint - reads from database, never blocks on Robinhood API
+            const { data } = await axiosInstance.get('/portfolio/positions/cached');
+            return data;
+        },
+        staleTime: 60000, // Data fresh for 1 minute (cache is updated every 30 min)
+        retry: 1, // Only retry once - cache should be reliable
+        retryDelay: 1000, // Quick retry
+        refetchOnWindowFocus: false,
+    });
+};
+
+/**
+ * Get live positions directly from Robinhood API.
+ * Use this only when you need real-time data and can wait for the API call.
+ * For most UI cases, use usePositions() which reads from cache.
+ */
+export const useLivePositions = () => {
+    return useQuery({
+        queryKey: ['live-positions'],
+        queryFn: async () => {
+            // Direct Robinhood API call - can be slow (30-60s)
             const { data } = await axiosInstance.get('/portfolio/positions');
             return data;
         },
         staleTime: 30000, // Data considered fresh for 30 seconds
-        refetchInterval: 30000, // Poll every 30 seconds (aligned with staleTime)
+        retry: 2, // Retry twice on failure (Robinhood can be flaky)
+        retryDelay: 3000, // Wait 3 seconds before retry
+        refetchOnWindowFocus: false,
+        enabled: false, // Manual trigger only - expensive call
+    });
+};
+
+/**
+ * Get the sync service status (last sync time, next sync, etc.)
+ */
+export const useSyncStatus = () => {
+    return useQuery({
+        queryKey: ['sync-status'],
+        queryFn: async () => {
+            const { data } = await axiosInstance.get('/portfolio/sync/status');
+            return data;
+        },
+        staleTime: 10000, // Fresh for 10 seconds
+        refetchInterval: 30000, // Update every 30 seconds
+        refetchOnWindowFocus: true,
+    });
+};
+
+/**
+ * Trigger a manual sync of positions from Robinhood to database.
+ * Use after making trades to immediately update the cache.
+ */
+export const useTriggerSync = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async () => {
+            const { data } = await axiosInstance.post('/portfolio/sync/trigger');
+            return data;
+        },
+        onSuccess: () => {
+            // Invalidate positions cache to pick up new data
+            queryClient.invalidateQueries({ queryKey: ['positions'] });
+            queryClient.invalidateQueries({ queryKey: ['sync-status'] });
+            queryClient.invalidateQueries({ queryKey: ['enriched-positions'] });
+        },
     });
 };
 
@@ -24,7 +123,7 @@ export const usePortfolioSummary = () => {
             const { data } = await axiosInstance.get('/portfolio/summary');
             return data;
         },
-        staleTime: 30000,
+        ...POLLING_QUERY_OPTIONS,
     });
 };
 
@@ -51,6 +150,7 @@ export const useEnrichedPositions = () => {
             const { data } = await axiosInstance.get('/portfolio/positions/enriched');
             return data;
         },
+        ...DEFAULT_QUERY_OPTIONS,
         staleTime: 60000, // 1 minute
     });
 };
@@ -62,6 +162,7 @@ export const usePositionRecommendations = () => {
             const { data } = await axiosInstance.get('/portfolio/recommendations');
             return data;
         },
+        ...AI_QUERY_OPTIONS,
         staleTime: 120000, // 2 minutes - AI analysis is expensive
     });
 };
@@ -75,6 +176,7 @@ export const useSymbolMetadata = (symbol: string | null) => {
             return data;
         },
         enabled: !!symbol,
+        ...DEFAULT_QUERY_OPTIONS,
         staleTime: 3600000, // 1 hour - metadata doesn't change often
     });
 };
@@ -88,7 +190,8 @@ export const useSymbolRecommendation = (symbol: string | null) => {
             return data;
         },
         enabled: !!symbol,
-        staleTime: 120000,
+        ...AI_QUERY_OPTIONS,
+        staleTime: 120000, // 2 minutes
     });
 };
 
@@ -101,7 +204,7 @@ export const useDeepAnalysis = (symbol: string | null, model: string = 'auto') =
             return data;
         },
         enabled: false, // Manual trigger only - expensive LLM call
-        staleTime: 300000, // 5 minutes
+        ...AI_QUERY_OPTIONS,
     });
 };
 
@@ -113,7 +216,7 @@ export const usePortfolioAnalysis = (model: string = 'auto') => {
             return data;
         },
         enabled: false, // Manual trigger only - expensive LLM call
-        staleTime: 300000, // 5 minutes
+        ...AI_QUERY_OPTIONS,
     });
 };
 
@@ -154,7 +257,7 @@ export const useDashboardSummary = () => {
             const { data } = await axiosInstance.get('/dashboard/summary');
             return data;
         },
-        staleTime: 30000,
+        ...POLLING_QUERY_OPTIONS,
     });
 };
 
@@ -165,6 +268,7 @@ export const usePerformanceHistory = (period: string = '1M') => {
             const { data } = await axiosInstance.get(`/dashboard/performance?period=${period}`);
             return data;
         },
+        ...DEFAULT_QUERY_OPTIONS,
         staleTime: 300000, // 5 minutes
     });
 };
@@ -182,6 +286,8 @@ export const useResearch = (symbol: string | null) => {
             return data;
         },
         enabled: !!symbol,
+        ...DEFAULT_QUERY_OPTIONS,
+        staleTime: 300000, // 5 minutes
     });
 };
 
@@ -222,7 +328,11 @@ export const useLiveGames = () => {
             const { data } = await axiosInstance.get('/sports/live');
             return data;
         },
+        staleTime: 30000, // Data considered fresh for 30 seconds
         refetchInterval: 30000, // Poll every 30 seconds for live games
+        retry: 1, // Only retry once on failure
+        retryDelay: 5000, // Wait 5 seconds before retry
+        refetchOnWindowFocus: false, // Don't refetch on window focus to reduce requests
     });
 };
 
@@ -233,7 +343,8 @@ export const useUpcomingGames = (limit: number = 20) => {
             const { data } = await axiosInstance.get(`/sports/upcoming?limit=${limit}`);
             return data;
         },
-        staleTime: 60000,
+        ...DEFAULT_QUERY_OPTIONS,
+        staleTime: 60000, // 1 minute
     });
 };
 
@@ -247,6 +358,8 @@ export const useSportsMarkets = (marketType?: string, limit: number = 50) => {
             const { data } = await axiosInstance.get(`/sports/markets?${params.toString()}`);
             return data;
         },
+        ...DEFAULT_QUERY_OPTIONS,
+        staleTime: 60000, // 1 minute
     });
 };
 
@@ -257,7 +370,7 @@ export const useBestBets = () => {
             const { data } = await axiosInstance.get('/sports/best-bets');
             return data;
         },
-        staleTime: 300000,
+        ...AI_QUERY_OPTIONS,
     });
 };
 
@@ -331,7 +444,8 @@ export const useAgents = () => {
             const { data } = await axiosInstance.get('/agents');
             return data;
         },
-        staleTime: 300000,
+        ...DEFAULT_QUERY_OPTIONS,
+        staleTime: 300000, // 5 minutes - agent list doesn't change often
     });
 };
 
@@ -370,6 +484,8 @@ export const useConversations = () => {
             const { data } = await axiosInstance.get('/conversations');
             return data;
         },
+        ...DEFAULT_QUERY_OPTIONS,
+        staleTime: 60000, // 1 minute
     });
 };
 
@@ -384,6 +500,8 @@ export const useWatchlists = () => {
             const { data } = await axiosInstance.get('/watchlists');
             return data;
         },
+        ...DEFAULT_QUERY_OPTIONS,
+        staleTime: 120000, // 2 minutes
     });
 };
 
@@ -401,6 +519,8 @@ export const usePredictionMarkets = (sector?: string, limit: number = 50) => {
             const { data } = await axiosInstance.get(`/predictions/markets?${params.toString()}`);
             return data;
         },
+        ...DEFAULT_QUERY_OPTIONS,
+        staleTime: 60000, // 1 minute
     });
 };
 
@@ -415,7 +535,8 @@ export const useHealthCheck = () => {
             const { data } = await axiosInstance.get('/health');
             return data;
         },
-        refetchInterval: 60000,
+        ...POLLING_QUERY_OPTIONS,
+        refetchInterval: 60000, // Override to 60 seconds for health checks
     });
 };
 
@@ -430,7 +551,8 @@ export const useAdvancedRiskMetrics = () => {
             const { data } = await axiosInstance.get('/portfolio/analytics/risk');
             return data;
         },
-        staleTime: 120000, // 2 minutes (aligned with refetchInterval)
+        ...DEFAULT_QUERY_OPTIONS,
+        staleTime: 120000, // 2 minutes
         refetchInterval: 120000, // Refresh every 2 minutes
     });
 };
@@ -442,7 +564,8 @@ export const useProbabilityMetrics = () => {
             const { data } = await axiosInstance.get('/portfolio/analytics/probability');
             return data;
         },
-        staleTime: 60000,
+        ...DEFAULT_QUERY_OPTIONS,
+        staleTime: 60000, // 1 minute
     });
 };
 
@@ -455,6 +578,7 @@ export const useMultiAgentConsensus = (symbol: string | null) => {
             return data;
         },
         enabled: !!symbol,
+        ...AI_QUERY_OPTIONS,
         staleTime: 120000, // 2 minutes - AI analysis
     });
 };
@@ -466,7 +590,8 @@ export const usePositionAlerts = () => {
             const { data } = await axiosInstance.get('/portfolio/analytics/alerts');
             return data;
         },
-        staleTime: 60000, // 60 seconds - aligned with refetch
+        ...DEFAULT_QUERY_OPTIONS,
+        staleTime: 60000, // 60 seconds
         refetchInterval: 60000, // Check every minute
     });
 };
@@ -478,7 +603,8 @@ export const useAnalyticsDashboard = () => {
             const { data } = await axiosInstance.get('/portfolio/analytics/dashboard');
             return data;
         },
-        staleTime: 120000, // 2 minutes - aligned with refetch
+        ...DEFAULT_QUERY_OPTIONS,
+        staleTime: 120000, // 2 minutes
         refetchInterval: 120000, // Refresh every 2 minutes
     });
 };
@@ -493,7 +619,7 @@ export const useStreamingInsights = (enabled: boolean = false) => {
             return data;
         },
         enabled,
-        staleTime: 30000,
+        ...POLLING_QUERY_OPTIONS,
     });
 };
 
@@ -508,8 +634,7 @@ export const usePositionsV2 = (forceRefresh: boolean = false) => {
             const { data } = await axiosInstance.get(`/portfolio/v2/positions?force_refresh=${forceRefresh}`);
             return data;
         },
-        staleTime: 30000, // 30 seconds (matches backend cache TTL)
-        refetchInterval: 30000,
+        ...POLLING_QUERY_OPTIONS,
     });
 };
 
@@ -520,6 +645,7 @@ export const useEnrichedPositionsV2 = () => {
             const { data } = await axiosInstance.get('/portfolio/v2/positions/enriched');
             return data;
         },
+        ...DEFAULT_QUERY_OPTIONS,
         staleTime: 300000, // 5 minutes
     });
 };
@@ -546,8 +672,8 @@ export const useVaRAnalysis = (method: 'parametric' | 'monte_carlo' | 'both' = '
             const { data } = await axiosInstance.get(`/portfolio/v2/risk/var?method=${method}&simulations=${simulations}`);
             return data;
         },
-        staleTime: 300000, // 5 minutes - expensive calculation
         enabled: false, // Manual trigger
+        ...AI_QUERY_OPTIONS,
     });
 };
 
@@ -572,8 +698,8 @@ export const useStressTests = () => {
             const { data } = await axiosInstance.get('/portfolio/v2/risk/stress-test');
             return data;
         },
-        staleTime: 300000, // 5 minutes
         enabled: false, // Manual trigger
+        ...AI_QUERY_OPTIONS,
     });
 };
 
@@ -600,7 +726,8 @@ export const usePnLProjection = (underlyingMove: number = 0, ivChange: number = 
             );
             return data;
         },
-        staleTime: 60000,
+        ...DEFAULT_QUERY_OPTIONS,
+        staleTime: 60000, // 1 minute
     });
 };
 
@@ -612,7 +739,8 @@ export const useMaxLoss = () => {
             const { data } = await axiosInstance.get('/portfolio/v2/risk/max-loss');
             return data;
         },
-        staleTime: 300000,
+        ...DEFAULT_QUERY_OPTIONS,
+        staleTime: 300000, // 5 minutes
     });
 };
 
@@ -654,8 +782,8 @@ export const usePortfolioV2Health = () => {
             const { data } = await axiosInstance.get('/portfolio/v2/health');
             return data;
         },
-        staleTime: 30000,
-        refetchInterval: 60000,
+        ...POLLING_QUERY_OPTIONS,
+        refetchInterval: 60000, // Check health every 60 seconds
     });
 };
 
@@ -666,7 +794,7 @@ export const usePortfolioV2Metrics = () => {
             const { data } = await axiosInstance.get('/portfolio/v2/metrics');
             return data;
         },
-        staleTime: 30000,
+        ...POLLING_QUERY_OPTIONS,
     });
 };
 
@@ -686,45 +814,94 @@ export const useInvalidateCache = () => {
 };
 
 // WebSocket Hook for Real-Time Positions
-export const usePositionsWebSocket = (userId?: string) => {
+export const usePositionsWebSocket = (userId?: string, autoConnect: boolean = false) => {
     const queryClient = useQueryClient();
+    const wsRef = useRef<WebSocket | null>(null);
+    const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const [isConnected, setIsConnected] = useState(false);
 
-    return {
-        connect: () => {
-            const wsUrl = `ws://localhost:8002/api/portfolio/v2/ws/positions${userId ? `?user_id=${userId}` : ''}`;
-            const ws = new WebSocket(wsUrl);
+    const connect = useCallback(() => {
+        // Prevent duplicate connections
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+            return;
+        }
 
-            ws.onmessage = (event) => {
+        // Uses centralized config from @/config/api
+        const wsUrl = `${WS_API_URL}/portfolio/v2/ws/positions${userId ? `?user_id=${userId}` : ''}`;
+        const ws = new WebSocket(wsUrl);
+        wsRef.current = ws;
+
+        ws.onopen = () => {
+            setIsConnected(true);
+            console.debug('[WS] Positions WebSocket connected');
+        };
+
+        ws.onmessage = (event) => {
+            try {
                 const data = JSON.parse(event.data);
                 if (data.type === 'positions_update' || data.type === 'initial_positions') {
                     queryClient.setQueryData(['positions-v2', false], data.data);
                 }
-            };
+            } catch (e) {
+                console.error('[WS] Failed to parse message:', e);
+            }
+        };
 
-            ws.onerror = (error) => {
-                console.error('WebSocket error:', error);
-            };
+        ws.onerror = (error) => {
+            console.error('[WS] WebSocket error:', error);
+        };
 
-            // Send heartbeat every 25 seconds
-            const heartbeatInterval = setInterval(() => {
-                if (ws.readyState === WebSocket.OPEN) {
-                    ws.send('ping');
-                }
-            }, 25000);
+        ws.onclose = () => {
+            setIsConnected(false);
+            // Clear heartbeat on any close (normal or abnormal) to prevent memory leak
+            if (heartbeatRef.current) {
+                clearInterval(heartbeatRef.current);
+                heartbeatRef.current = null;
+            }
+            console.debug('[WS] Positions WebSocket disconnected');
+        };
 
-            return {
-                ws,
-                close: () => {
-                    clearInterval(heartbeatInterval);
-                    ws.close();
-                },
-                refresh: () => {
-                    if (ws.readyState === WebSocket.OPEN) {
-                        ws.send('refresh');
-                    }
-                }
-            };
+        // Send heartbeat every 25 seconds
+        heartbeatRef.current = setInterval(() => {
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send('ping');
+            }
+        }, 25000);
+    }, [userId, queryClient]);
+
+    const disconnect = useCallback(() => {
+        if (heartbeatRef.current) {
+            clearInterval(heartbeatRef.current);
+            heartbeatRef.current = null;
         }
+        if (wsRef.current) {
+            wsRef.current.close();
+            wsRef.current = null;
+        }
+        setIsConnected(false);
+    }, []);
+
+    const refresh = useCallback(() => {
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send('refresh');
+        }
+    }, []);
+
+    // Cleanup on unmount
+    useEffect(() => {
+        if (autoConnect) {
+            connect();
+        }
+        return () => {
+            disconnect();
+        };
+    }, [autoConnect, connect, disconnect]);
+
+    return {
+        connect,
+        disconnect,
+        refresh,
+        isConnected,
     };
 };
 
@@ -740,6 +917,7 @@ export const useAnomalyDetection = () => {
             const { data } = await axiosInstance.get('/portfolio/v2/ai/anomalies');
             return data;
         },
+        ...AI_QUERY_OPTIONS,
         staleTime: 120000, // 2 minutes
     });
 };
@@ -752,7 +930,8 @@ export const useRiskScore = () => {
             const { data } = await axiosInstance.get('/portfolio/v2/ai/risk-score');
             return data;
         },
-        staleTime: 120000,
+        ...AI_QUERY_OPTIONS,
+        staleTime: 120000, // 2 minutes
     });
 };
 
@@ -764,7 +943,7 @@ export const useAIRecommendations = (riskTolerance: 'conservative' | 'moderate' 
             const { data } = await axiosInstance.get(`/portfolio/v2/ai/recommendations?risk_tolerance=${riskTolerance}`);
             return data;
         },
-        staleTime: 300000, // 5 minutes
+        ...AI_QUERY_OPTIONS,
     });
 };
 
@@ -778,7 +957,7 @@ export const usePricePrediction = (symbol: string | null) => {
             return data;
         },
         enabled: !!symbol,
-        staleTime: 300000,
+        ...AI_QUERY_OPTIONS,
     });
 };
 
@@ -792,7 +971,7 @@ export const useTrendSignal = (symbol: string | null) => {
             return data;
         },
         enabled: !!symbol,
-        staleTime: 300000,
+        ...AI_QUERY_OPTIONS,
     });
 };
 
@@ -804,8 +983,8 @@ export const useComprehensiveAnalysis = (riskTolerance: 'conservative' | 'modera
             const { data } = await axiosInstance.get(`/portfolio/v2/ai/comprehensive?risk_tolerance=${riskTolerance}`);
             return data;
         },
-        staleTime: 300000, // 5 minutes - expensive calculation
         enabled: false, // Manual trigger recommended
+        ...AI_QUERY_OPTIONS,
     });
 };
 

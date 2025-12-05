@@ -52,7 +52,8 @@ from backend.infrastructure.websocket_manager import (
     get_ws_manager,
     get_position_broadcaster
 )
-from backend.infrastructure.async_db import get_async_db
+from backend.infrastructure.database import get_database
+from backend.infrastructure.errors import safe_internal_error
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +92,7 @@ async def get_positions_v2(
         )
     except Exception as e:
         logger.error(f"Error fetching positions: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "fetch positions")
 
 
 @router.get("/positions/enriched")
@@ -107,7 +108,7 @@ async def get_enriched_positions_v2(
         return await service.get_enriched_positions()
     except Exception as e:
         logger.error(f"Error fetching enriched positions: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "fetch enriched positions")
 
 
 @router.post("/positions/refresh")
@@ -471,7 +472,7 @@ async def get_health_status(
 
     # Database health
     try:
-        db = await get_async_db()
+        db = await get_database()
         db_health = await db.health_check()
     except Exception as e:
         db_health = {"healthy": False, "error": str(e)}
@@ -665,11 +666,11 @@ async def get_price_prediction(
         historical_prices = stock_data.historical_prices
         iv_estimate = stock_data.iv_estimate
     except ImportError:
-        raise HTTPException(status_code=500, detail="yfinance not available")
+        raise HTTPException(status_code=500, detail="Market data service unavailable")
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=f"Symbol not found: {symbol}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "fetch stock data")
 
     prediction = engine.predict_price(
         symbol=symbol.upper(),
@@ -710,11 +711,11 @@ async def get_trend_signal(
         stock_data = await yf_client.get_stock_data(symbol, period="3mo")
         historical_prices = stock_data.historical_prices
     except ImportError:
-        raise HTTPException(status_code=500, detail="yfinance not available")
+        raise HTTPException(status_code=500, detail="Market data service unavailable")
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=f"Symbol not found: {symbol}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "fetch trend data")
 
     signal = engine.get_trend_signal(
         symbol=symbol.upper(),
@@ -1023,7 +1024,7 @@ async def get_price_forecast(
         raise HTTPException(status_code=500, detail="yfinance not available")
     except Exception as e:
         logger.error(f"Forecast error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "price forecast")
 
 
 # =============================================================================
@@ -1079,7 +1080,7 @@ async def get_volatility_forecast(
         raise HTTPException(status_code=500, detail="yfinance not available")
     except Exception as e:
         logger.error(f"Volatility forecast error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "volatility forecast")
 
 
 @router.get("/forecast/vol-surface/{symbol}")
@@ -1113,7 +1114,7 @@ async def get_volatility_surface(
         raise HTTPException(status_code=500, detail="yfinance not available")
     except Exception as e:
         logger.error(f"Vol surface error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "volatility surface")
 
 
 @router.get("/ai/full-analysis/{symbol}")
@@ -1203,4 +1204,4 @@ async def get_full_symbol_analysis(
         raise HTTPException(status_code=500, detail="yfinance not available")
     except Exception as e:
         logger.error(f"Full analysis error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "full symbol analysis")

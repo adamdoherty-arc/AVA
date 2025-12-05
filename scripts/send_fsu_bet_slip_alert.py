@@ -27,8 +27,8 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Backend API base URL
-API_BASE = "http://localhost:8000"
+# Backend API base URL - uses centralized port 8002
+API_BASE = os.getenv("API_BASE_URL", "http://localhost:8002").rstrip("/api")
 
 
 def sync_ncaaf_games():

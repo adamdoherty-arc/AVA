@@ -7,16 +7,20 @@ OPTIMIZATIONS APPLIED:
 2. UNION queries for live/upcoming games (4x fewer queries)
 3. Batch predictions for AI analysis
 4. Query caching with proper TTLs
+
+MIGRATION STATUS:
+- Migrated from sync psycopg2 to async asyncpg
+- All database methods now use async/await pattern
+- Using AsyncDatabaseManager from infrastructure layer
 """
 
 from typing import List, Optional
-import logging
-from psycopg2.extras import RealDictCursor, execute_values
-from backend.database.connection import db_pool
+import structlog
+from backend.infrastructure.database import get_database, AsyncDatabaseManager
 from backend.models.market import Market
 from backend.config import settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 from src.nfl_db_manager import NFLDBManager
 from src.database.query_cache import query_cache
@@ -25,85 +29,101 @@ from src.prediction_agents.nba_predictor import NBAPredictor
 from src.prediction_agents.ncaa_predictor import NCAAPredictor
 from src.odds_api_client import TheOddsAPIClient
 import asyncio
+import threading
 from datetime import datetime
 
-# Singleton predictors for efficiency
+# Thread-safe singleton predictors
 _nfl_predictor = None
 _nba_predictor = None
 _ncaa_predictor = None
+_predictor_lock = threading.Lock()
+
 
 def get_nfl_predictor():
+    """Thread-safe singleton for NFL predictor."""
     global _nfl_predictor
     if _nfl_predictor is None:
-        _nfl_predictor = NFLPredictor()
+        with _predictor_lock:
+            # Double-checked locking pattern
+            if _nfl_predictor is None:
+                _nfl_predictor = NFLPredictor()
     return _nfl_predictor
 
+
 def get_nba_predictor():
+    """Thread-safe singleton for NBA predictor."""
     global _nba_predictor
     if _nba_predictor is None:
-        _nba_predictor = NBAPredictor()
+        with _predictor_lock:
+            if _nba_predictor is None:
+                _nba_predictor = NBAPredictor()
     return _nba_predictor
 
+
 def get_ncaa_predictor():
+    """Thread-safe singleton for NCAA predictor."""
     global _ncaa_predictor
     if _ncaa_predictor is None:
-        _ncaa_predictor = NCAAPredictor()
+        with _predictor_lock:
+            if _ncaa_predictor is None:
+                _ncaa_predictor = NCAAPredictor()
     return _ncaa_predictor
 
 class SportsService:
     def __init__(self) -> None:
         self.nfl_db = NFLDBManager()
 
-    def get_markets_with_predictions(self, market_type: Optional[str] = None, limit: int = 50) -> List[Market]:
+    async def get_markets_with_predictions(self, market_type: Optional[str] = None, limit: int = 50) -> List[Market]:
         """
         Get markets with AI predictions, ranked by opportunity.
         """
-        with db_pool.get_connection() as conn:
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                try:
-                    query = """
-                        SELECT
-                            m.id,
-                            m.ticker,
-                            m.title,
-                            m.market_type,
-                            m.home_team,
-                            m.away_team,
-                            m.game_date,
-                            m.yes_price,
-                            m.no_price,
-                            m.volume,
-                            m.close_time,
-                            p.predicted_outcome,
-                            p.confidence_score,
-                            p.edge_percentage,
-                            p.overall_rank,
-                            p.recommended_action,
-                            p.recommended_stake_pct,
-                            p.reasoning
-                        FROM kalshi_markets m
-                        LEFT JOIN kalshi_predictions p ON m.id = p.market_id
-                        WHERE m.status IN ('open', 'active')
-                    """
-                    
-                    params = []
-                    if market_type:
-                        query += " AND m.market_type = %s"
-                        params.append(market_type)
-                        
-                    query += " ORDER BY p.overall_rank ASC NULLS LAST LIMIT %s"
-                    params.append(limit)
-                    
-                    cur.execute(query, tuple(params))
-                    results = cur.fetchall()
-                    
-                    return [Market(**row) for row in results]
-                    
-                except Exception as e:
-                    logger.error(f"Error fetching markets: {e}")
-                    return []
+        db = await get_database()
+        try:
+            query = """
+                SELECT
+                    m.id,
+                    m.ticker,
+                    m.title,
+                    m.market_type,
+                    m.home_team,
+                    m.away_team,
+                    m.game_date,
+                    m.yes_price,
+                    m.no_price,
+                    m.volume,
+                    m.close_time,
+                    p.predicted_outcome,
+                    p.confidence_score,
+                    p.edge_percentage,
+                    p.overall_rank,
+                    p.recommended_action,
+                    p.recommended_stake_pct,
+                    p.reasoning
+                FROM kalshi_markets m
+                LEFT JOIN kalshi_predictions p ON m.id = p.market_id
+                WHERE m.status IN ('open', 'active')
+            """
 
-    def get_live_games(self) -> List[dict]:
+            params = []
+            param_count = 1
+
+            if market_type:
+                query += f" AND m.market_type = ${param_count}"
+                params.append(market_type)
+                param_count += 1
+
+            query += f" ORDER BY p.overall_rank ASC NULLS LAST LIMIT ${param_count}"
+            params.append(limit)
+
+            results = await db.fetch(query, *params)
+
+            return [Market(**dict(row)) for row in results]
+
+        except Exception as e:
+            logger.error("Error fetching markets", error=str(e))
+            return []
+
+    async def get_live_games(self) -> List[dict]:
         """Get all currently live games across ALL sports with AI predictions.
 
         Optimized:
@@ -117,74 +137,72 @@ class SportsService:
                 return cached
 
             normalized_games = []
+            db = await get_database()
 
-            with db_pool.get_connection() as conn:
-                with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                    try:
-                        cur.execute("""
-                            SELECT 'NFL' as league, game_id, home_team, away_team,
-                                   home_score, away_score, quarter, time_remaining,
-                                   moneyline_home, moneyline_away, spread_home, over_under,
-                                   NULL::int as home_rank, NULL::int as away_rank
-                            FROM nfl_games WHERE is_live = true
-                            UNION ALL
-                            SELECT 'NBA' as league, game_id, home_team, away_team,
-                                   home_score, away_score, quarter, time_remaining,
-                                   moneyline_home, moneyline_away, spread_home, over_under,
-                                   NULL::int as home_rank, NULL::int as away_rank
-                            FROM nba_games WHERE is_live = true
-                            UNION ALL
-                            SELECT 'NCAAF' as league, game_id, home_team, away_team,
-                                   home_score, away_score, quarter, time_remaining,
-                                   NULL::int as moneyline_home, NULL::int as moneyline_away,
-                                   spread_home, over_under, home_rank, away_rank
-                            FROM ncaa_football_games WHERE is_live = true
-                            UNION ALL
-                            SELECT 'NCAAB' as league, game_id, home_team, away_team,
-                                   home_score, away_score, half as quarter, time_remaining,
-                                   NULL::int as moneyline_home, NULL::int as moneyline_away,
-                                   spread_home, over_under, home_rank, away_rank
-                            FROM ncaa_basketball_games WHERE is_live = true
-                        """)
-                        all_live_games = cur.fetchall()
+            try:
+                all_live_games = await db.fetch("""
+                    SELECT 'NFL' as league, game_id, home_team, away_team,
+                           home_score, away_score, quarter, time_remaining,
+                           moneyline_home, moneyline_away, spread_home, over_under,
+                           NULL::int as home_rank, NULL::int as away_rank
+                    FROM nfl_games WHERE is_live = true
+                    UNION ALL
+                    SELECT 'NBA' as league, game_id, home_team, away_team,
+                           home_score, away_score, quarter, time_remaining,
+                           moneyline_home, moneyline_away, spread_home, over_under,
+                           NULL::int as home_rank, NULL::int as away_rank
+                    FROM nba_games WHERE is_live = true
+                    UNION ALL
+                    SELECT 'NCAAF' as league, game_id, home_team, away_team,
+                           home_score, away_score, quarter, time_remaining,
+                           NULL::int as moneyline_home, NULL::int as moneyline_away,
+                           spread_home, over_under, home_rank, away_rank
+                    FROM ncaa_football_games WHERE is_live = true
+                    UNION ALL
+                    SELECT 'NCAAB' as league, game_id, home_team, away_team,
+                           home_score, away_score, half as quarter, time_remaining,
+                           NULL::int as moneyline_home, NULL::int as moneyline_away,
+                           spread_home, over_under, home_rank, away_rank
+                    FROM ncaa_basketball_games WHERE is_live = true
+                """)
 
-                        # BATCH PREDICTIONS: Group games by league, then batch predict
-                        games_by_league = {'NFL': [], 'NBA': [], 'NCAAF': [], 'NCAAB': []}
-                        for game in all_live_games:
-                            games_by_league[game['league']].append(dict(game))
+                # BATCH PREDICTIONS: Group games by league, then batch predict
+                games_by_league = {'NFL': [], 'NBA': [], 'NCAAF': [], 'NCAAB': []}
+                for game in all_live_games:
+                    games_by_league[game['league']].append(dict(game))
 
-                        # Get batch predictions for each league
-                        predictions_by_game = {}
-                        for league, games in games_by_league.items():
-                            if not games:
-                                continue
-                            if league == 'NFL':
-                                predictor = get_nfl_predictor()
-                            elif league == 'NBA':
-                                predictor = get_nba_predictor()
-                            else:
-                                predictor = get_ncaa_predictor()
+                # Get batch predictions for each league
+                predictions_by_game = {}
+                for league, games in games_by_league.items():
+                    if not games:
+                        continue
+                    if league == 'NFL':
+                        predictor = get_nfl_predictor()
+                    elif league == 'NBA':
+                        predictor = get_nba_predictor()
+                    else:
+                        predictor = get_ncaa_predictor()
 
-                            batch_preds = predictor.predict_batch(games)
-                            predictions_by_game.update(batch_preds)
+                    batch_preds = predictor.predict_batch(games)
+                    predictions_by_game.update(batch_preds)
 
-                        # Normalize games with pre-computed predictions
-                        for game in all_live_games:
-                            league = game['league']
-                            game_id = game['game_id']
-                            prediction = predictions_by_game.get(game_id)
-                            normalized_games.append(
-                                self._normalize_game_with_prediction(game, league, prediction, is_live=True)
-                            )
-                    except Exception as e:
-                        logger.warning(f"Error fetching live games via UNION: {e}")
+                # Normalize games with pre-computed predictions
+                for game in all_live_games:
+                    league = game['league']
+                    game_id = game['game_id']
+                    prediction = predictions_by_game.get(game_id)
+                    normalized_games.append(
+                        self._normalize_game_with_prediction(game, league, prediction, is_live=True)
+                    )
+            except Exception as e:
+                logger.warning("Error fetching live games via UNION", error=str(e))
 
             # Cache for 30 seconds
             query_cache.set('live_games_all', normalized_games, ttl_seconds=30)
             return normalized_games
 
         except Exception as e:
-            logger.error(f"Error getting live games: {e}")
+            logger.error("Error getting live games", error=str(e))
             return []
 
     def _normalize_game(self, game: dict, league: str, predictor, is_live: bool = False) -> dict:
@@ -227,7 +245,7 @@ class SportsService:
                     'reasoning': prediction.get('explanation', 'AI model prediction')[:150]
                 }
         except Exception as e:
-            logger.warning(f"Error getting prediction for {home_team} vs {away_team}: {e}")
+            logger.warning(f"Error getting prediction for {home_team} vs {away_team}", error=str(e))
 
         # Format game time
         if is_live:
@@ -353,7 +371,7 @@ class SportsService:
             'ai_prediction': ai_prediction
         }
 
-    def get_upcoming_games(self, limit: int = 10) -> List[dict]:
+    async def get_upcoming_games(self, limit: int = 10) -> List[dict]:
         """Get upcoming games across ALL sports with odds and AI predictions.
 
         Optimized: Uses single UNION query instead of 4 separate queries for 4x efficiency.
@@ -367,73 +385,72 @@ class SportsService:
             # Limit per sport to ensure fair distribution
             per_sport_limit = max(5, limit // 2)
 
-            with db_pool.get_connection() as conn:
-                with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                    # OPTIMIZED: Single UNION query instead of 4 separate queries
-                    try:
-                        cur.execute("""
-                            (SELECT 'NFL' as league, game_id, home_team, away_team, game_time,
-                                    moneyline_home, moneyline_away, spread_home, over_under,
-                                    NULL::int as home_rank, NULL::int as away_rank
-                             FROM nfl_games
-                             WHERE game_status = 'scheduled' AND game_time > NOW()
-                             ORDER BY game_time LIMIT %s)
-                            UNION ALL
-                            (SELECT 'NBA' as league, game_id, home_team, away_team, game_time,
-                                    moneyline_home, moneyline_away, spread_home, over_under,
-                                    NULL::int as home_rank, NULL::int as away_rank
-                             FROM nba_games
-                             WHERE game_status = 'scheduled' AND game_time > NOW()
-                             ORDER BY game_time LIMIT %s)
-                            UNION ALL
-                            (SELECT 'NCAAF' as league, game_id, home_team, away_team, game_time,
-                                    NULL::int as moneyline_home, NULL::int as moneyline_away,
-                                    spread_home, over_under, home_rank, away_rank
-                             FROM ncaa_football_games
-                             WHERE game_status = 'scheduled' AND game_time > NOW()
-                             ORDER BY game_time LIMIT %s)
-                            UNION ALL
-                            (SELECT 'NCAAB' as league, game_id, home_team, away_team, game_time,
-                                    NULL::int as moneyline_home, NULL::int as moneyline_away,
-                                    spread_home, over_under, home_rank, away_rank
-                             FROM ncaa_basketball_games
-                             WHERE game_status = 'scheduled' AND game_time > NOW()
-                             ORDER BY game_time LIMIT %s)
-                            ORDER BY game_time
-                        """, (per_sport_limit, per_sport_limit, per_sport_limit, per_sport_limit))
-                        all_upcoming_games = cur.fetchall()
+            db = await get_database()
 
-                        # BATCH PREDICTIONS: Group by league, then batch predict
-                        games_by_league = {'NFL': [], 'NBA': [], 'NCAAF': [], 'NCAAB': []}
-                        for game in all_upcoming_games:
-                            games_by_league[game['league']].append(dict(game))
+            # OPTIMIZED: Single UNION query instead of 4 separate queries
+            try:
+                all_upcoming_games = await db.fetch("""
+                    (SELECT 'NFL' as league, game_id, home_team, away_team, game_time,
+                            moneyline_home, moneyline_away, spread_home, over_under,
+                            NULL::int as home_rank, NULL::int as away_rank
+                     FROM nfl_games
+                     WHERE game_status = 'scheduled' AND game_time > NOW()
+                     ORDER BY game_time LIMIT $1)
+                    UNION ALL
+                    (SELECT 'NBA' as league, game_id, home_team, away_team, game_time,
+                            moneyline_home, moneyline_away, spread_home, over_under,
+                            NULL::int as home_rank, NULL::int as away_rank
+                     FROM nba_games
+                     WHERE game_status = 'scheduled' AND game_time > NOW()
+                     ORDER BY game_time LIMIT $2)
+                    UNION ALL
+                    (SELECT 'NCAAF' as league, game_id, home_team, away_team, game_time,
+                            NULL::int as moneyline_home, NULL::int as moneyline_away,
+                            spread_home, over_under, home_rank, away_rank
+                     FROM ncaa_football_games
+                     WHERE game_status = 'scheduled' AND game_time > NOW()
+                     ORDER BY game_time LIMIT $3)
+                    UNION ALL
+                    (SELECT 'NCAAB' as league, game_id, home_team, away_team, game_time,
+                            NULL::int as moneyline_home, NULL::int as moneyline_away,
+                            spread_home, over_under, home_rank, away_rank
+                     FROM ncaa_basketball_games
+                     WHERE game_status = 'scheduled' AND game_time > NOW()
+                     ORDER BY game_time LIMIT $4)
+                    ORDER BY game_time
+                """, per_sport_limit, per_sport_limit, per_sport_limit, per_sport_limit)
 
-                        predictions_by_game = {}
-                        for league, games in games_by_league.items():
-                            if not games:
-                                continue
-                            if league == 'NFL':
-                                predictor = get_nfl_predictor()
-                            elif league == 'NBA':
-                                predictor = get_nba_predictor()
-                            else:
-                                predictor = get_ncaa_predictor()
+                # BATCH PREDICTIONS: Group by league, then batch predict
+                games_by_league = {'NFL': [], 'NBA': [], 'NCAAF': [], 'NCAAB': []}
+                for game in all_upcoming_games:
+                    games_by_league[game['league']].append(dict(game))
 
-                            batch_preds = predictor.predict_batch(games)
-                            predictions_by_game.update(batch_preds)
+                predictions_by_game = {}
+                for league, games in games_by_league.items():
+                    if not games:
+                        continue
+                    if league == 'NFL':
+                        predictor = get_nfl_predictor()
+                    elif league == 'NBA':
+                        predictor = get_nba_predictor()
+                    else:
+                        predictor = get_ncaa_predictor()
 
-                        # Normalize with pre-computed predictions
-                        for game in all_upcoming_games:
-                            league = game['league']
-                            game_id = game['game_id']
-                            prediction = predictions_by_game.get(game_id)
-                            normalized_games.append(
-                                self._normalize_game_with_prediction(
-                                    game, league, prediction, is_live=False
-                                )
-                            )
-                    except Exception as e:
-                        logger.warning(f"Error fetching upcoming games via UNION: {e}")
+                    batch_preds = predictor.predict_batch(games)
+                    predictions_by_game.update(batch_preds)
+
+                # Normalize with pre-computed predictions
+                for game in all_upcoming_games:
+                    league = game['league']
+                    game_id = game['game_id']
+                    prediction = predictions_by_game.get(game_id)
+                    normalized_games.append(
+                        self._normalize_game_with_prediction(
+                            game, league, prediction, is_live=False
+                        )
+                    )
+            except Exception as e:
+                logger.warning("Error fetching upcoming games via UNION", error=str(e))
 
             # Already sorted by game_time in SQL
             # Limit total results
@@ -443,7 +460,7 @@ class SportsService:
             return normalized_games
 
         except Exception as e:
-            logger.error(f"Error getting upcoming games: {e}")
+            logger.error("Error getting upcoming games", error=str(e))
             return []
 
     async def sync_odds_from_api(self, sports: List[str] = None) -> dict:
@@ -529,65 +546,82 @@ class SportsService:
                         }
                         continue
 
-                    # Execute BATCH UPDATE with CTE
-                    with db_pool.get_connection() as conn:
-                        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                            try:
-                                # Use execute_values for efficient batch insert
-                                # into temp table, then UPDATE FROM
-                                batch_query = f"""
-                                    WITH odds_updates AS (
-                                        SELECT * FROM (
-                                            VALUES %s
-                                        ) AS t(
-                                            ml_home, ml_away, spread,
-                                            spread_odds_h, spread_odds_a,
-                                            total, over_o, under_o,
-                                            home_pat, away_pat
-                                        )
-                                    )
-                                    UPDATE {table} g
-                                    SET
-                                        moneyline_home = COALESCE(
-                                            u.ml_home::int, g.moneyline_home
-                                        ),
-                                        moneyline_away = COALESCE(
-                                            u.ml_away::int, g.moneyline_away
-                                        ),
-                                        spread_home = COALESCE(
-                                            u.spread::numeric, g.spread_home
-                                        ),
-                                        spread_odds_home = COALESCE(
-                                            u.spread_odds_h::int, g.spread_odds_home
-                                        ),
-                                        spread_odds_away = COALESCE(
-                                            u.spread_odds_a::int, g.spread_odds_away
-                                        ),
-                                        over_under = COALESCE(
-                                            u.total::numeric, g.over_under
-                                        ),
-                                        over_odds = COALESCE(
-                                            u.over_o::int, g.over_odds
-                                        ),
-                                        under_odds = COALESCE(
-                                            u.under_o::int, g.under_odds
-                                        ),
-                                        last_synced = NOW()
-                                    FROM odds_updates u
-                                    WHERE g.game_status = 'scheduled'
-                                      AND LOWER(g.home_team) LIKE u.home_pat
-                                      AND LOWER(g.away_team) LIKE u.away_pat
-                                """
-                                execute_values(cur, batch_query, batch_data)
-                                updated = cur.rowcount
-                                conn.commit()
-                                logger.info(
-                                    f"Batch updated {updated} {sport} games"
+                    # Execute BATCH UPDATE with unnest for asyncpg compatibility
+                    db = await get_database()
+                    try:
+                        # asyncpg doesn't support execute_values, so we use unnest with arrays
+                        query = f"""
+                            WITH odds_updates AS (
+                                SELECT * FROM unnest(
+                                    $1::int[], $2::int[], $3::numeric[], $4::int[], $5::int[],
+                                    $6::numeric[], $7::int[], $8::int[], $9::text[], $10::text[]
+                                ) AS t(
+                                    ml_home, ml_away, spread,
+                                    spread_odds_h, spread_odds_a,
+                                    total, over_o, under_o,
+                                    home_pat, away_pat
                                 )
-                            except Exception as e:
-                                logger.error(f"Batch update failed: {e}")
-                                result['totals']['errors'] += 1
-                                conn.rollback()
+                            )
+                            UPDATE {table} g
+                            SET
+                                moneyline_home = COALESCE(
+                                    u.ml_home, g.moneyline_home
+                                ),
+                                moneyline_away = COALESCE(
+                                    u.ml_away, g.moneyline_away
+                                ),
+                                spread_home = COALESCE(
+                                    u.spread, g.spread_home
+                                ),
+                                spread_odds_home = COALESCE(
+                                    u.spread_odds_h, g.spread_odds_home
+                                ),
+                                spread_odds_away = COALESCE(
+                                    u.spread_odds_a, g.spread_odds_away
+                                ),
+                                over_under = COALESCE(
+                                    u.total, g.over_under
+                                ),
+                                over_odds = COALESCE(
+                                    u.over_o, g.over_odds
+                                ),
+                                under_odds = COALESCE(
+                                    u.under_o, g.under_odds
+                                ),
+                                last_synced = NOW()
+                            FROM odds_updates u
+                            WHERE g.game_status = 'scheduled'
+                              AND LOWER(g.home_team) LIKE u.home_pat
+                              AND LOWER(g.away_team) LIKE u.away_pat
+                        """
+
+                        # Transpose batch_data into column arrays
+                        ml_home_arr = [d[0] for d in batch_data]
+                        ml_away_arr = [d[1] for d in batch_data]
+                        spread_arr = [d[2] for d in batch_data]
+                        spread_h_arr = [d[3] for d in batch_data]
+                        spread_a_arr = [d[4] for d in batch_data]
+                        total_arr = [d[5] for d in batch_data]
+                        over_arr = [d[6] for d in batch_data]
+                        under_arr = [d[7] for d in batch_data]
+                        home_pat_arr = [d[8] for d in batch_data]
+                        away_pat_arr = [d[9] for d in batch_data]
+
+                        updated = await db.execute(
+                            query,
+                            ml_home_arr, ml_away_arr, spread_arr, spread_h_arr, spread_a_arr,
+                            total_arr, over_arr, under_arr, home_pat_arr, away_pat_arr
+                        )
+                        # Parse "UPDATE N" response to get count
+                        if isinstance(updated, str) and updated.startswith('UPDATE'):
+                            updated = int(updated.split()[1])
+                        else:
+                            updated = 0
+
+                        logger.info(f"Batch updated {updated} {sport} games")
+                    except Exception as e:
+                        logger.error("Batch update failed", error=str(e))
+                        result['totals']['errors'] += 1
 
                     result['sports'][sport] = {
                         'fetched': len(odds_data),
@@ -598,7 +632,7 @@ class SportsService:
                     result['totals']['skipped'] += skipped
 
                 except Exception as e:
-                    logger.error(f"Error syncing {sport} odds: {e}")
+                    logger.error(f"Error syncing {sport} odds", error=str(e))
                     result['sports'][sport] = {'error': str(e)}
                     result['totals']['errors'] += 1
 
@@ -610,11 +644,11 @@ class SportsService:
             # Clear relevant caches
             query_cache.invalidate()
 
-            logger.info(f"Odds sync complete: {result['totals']}")
+            logger.info("Odds sync complete", totals=result['totals'])
             return result
 
         except Exception as e:
-            logger.error(f"Failed to sync odds: {e}")
+            logger.error("Failed to sync odds", error=str(e))
             return {
                 'success': False,
                 'error': str(e),

@@ -133,7 +133,7 @@ class AccomplishmentsTracker:
             "is_currently_running": False,
             "last_run": summary.timestamp,
             "last_run_id": summary.run_id,
-            "next_run": (datetime.now() + timedelta(minutes=20)).isoformat(),
+            "next_run": (datetime.now() + timedelta(minutes=10)).isoformat(),
             "current_cycle": self._get_cycle_count() + 1,
             "last_accomplishments_count": summary.issues_fixed,
             "health_score": summary.health_score_after,

@@ -27,7 +27,7 @@ class PredictionTracker:
             "postgresql://postgres:postgres@localhost:5432/magnus"
         )
 
-    def _get_connection(self):
+    def _get_connection(self) -> None:
         """Get database connection"""
         return psycopg2.connect(self.db_url, cursor_factory=RealDictCursor)
 

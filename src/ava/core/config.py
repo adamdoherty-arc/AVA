@@ -383,7 +383,7 @@ class AVAConfig:
         print(config.risk.max_portfolio_delta)
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.api = APISettings()
         self.market_hours = MarketHoursSettings()
         self.strategy = StrategySettings()

@@ -87,25 +87,25 @@ def _fetch_all_upcoming_games_unified(sport_list: list, limit: int = 50) -> list
         # Each sport uses a safe, hardcoded table name from the whitelist
         if sport_upper in ['NFL', 'NBA']:
             union_parts.append(f"""
-                SELECT game_id, '{sport_upper}' as sport, home_team, away_team, game_time,
+                (SELECT game_id, '{sport_upper}' as sport, home_team, away_team, game_time,
                        spread_home, over_under, moneyline_home, moneyline_away,
                        NULL::integer as home_rank, NULL::integer as away_rank
                 FROM {table}
                 WHERE game_time > NOW() AND game_time < NOW() + INTERVAL '7 days'
                   AND game_status = 'scheduled'
                 ORDER BY game_time
-                LIMIT {int(limit)}
+                LIMIT {int(limit)})
             """)
         else:  # NCAA sports have ranking columns
             union_parts.append(f"""
-                SELECT game_id, '{sport_upper}' as sport, home_team, away_team, game_time,
+                (SELECT game_id, '{sport_upper}' as sport, home_team, away_team, game_time,
                        spread_home, over_under, moneyline_home, moneyline_away,
                        home_rank, away_rank
                 FROM {table}
                 WHERE game_time > NOW() AND game_time < NOW() + INTERVAL '7 days'
                   AND game_status = 'scheduled'
                 ORDER BY game_time
-                LIMIT {int(limit)}
+                LIMIT {int(limit)})
             """)
 
     if not union_parts:
@@ -1747,22 +1747,22 @@ async def get_all_sports_data(
     OPTIMIZED: Uses asyncio.gather() for true parallel fetching of all data sources.
     """
     import asyncio
-    from concurrent.futures import ThreadPoolExecutor
 
     try:
-        # Create thread pool for sync operations
-        executor = ThreadPoolExecutor(max_workers=3)
-        loop = asyncio.get_event_loop()
-
-        # OPTIMIZED: Run all data fetches in parallel using asyncio.gather()
+        # OPTIMIZED: Run all async data fetches in parallel using asyncio.gather()
         async def fetch_live():
-            return await loop.run_in_executor(executor, sports_service.get_live_games)
+            try:
+                return await sports_service.get_live_games()
+            except Exception as e:
+                logger.warning(f"Error fetching live games: {e}")
+                return []
 
         async def fetch_upcoming():
-            return await loop.run_in_executor(
-                executor,
-                lambda: sports_service.get_upcoming_games(limit=limit)
-            )
+            try:
+                return await sports_service.get_upcoming_games(limit=limit)
+            except Exception as e:
+                logger.warning(f"Error fetching upcoming games: {e}")
+                return []
 
         async def fetch_best_bets():
             try:

@@ -37,6 +37,7 @@ from backend.services.ai_sports_predictor import (
     get_best_bets as get_best_bets_from_predictor,
 )
 from backend.infrastructure.cache import get_cache
+from backend.infrastructure.errors import safe_internal_error
 
 logger = logging.getLogger(__name__)
 
@@ -179,7 +180,7 @@ async def get_live_games(
         return [_game_to_response(game) for game in games]
     except Exception as e:
         logger.error(f"Error fetching live games: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "fetch live games")
 
 
 @router.get("/games/upcoming", response_model=List[GameResponse])
@@ -201,7 +202,7 @@ async def get_upcoming_games(
         return [_game_to_response(game) for game in games]
     except Exception as e:
         logger.error(f"Error fetching upcoming games: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "fetch upcoming games")
 
 
 @router.get("/games/with-odds", response_model=List[GameResponse])
@@ -221,7 +222,7 @@ async def get_games_with_odds(
         return [_game_to_response(game) for game in games]
     except Exception as e:
         logger.error(f"Error fetching games with odds: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "fetch games with odds")
 
 
 @router.get("/predict/{sport}/{game_id}", response_model=PredictionResponse)
@@ -250,7 +251,7 @@ async def get_prediction(
         raise
     except Exception as e:
         logger.error(f"Error getting prediction: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "get game prediction")
 
 
 @router.get("/best-bets", response_model=BestBetsResponse)
@@ -370,7 +371,7 @@ async def get_best_bets_v2(
 
     except Exception as e:
         logger.error(f"Error getting best bets: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "get best bets")
 
 
 @router.get("/stats")
@@ -389,7 +390,7 @@ async def get_stats(
         }
     except Exception as e:
         logger.error(f"Error getting stats: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "get game stats")
 
 
 @router.post("/cache/clear")
@@ -413,7 +414,7 @@ async def clear_cache():
         }
     except Exception as e:
         logger.error(f"Error clearing cache: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "clear sports cache")
 
 
 # =============================================================================

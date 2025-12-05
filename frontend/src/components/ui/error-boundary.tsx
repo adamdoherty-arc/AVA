@@ -111,7 +111,7 @@ export class ErrorBoundary extends React.Component<
             </Button>
           </div>
 
-          {process.env.NODE_ENV === "development" && this.state.errorInfo && (
+          {import.meta.env.DEV && this.state.errorInfo && (
             <details className="mt-4 p-4 bg-muted rounded-md w-full max-w-2xl overflow-auto">
               <summary className="text-sm font-medium cursor-pointer">
                 Error Details (Development Only)
@@ -152,7 +152,7 @@ export class StreamingErrorBoundary extends React.Component<
   StreamingErrorBoundaryProps,
   StreamingErrorBoundaryState
 > {
-  private retryTimeout: NodeJS.Timeout | null = null
+  private retryTimeout: ReturnType<typeof setTimeout> | null = null
 
   constructor(props: StreamingErrorBoundaryProps) {
     super(props)

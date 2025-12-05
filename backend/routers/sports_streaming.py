@@ -86,33 +86,37 @@ async def _stream_ai_prediction(
         })
         await asyncio.sleep(0.3)
 
-        # Fetch game data from database
-        import psycopg2
-        from psycopg2.extras import RealDictCursor
-        import os
-
-        db_url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/magnus")
+        # Fetch game data from database using async pool
+        from backend.infrastructure.database import get_database
         game_data = None
 
         try:
-            conn = psycopg2.connect(db_url, cursor_factory=RealDictCursor)
-            with conn.cursor() as cur:
-                # Try each sport table
-                tables = {
-                    "NFL": "nfl_games",
-                    "NBA": "nba_games",
-                    "NCAAF": "ncaa_football_games",
-                    "NCAAB": "ncaa_basketball_games"
-                }
-                table = tables.get(sport.upper(), "nfl_games")
-
-                cur.execute(f"""
-                    SELECT * FROM {table}
-                    WHERE game_id = %s
-                    LIMIT 1
-                """, (game_id,))
-                game_data = cur.fetchone()
-            conn.close()
+            db = await get_database()
+            # Use explicit queries for each sport table - no dynamic SQL
+            sport_upper = sport.upper()
+            if sport_upper == "NFL":
+                game_data = await db.fetchrow(
+                    "SELECT * FROM nfl_games WHERE game_id = $1 LIMIT 1", game_id
+                )
+            elif sport_upper == "NBA":
+                game_data = await db.fetchrow(
+                    "SELECT * FROM nba_games WHERE game_id = $1 LIMIT 1", game_id
+                )
+            elif sport_upper == "NCAAF":
+                game_data = await db.fetchrow(
+                    "SELECT * FROM ncaa_football_games WHERE game_id = $1 LIMIT 1", game_id
+                )
+            elif sport_upper == "NCAAB":
+                game_data = await db.fetchrow(
+                    "SELECT * FROM ncaa_basketball_games WHERE game_id = $1 LIMIT 1", game_id
+                )
+            else:
+                game_data = await db.fetchrow(
+                    "SELECT * FROM nfl_games WHERE game_id = $1 LIMIT 1", game_id
+                )
+            # Convert to dict for compatibility
+            if game_data:
+                game_data = dict(game_data)
         except Exception as e:
             logger.warning(f"Database fetch error: {e}")
 
@@ -136,7 +140,8 @@ async def _stream_ai_prediction(
             prediction = predictor.predict_winner(home_team, away_team)
             home_prob = prediction.get("home_win_prob", 0.5)
             confidence = prediction.get("confidence", "medium")
-        except:
+        except Exception as e:
+            logger.warning(f"Prediction failed for {home_team} vs {away_team}: {e}")
             home_prob = 0.55
             confidence = "medium"
 

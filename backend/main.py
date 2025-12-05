@@ -64,7 +64,11 @@ from backend.routers import (
     # Master Orchestrator - Feature specs and codebase intelligence
     orchestrator,
     # Stocks Tile Hub - AI-scored stock tiles
-    stocks_tiles
+    stocks_tiles,
+    # DeepSeek R1 32B Deep Reasoning API
+    reasoning,
+    # Stock Universe - Complete stock/ETF database
+    universe
 )
 
 # Initialize observability early
@@ -73,6 +77,133 @@ logger = get_logger(__name__)
 
 # Background task references for cleanup
 _background_tasks = []
+_task_restart_counts: dict = {}  # Track restart counts per task
+MAX_TASK_RESTARTS = 5  # Maximum restarts before giving up
+
+
+async def resilient_task_wrapper(task_name: str, task_func, *args, **kwargs):
+    """
+    Wrapper that makes background tasks resilient with auto-restart.
+
+    Features:
+    - Automatic restart on failure with exponential backoff
+    - Maximum restart limit to prevent infinite loops
+    - Detailed logging of failures and restarts
+    """
+    global _task_restart_counts
+    _task_restart_counts[task_name] = 0
+    backoff_seconds = 60  # Start with 1 minute
+
+    while _task_restart_counts[task_name] < MAX_TASK_RESTARTS:
+        try:
+            await task_func(*args, **kwargs)
+            # If task completes normally (shouldn't happen for long-running tasks)
+            break
+        except asyncio.CancelledError:
+            logger.info(f"resilient_task_cancelled", task=task_name)
+            break
+        except Exception as e:
+            _task_restart_counts[task_name] += 1
+            logger.error(
+                "resilient_task_failed",
+                task=task_name,
+                error=str(e),
+                restart_count=_task_restart_counts[task_name],
+                max_restarts=MAX_TASK_RESTARTS
+            )
+
+            if _task_restart_counts[task_name] >= MAX_TASK_RESTARTS:
+                logger.critical(
+                    "resilient_task_max_restarts_reached",
+                    task=task_name,
+                    message="Task will not be restarted"
+                )
+                break
+
+            # Exponential backoff with cap at 30 minutes
+            wait_time = min(backoff_seconds * (2 ** (_task_restart_counts[task_name] - 1)), 1800)
+            logger.info(
+                "resilient_task_restarting",
+                task=task_name,
+                wait_seconds=wait_time
+            )
+
+            # Use cancellable sleep to allow clean shutdown
+            try:
+                await asyncio.sleep(wait_time)
+            except asyncio.CancelledError:
+                logger.info("resilient_task_sleep_cancelled", task=task_name)
+                raise  # Re-raise to exit the wrapper properly
+
+
+async def periodic_cache_cleanup():
+    """
+    Background task to periodically clean up unused cache locks.
+    Runs every 5 minutes to prevent memory leaks.
+    """
+    from backend.infrastructure.cache import get_cache
+
+    while True:
+        try:
+            await asyncio.sleep(300)  # Run every 5 minutes
+            cache = get_cache()
+            if hasattr(cache, '_lock_manager'):
+                removed = await cache._lock_manager.cleanup_unused()
+                if removed > 0:
+                    logger.info("cache_locks_cleaned", count=removed)
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error("cache_cleanup_error", error=str(e))
+
+
+async def periodic_rag_sync():
+    """
+    Background task to sync RAG knowledge base.
+    Runs every hour to keep knowledge base updated with:
+    - Earnings transcripts
+    - Discord premium signals
+    - XTrades trader messages
+    - News articles
+    """
+    # Wait 2 minutes before first sync to let other services initialize
+    await asyncio.sleep(120)
+
+    while True:
+        try:
+            logger.info("rag_sync_starting")
+
+            # Run sync in thread pool since RAG service uses blocking I/O
+            def sync_rag():
+                from src.rag.rag_service import get_rag_service
+                rag = get_rag_service()
+                return rag.sync_from_database("all")
+
+            stats = await asyncio.get_event_loop().run_in_executor(None, sync_rag)
+
+            total = (stats['earnings_synced'] + stats['discord_synced'] +
+                    stats['xtrades_synced'] + stats['news_synced'])
+
+            logger.info(
+                "rag_sync_complete",
+                total_synced=total,
+                earnings=stats['earnings_synced'],
+                discord=stats['discord_synced'],
+                xtrades=stats['xtrades_synced'],
+                news=stats['news_synced'],
+                errors=len(stats.get('errors', []))
+            )
+
+            # Run every hour
+            await asyncio.sleep(3600)
+
+        except asyncio.CancelledError:
+            logger.info("rag_sync_cancelled")
+            break
+        except Exception as e:
+            logger.error("rag_sync_error", error=str(e))
+            # Wait 15 minutes before retry on error
+            await asyncio.sleep(900)
 
 
 async def auto_sync_earnings():
@@ -85,13 +216,14 @@ async def auto_sync_earnings():
 
     This ensures earnings data is always fresh when users access the platform.
     """
-    from backend.routers.earnings import EarningsService
+    from src.earnings_manager import EarningsManager
 
     # Initial sync on startup
     try:
         logger.info("Auto-sync: Running initial earnings sync...")
-        service = EarningsService()
-        await service.sync_earnings()
+        manager = EarningsManager()
+        # Run sync in thread pool since EarningsManager is synchronous
+        await asyncio.to_thread(manager.sync_finnhub_earnings)
         logger.info("Auto-sync: Initial earnings sync complete")
     except Exception as e:
         logger.error(f"Auto-sync: Initial earnings sync failed: {e}")
@@ -117,8 +249,8 @@ async def auto_sync_earnings():
 
             # Run sync
             logger.info("Auto-sync: Running scheduled earnings sync...")
-            service = EarningsService()
-            await service.sync_earnings()
+            manager = EarningsManager()
+            await asyncio.to_thread(manager.sync_finnhub_earnings)
             logger.info("Auto-sync: Scheduled earnings sync complete")
 
         except asyncio.CancelledError:
@@ -245,6 +377,9 @@ async def lifespan(app: FastAPI):
             pool_size=db_stats["pool_stats"]["size"],
             max_size=db_stats["pool_stats"]["max_size"],
         )
+        # Warmup connection pool to prevent cold-start latency
+        warmed = await db.warmup_pool()
+        logger.info("database_pool_warmed", connections=warmed)
     except Exception as e:
         logger.error("database_initialization_failed", error=str(e))
         # Continue - some features may work without DB
@@ -263,14 +398,38 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error("cache_initialization_failed", error=str(e))
 
-    # Start background sync tasks
+    # Start background sync tasks with resilient wrappers
     logger.info("background_tasks_starting")
+    global _background_tasks
     _background_tasks = [
-        asyncio.create_task(auto_sync_earnings(), name="earnings_sync"),
-        asyncio.create_task(auto_sync_espn_games(), name="espn_games_sync"),
-        asyncio.create_task(auto_sync_sports_odds(), name="sports_odds_sync"),
+        asyncio.create_task(
+            resilient_task_wrapper("earnings_sync", auto_sync_earnings),
+            name="earnings_sync"
+        ),
+        asyncio.create_task(
+            resilient_task_wrapper("espn_games_sync", auto_sync_espn_games),
+            name="espn_games_sync"
+        ),
+        asyncio.create_task(
+            resilient_task_wrapper("sports_odds_sync", auto_sync_sports_odds),
+            name="sports_odds_sync"
+        ),
+        asyncio.create_task(periodic_cache_cleanup(), name="cache_cleanup"),
+        asyncio.create_task(
+            resilient_task_wrapper("rag_knowledge_sync", periodic_rag_sync),
+            name="rag_knowledge_sync"
+        ),
     ]
     logger.info("background_tasks_started", count=len(_background_tasks))
+
+    # Start positions sync service (30-minute Robinhood sync for non-blocking UI)
+    try:
+        from backend.services.positions_sync_service import start_positions_sync_service
+        await start_positions_sync_service()
+        logger.info("positions_sync_service_started")
+    except Exception as e:
+        logger.error("positions_sync_service_failed", error=str(e))
+        # Continue - positions will fall back to live API
 
     logger.info("ava_platform_ready")
 
@@ -280,6 +439,14 @@ async def lifespan(app: FastAPI):
     # SHUTDOWN
     # ==========================================================================
     logger.info("ava_platform_shutting_down")
+
+    # Stop positions sync service
+    try:
+        from backend.services.positions_sync_service import stop_positions_sync_service
+        await stop_positions_sync_service()
+        logger.info("positions_sync_service_stopped")
+    except Exception as e:
+        logger.warning("positions_sync_service_stop_error", error=str(e))
 
     # Cancel background tasks gracefully
     for task in _background_tasks:
@@ -317,28 +484,60 @@ app = FastAPI(
 # GZip compression for responses > 1KB
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-# CORS Configuration
+# CORS Configuration - Uses centralized config from backend/config.py
+# Origins are defined in app_settings.CORS_ORIGINS and parsed by cors_origins_list
 app.add_middleware(
     CORSMiddleware,
     allow_origins=app_settings.cors_origins_list,
     allow_credentials=app_settings.CORS_ALLOW_CREDENTIALS,
-    allow_methods=["*"],  # Allow all methods
-    allow_headers=["*"],  # Allow all headers
+    # Security: Use explicit methods from config instead of wildcard
+    allow_methods=app_settings.cors_methods_list,
+    # Security: Use explicit headers from config instead of wildcard
+    allow_headers=app_settings.cors_headers_list,
     expose_headers=["X-Correlation-ID", "X-Request-Duration"],
 )
 
-<<<<<<< HEAD
-# Global exception handler to log all unhandled exceptions
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    """Log all unhandled exceptions with full traceback"""
-    tb = traceback.format_exc()
-    logger.error(f"Unhandled exception on {request.method} {request.url.path}: {exc}\n{tb}")
-    return JSONResponse(
-        status_code=500,
-        content={"detail": str(exc), "path": request.url.path}
-    )
-=======
+
+# Global request timeout middleware
+REQUEST_TIMEOUT_SECONDS = 60  # 60 second timeout for all requests
+
+
+@app.middleware("http")
+async def request_timeout_middleware(request: Request, call_next):
+    """
+    Enforce global request timeout to prevent hung requests.
+
+    Exempt paths:
+    - WebSocket upgrades
+    - Streaming endpoints
+    - Health checks
+    """
+    # Exempt paths from timeout
+    exempt_paths = ["/api/health", "/ws", "/api/chat/stream", "/api/sports/stream"]
+    if any(request.url.path.startswith(p) for p in exempt_paths):
+        return await call_next(request)
+
+    try:
+        return await asyncio.wait_for(
+            call_next(request),
+            timeout=REQUEST_TIMEOUT_SECONDS
+        )
+    except asyncio.TimeoutError:
+        logger.error(
+            "request_timeout",
+            path=request.url.path,
+            method=request.method,
+            timeout_seconds=REQUEST_TIMEOUT_SECONDS
+        )
+        return JSONResponse(
+            status_code=504,
+            content={
+                "error": "Request timeout",
+                "detail": f"Request exceeded {REQUEST_TIMEOUT_SECONDS} second timeout",
+                "path": request.url.path
+            }
+        )
+
 
 # Request logging and correlation middleware
 @app.middleware("http")
@@ -405,7 +604,6 @@ async def request_middleware(request: Request, call_next):
 
 # Register exception handlers
 register_exception_handlers(app)
->>>>>>> 1451b16b8bbb2d18ab5535615072ccbf2e9e199e
 
 # Core routers
 app.include_router(sports.router)
@@ -416,9 +614,9 @@ app.include_router(dashboard.router)
 app.include_router(chat.router)
 app.include_router(research.router)
 app.include_router(portfolio.router)
-app.include_router(portfolio.positions_router)  # Alias for /api/positions
+# app.include_router(portfolio.positions_router)  # Alias for /api/positions - TODO: add to portfolio.py
 app.include_router(strategy.router)
-app.include_router(strategy.strategies_router)  # strategies endpoint
+# app.include_router(strategy.strategies_router)  # strategies endpoint - TODO: add to strategy.py
 app.include_router(scanner.router)
 app.include_router(agents.router)
 app.include_router(earnings.router)
@@ -443,12 +641,9 @@ app.include_router(smart_money.router)
 app.include_router(advanced_technicals.router)
 app.include_router(options_indicators.router)
 
-<<<<<<< HEAD
 # QA Dashboard
 app.include_router(qa_dashboard.router)
 
-@app.get("/")
-=======
 # Goal tracking
 app.include_router(goals.router)
 
@@ -486,6 +681,15 @@ app.include_router(orchestrator.router)
 # - Custom watchlist management
 app.include_router(stocks_tiles.router)
 
+# DeepSeek R1 32B Deep Reasoning API - Chain-of-thought reasoning
+app.include_router(reasoning.router)
+
+# Stock Universe - Complete stock/ETF database with 60+ data points per stock
+# - Full company information (fundamentals, technicals, valuations)
+# - Advanced filtering by sector, industry, market cap, volume
+# - Search and symbol lookup
+app.include_router(universe.router)
+
 
 # =============================================================================
 # ROOT & HEALTH ENDPOINTS
@@ -493,7 +697,6 @@ app.include_router(stocks_tiles.router)
 
 
 @app.get("/", include_in_schema=False)
->>>>>>> 1451b16b8bbb2d18ab5535615072ccbf2e9e199e
 async def root():
     """Redirect root to API documentation."""
     return RedirectResponse(url="/docs")
@@ -549,12 +752,35 @@ async def readiness_check():
 
 
 @app.get("/api/metrics")
-async def get_metrics():
+async def get_metrics(request: Request):
     """
     Get application metrics.
 
     Returns Prometheus-compatible metrics for monitoring.
+
+    Security: Requires X-Metrics-Token header matching METRICS_TOKEN env var,
+    or request from localhost/internal network.
     """
+    import os
+
+    # Security check - require token or localhost
+    metrics_token = os.getenv("METRICS_TOKEN")
+    client_host = request.client.host if request.client else None
+    is_localhost = client_host in ("127.0.0.1", "localhost", "::1", None)
+    request_token = request.headers.get("X-Metrics-Token")
+
+    if metrics_token and not is_localhost:
+        if request_token != metrics_token:
+            logger.warning(
+                "metrics_access_denied",
+                client=client_host,
+                reason="invalid_token"
+            )
+            return JSONResponse(
+                status_code=403,
+                content={"error": "Access denied. Provide valid X-Metrics-Token header."}
+            )
+
     try:
         # Get database stats
         db = await get_database()
@@ -573,6 +799,7 @@ async def get_metrics():
     return {
         "database": db_stats,
         "cache": cache_stats,
+        "task_restart_counts": _task_restart_counts,
         "background_tasks": [
             {
                 "name": task.get_name(),
@@ -594,7 +821,7 @@ def run_server():
     uvicorn.run(
         "backend.main:app",
         host="0.0.0.0",
-        port=8002,
+        port=app_settings.SERVER_PORT,  # Uses centralized config
         reload=app_settings.DEBUG,
         log_level="info",
         access_log=True,
@@ -610,8 +837,8 @@ def main():
                         help='Show status of backend server')
     parser.add_argument('--stop', action='store_true',
                         help='Stop running backend server')
-    parser.add_argument('--port', type=int, default=BACKEND_PORT,
-                        help=f'Port to run on (default: {BACKEND_PORT})')
+    parser.add_argument('--port', type=int, default=app_settings.SERVER_PORT,
+                        help=f'Port to run on (default: {app_settings.SERVER_PORT})')
     parser.add_argument('--no-reload', action='store_true',
                         help='Disable auto-reload')
     parser.add_argument('--json', action='store_true',
@@ -679,8 +906,4 @@ def main():
 
 
 if __name__ == "__main__":
-<<<<<<< HEAD
-    main()
-=======
     run_server()
->>>>>>> 1451b16b8bbb2d18ab5535615072ccbf2e9e199e

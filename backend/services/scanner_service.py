@@ -50,7 +50,7 @@ class ScannerService:
     - Symbol validation
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._scanner_v1 = PremiumScanner()  # Fallback
         self._scanner_v2 = None
         self._universe = None
@@ -59,7 +59,7 @@ class ScannerService:
         self._lock = threading.Lock()
         self._initialized = False
 
-    def _ensure_initialized(self):
+    def _ensure_initialized(self) -> None:
         """Lazy initialization of V2 components"""
         if self._initialized:
             return

@@ -13,6 +13,7 @@ import numpy as np
 
 # Import existing Options Indicators
 from src.options_indicators import OptionsIndicators
+from backend.infrastructure.errors import safe_internal_error
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +108,7 @@ async def get_iv_rank(symbol: str):
         raise
     except Exception as e:
         logger.error(f"Error getting IVR for {symbol}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "get IV rank")
 
 
 def get_ivr_strategies(ivr: float) -> list:
@@ -167,7 +168,7 @@ async def get_iv_percentile(symbol: str):
         raise
     except Exception as e:
         logger.error(f"Error getting IVP for {symbol}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "get IV percentile")
 
 
 @router.get("/expected-move/{symbol}")
@@ -273,7 +274,7 @@ async def get_expected_move(symbol: str, dte: Optional[int] = None):
         raise
     except Exception as e:
         logger.error(f"Error getting Expected Move for {symbol}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "get expected move")
 
 
 @router.get("/greeks/{symbol}")
@@ -379,7 +380,7 @@ async def get_option_greeks(
         raise
     except Exception as e:
         logger.error(f"Error getting Greeks for {symbol}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "get option greeks")
 
 
 @router.get("/put-call-ratio/{symbol}")
@@ -458,7 +459,7 @@ async def get_put_call_ratio(symbol: str):
         raise
     except Exception as e:
         logger.error(f"Error getting PCR for {symbol}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "get put/call ratio")
 
 
 def get_sentiment_score(pcr: float) -> int:
@@ -588,7 +589,7 @@ async def get_strategy_recommendation(symbol: str, trend: str = "auto"):
         raise
     except Exception as e:
         logger.error(f"Error getting strategy recommendation for {symbol}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "get strategy recommendation")
 
 
 @router.get("/comprehensive/{symbol}")
@@ -671,4 +672,4 @@ async def get_comprehensive_options_analysis(symbol: str):
         raise
     except Exception as e:
         logger.error(f"Error getting comprehensive analysis for {symbol}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "get comprehensive options analysis")

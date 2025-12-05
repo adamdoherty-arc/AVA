@@ -67,7 +67,7 @@ class EnsembleSportsPredictor:
         "NCAAB": {"momentum": 0.30, "features": 0.20}    # March Madness chaos
     }
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.model_accuracy_cache: Dict[str, float] = {}
         self.prediction_history: List[Dict] = []
 

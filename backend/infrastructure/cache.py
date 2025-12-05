@@ -27,17 +27,24 @@ class KeyedLockManager:
     """
     Manages per-key locks to prevent cache stampede.
 
-    Uses weak references so locks are garbage collected
-    when no longer in use.
+    Uses lazy initialization for asyncio.Lock to avoid
+    issues when instantiated before event loop exists.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._locks: Dict[str, asyncio.Lock] = {}
-        self._meta_lock = asyncio.Lock()
+        self._meta_lock: Optional[asyncio.Lock] = None  # Lazy init
+
+    def _get_meta_lock(self) -> asyncio.Lock:
+        """Lazily create the meta lock when first needed (in async context)."""
+        if self._meta_lock is None:
+            self._meta_lock = asyncio.Lock()
+        return self._meta_lock
 
     async def acquire(self, key: str) -> asyncio.Lock:
         """Get or create a lock for a key"""
-        async with self._meta_lock:
+        meta_lock = self._get_meta_lock()
+        async with meta_lock:
             if key not in self._locks:
                 self._locks[key] = asyncio.Lock()
             lock = self._locks[key]
@@ -439,28 +446,53 @@ import threading
 
 _cache_instance: Optional[RedisCache] = None
 _cache_lock = threading.Lock()
-_cache_init_lock = asyncio.Lock()
+_cache_connected = False  # Track connection state separately
 
 
 async def init_cache() -> RedisCache:
-    """Initialize the global cache instance (thread-safe)"""
-    global _cache_instance
-    if _cache_instance is None:
-        async with _cache_init_lock:
-            # Double-check after acquiring lock
-            if _cache_instance is None:
-                instance = RedisCache()
-                await instance.connect()
-                _cache_instance = instance
+    """
+    Initialize and connect the global cache instance.
+
+    This should be called during app startup (in lifespan).
+    Thread-safe with proper async connection.
+    """
+    global _cache_instance, _cache_connected
+
+    with _cache_lock:
+        if _cache_instance is None:
+            _cache_instance = RedisCache()
+
+    # Connect outside the lock (async operation)
+    if not _cache_connected:
+        try:
+            await _cache_instance.connect()
+            _cache_connected = True
+            logger.info("Cache initialized and connected")
+        except Exception as e:
+            logger.warning(f"Cache connection failed, using in-memory fallback: {e}")
+            _cache_connected = True  # Mark as "initialized" even if Redis failed
+
     return _cache_instance
 
 
 def get_cache() -> RedisCache:
-    """Get the global cache instance (thread-safe)"""
+    """
+    Get the global cache instance (thread-safe).
+
+    NOTE: Returns cache that may not be connected yet if called before
+    init_cache(). The cache will gracefully fall back to in-memory storage.
+    For proper initialization, call init_cache() during app startup.
+    """
     global _cache_instance
     if _cache_instance is None:
         with _cache_lock:
             # Double-check pattern for thread safety
             if _cache_instance is None:
                 _cache_instance = RedisCache()
+                logger.info("Cache instance created (connection deferred to init_cache)")
     return _cache_instance
+
+
+def is_cache_connected() -> bool:
+    """Check if cache has been properly initialized."""
+    return _cache_connected

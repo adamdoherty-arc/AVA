@@ -94,14 +94,14 @@ class LLMClient:
         elif self.provider == LLMProvider.OPENAI:
             return "gpt-4-turbo"
         elif self.provider == LLMProvider.OLLAMA:
-            return "llama3.2"  # Good default, can also use mistral, codellama
+            return "qwen2.5:32b-instruct-q4_K_M"  # Balanced local model (you also have deepseek-r1:32b for reasoning)
         elif self.provider == LLMProvider.GROQ:
             return "llama-3.3-70b-versatile"  # Free tier available
         elif self.provider == LLMProvider.HUGGINGFACE:
             return "mistralai/Mistral-7B-Instruct-v0.3"
-        return "llama3.2"
+        return "qwen2.5:32b-instruct-q4_K_M"
 
-    async def _ensure_initialized(self):
+    async def _ensure_initialized(self) -> None:
         """Lazy initialization of API client"""
         if self._initialized:
             return

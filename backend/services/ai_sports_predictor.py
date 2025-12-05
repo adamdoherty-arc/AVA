@@ -185,7 +185,7 @@ class EloModel:
     K_FACTOR = 20
     HOME_ADVANTAGE_ELO = 65  # ~2.5 points
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._ratings: Dict[str, float] = {}
 
     def get_rating(self, team: str) -> float:
@@ -357,7 +357,7 @@ class AISportsPredictor:
         Sport.NCAAB: {"momentum": 0.30, "elo": 0.30},
     }
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._elo = EloModel()
         self._momentum = MomentumModel()
         self._situational = SituationalModel()

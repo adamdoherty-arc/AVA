@@ -70,7 +70,7 @@ class CircuitBreaker:
     _half_open_calls: int = 0
     _lock: threading.Lock = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self._lock = threading.Lock()
 
     @property

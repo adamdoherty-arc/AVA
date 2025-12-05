@@ -324,7 +324,7 @@ class StreamingServer:
     # STREAMING LOOPS
     # =========================================================================
 
-    async def start(self):
+    async def start(self) -> None:
         """Start all streaming loops"""
         if self.running:
             return
@@ -342,7 +342,7 @@ class StreamingServer:
 
         logger.info("Streaming server started")
 
-    async def stop(self):
+    async def stop(self) -> None:
         """Stop all streaming loops"""
         self.running = False
 
@@ -355,7 +355,7 @@ class StreamingServer:
         self.tasks = []
         logger.info("Streaming server stopped")
 
-    async def _position_stream_loop(self):
+    async def _position_stream_loop(self) -> None:
         """Stream position updates"""
         while self.running:
             try:
@@ -374,7 +374,7 @@ class StreamingServer:
 
             await asyncio.sleep(self.update_interval)
 
-    async def _greeks_stream_loop(self):
+    async def _greeks_stream_loop(self) -> None:
         """Stream Greeks updates"""
         while self.running:
             try:
@@ -395,7 +395,7 @@ class StreamingServer:
 
             await asyncio.sleep(self.greeks_interval)
 
-    async def _portfolio_stream_loop(self):
+    async def _portfolio_stream_loop(self) -> None:
         """Stream portfolio updates"""
         while self.running:
             try:
@@ -410,7 +410,7 @@ class StreamingServer:
 
             await asyncio.sleep(self.portfolio_interval)
 
-    async def _alert_processor_loop(self):
+    async def _alert_processor_loop(self) -> None:
         """Process queued alerts"""
         while self.running:
             try:
@@ -596,7 +596,7 @@ if __name__ == "__main__":
 
     # Create mock data provider
     class MockPositionProvider:
-        def __init__(self):
+        def __init__(self) -> None:
             self.positions = [
                 {
                     "id": "1",
@@ -624,7 +624,7 @@ if __name__ == "__main__":
                 }
             ]
 
-        def get_positions(self):
+        def get_positions(self) -> None:
             return self.positions
 
     async def mock_send(message: str):

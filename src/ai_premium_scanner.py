@@ -33,13 +33,13 @@ class AIPremiumScanner:
     - AI-generated trade recommendations
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.base_scanner = PremiumScanner()
         self.scorer = MultiCriteriaScorer()
         self._llm_service = None
         self._fundamental_cache = {}
 
-    def _get_llm_service(self):
+    def _get_llm_service(self) -> None:
         """Lazy load LLM service to avoid import issues"""
         if self._llm_service is None:
             try:

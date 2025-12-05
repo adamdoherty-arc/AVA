@@ -247,7 +247,7 @@ export default function FibonacciAnalysis() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {data.retracement_levels.map((level, idx) => {
+                  {(data.retracement_levels ?? []).map((level, idx) => {
                     const isNearPrice = Math.abs(level.distance_pct) < 2
                     return (
                       <div
@@ -309,7 +309,7 @@ export default function FibonacciAnalysis() {
                   Potential price targets if the move continues beyond 100%
                 </p>
                 <div className="space-y-2">
-                  {data.extension_levels.map((level, idx) => {
+                  {(data.extension_levels ?? []).map((level, idx) => {
                     const levelPrice = level.price ?? 0
                     const currentPrice = data.current_price ?? 1
                     const distancePct = currentPrice ? ((levelPrice - currentPrice) / currentPrice) * 100 : 0

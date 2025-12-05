@@ -1,11 +1,13 @@
 """
 Discord Integration Agent - Monitor and analyze Discord messages
+Uses XTrades Discord channel (990343144241500232) as primary source
 """
 
 import logging
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 import psycopg2
+import psycopg2.extras
 import os
 
 from ...core.agent_base import BaseAgent, AgentState
@@ -13,68 +15,85 @@ from langchain_core.tools import tool
 
 logger = logging.getLogger(__name__)
 
+# XTrades Discord channel ID - Primary source
+XTRADES_CHANNEL_ID = 990343144241500232
+
+
+def _get_db_connection():
+    """Get database connection with correct settings"""
+    return psycopg2.connect(
+        host=os.getenv('DB_HOST', 'localhost'),
+        port=os.getenv('DB_PORT', '5432'),
+        database=os.getenv('DB_NAME', 'magnus'),  # Fixed: was 'trading'
+        user=os.getenv('DB_USER', 'postgres'),
+        password=os.getenv('DB_PASSWORD', '')
+    )
+
 
 @tool
-def get_discord_messages_tool(hours_back: int = 24, channel: Optional[str] = None, limit: int = 50) -> str:
+def get_discord_messages_tool(hours_back: int = 24, channel_id: Optional[str] = None, limit: int = 50) -> str:
     """
     Get recent Discord messages (XTrades trader signals)
 
     Args:
         hours_back: How many hours back to fetch (default 24)
-        channel: Specific channel name to filter (optional)
+        channel_id: Specific channel ID to filter (optional, defaults to XTrades channel)
         limit: Maximum number of messages to return (default 50)
 
     Returns:
         JSON string with Discord messages
     """
+    conn = None
+    cursor = None
     try:
-        # Database connection
-        conn = psycopg2.connect(
-            host=os.getenv('DB_HOST', 'localhost'),
-            port=os.getenv('DB_PORT', '5432'),
-            database=os.getenv('DB_NAME', 'trading'),
-            user=os.getenv('DB_USER', 'postgres'),
-            password=os.getenv('DB_PASSWORD', '')
-        )
-
+        conn = _get_db_connection()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
-        # Build query
         since_time = datetime.now() - timedelta(hours=hours_back)
+        target_channel = int(channel_id) if channel_id else XTRADES_CHANNEL_ID
 
-        if channel:
-            query = """
-                SELECT message_id, channel_name, author_name, content, timestamp,
-                       attachments, embeds, message_type
-                FROM discord_messages
-                WHERE timestamp >= %s AND channel_name = %s
-                ORDER BY timestamp DESC
-                LIMIT %s
-            """
-            cursor.execute(query, (since_time, channel, limit))
-        else:
-            query = """
-                SELECT message_id, channel_name, author_name, content, timestamp,
-                       attachments, embeds, message_type
-                FROM discord_messages
-                WHERE timestamp >= %s
-                ORDER BY timestamp DESC
-                LIMIT %s
-            """
-            cursor.execute(query, (since_time, limit))
-
+        query = """
+            SELECT
+                m.message_id,
+                m.channel_id,
+                c.channel_name,
+                m.author_name,
+                m.content,
+                m.timestamp,
+                m.attachments,
+                m.embeds
+            FROM discord_messages m
+            LEFT JOIN discord_channels c ON m.channel_id = c.channel_id
+            WHERE m.timestamp >= %s
+            AND m.channel_id = %s
+            AND m.content IS NOT NULL
+            AND m.content != ''
+            ORDER BY m.timestamp DESC
+            LIMIT %s
+        """
+        cursor.execute(query, (since_time, target_channel, limit))
         messages = cursor.fetchall()
-        cursor.close()
-        conn.close()
 
         if not messages:
-            return f"No Discord messages found in the last {hours_back} hours"
+            return f"No Discord messages found in the last {hours_back} hours for channel {target_channel}"
 
-        # Format response
+        # Convert to serializable format
+        formatted_messages = []
+        for msg in messages:
+            formatted_messages.append({
+                'message_id': str(msg['message_id']),
+                'channel_id': str(msg['channel_id']),
+                'channel_name': msg['channel_name'],
+                'author': msg['author_name'],
+                'content': msg['content'],
+                'timestamp': msg['timestamp'].isoformat() if msg['timestamp'] else None
+            })
+
         result = {
-            'count': len(messages),
+            'count': len(formatted_messages),
             'time_range': f'Last {hours_back} hours',
-            'messages': messages
+            'channel_id': str(target_channel),
+            'messages': formatted_messages
         }
 
         return str(result)
@@ -82,6 +101,11 @@ def get_discord_messages_tool(hours_back: int = 24, channel: Optional[str] = Non
     except Exception as e:
         logger.error(f"Error fetching Discord messages: {e}")
         return f"Error: {str(e)}"
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 @tool
@@ -96,15 +120,10 @@ def search_discord_alerts_tool(keywords: str, days_back: int = 7) -> str:
     Returns:
         JSON string with matching messages
     """
+    conn = None
+    cursor = None
     try:
-        conn = psycopg2.connect(
-            host=os.getenv('DB_HOST', 'localhost'),
-            port=os.getenv('DB_PORT', '5432'),
-            database=os.getenv('DB_NAME', 'trading'),
-            user=os.getenv('DB_USER', 'postgres'),
-            password=os.getenv('DB_PASSWORD', '')
-        )
-
+        conn = _get_db_connection()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
         since_time = datetime.now() - timedelta(days=days_back)
@@ -114,28 +133,42 @@ def search_discord_alerts_tool(keywords: str, days_back: int = 7) -> str:
         search_pattern = '%' + '%'.join(keyword_list) + '%'
 
         query = """
-            SELECT message_id, channel_name, author_name, content, timestamp,
-                   message_type
-            FROM discord_messages
-            WHERE timestamp >= %s AND content ILIKE %s
-            ORDER BY timestamp DESC
+            SELECT
+                m.message_id,
+                m.channel_id,
+                c.channel_name,
+                m.author_name,
+                m.content,
+                m.timestamp
+            FROM discord_messages m
+            LEFT JOIN discord_channels c ON m.channel_id = c.channel_id
+            WHERE m.timestamp >= %s
+            AND m.content ILIKE %s
+            ORDER BY m.timestamp DESC
             LIMIT 100
         """
 
         cursor.execute(query, (since_time, search_pattern))
         messages = cursor.fetchall()
 
-        cursor.close()
-        conn.close()
-
         if not messages:
             return f"No messages found matching '{keywords}' in the last {days_back} days"
 
+        formatted_messages = []
+        for msg in messages:
+            formatted_messages.append({
+                'message_id': str(msg['message_id']),
+                'channel_name': msg['channel_name'],
+                'author': msg['author_name'],
+                'content': msg['content'],
+                'timestamp': msg['timestamp'].isoformat() if msg['timestamp'] else None
+            })
+
         result = {
             'keywords': keywords,
-            'count': len(messages),
+            'count': len(formatted_messages),
             'time_range': f'Last {days_back} days',
-            'matches': messages
+            'matches': formatted_messages
         }
 
         return str(result)
@@ -143,6 +176,11 @@ def search_discord_alerts_tool(keywords: str, days_back: int = 7) -> str:
     except Exception as e:
         logger.error(f"Error searching Discord messages: {e}")
         return f"Error: {str(e)}"
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 @tool
@@ -157,42 +195,52 @@ def filter_trader_messages_tool(trader_name: str, hours_back: int = 48) -> str:
     Returns:
         JSON string with trader's messages
     """
+    conn = None
+    cursor = None
     try:
-        conn = psycopg2.connect(
-            host=os.getenv('DB_HOST', 'localhost'),
-            port=os.getenv('DB_PORT', '5432'),
-            database=os.getenv('DB_NAME', 'trading'),
-            user=os.getenv('DB_USER', 'postgres'),
-            password=os.getenv('DB_PASSWORD', '')
-        )
-
+        conn = _get_db_connection()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
         since_time = datetime.now() - timedelta(hours=hours_back)
 
         query = """
-            SELECT message_id, channel_name, author_name, content, timestamp,
-                   message_type, attachments
-            FROM discord_messages
-            WHERE timestamp >= %s AND author_name ILIKE %s
-            ORDER BY timestamp DESC
+            SELECT
+                m.message_id,
+                m.channel_id,
+                c.channel_name,
+                m.author_name,
+                m.content,
+                m.timestamp,
+                m.attachments
+            FROM discord_messages m
+            LEFT JOIN discord_channels c ON m.channel_id = c.channel_id
+            WHERE m.timestamp >= %s
+            AND m.author_name ILIKE %s
+            ORDER BY m.timestamp DESC
             LIMIT 50
         """
 
         cursor.execute(query, (since_time, f'%{trader_name}%'))
         messages = cursor.fetchall()
 
-        cursor.close()
-        conn.close()
-
         if not messages:
             return f"No messages found from trader '{trader_name}' in the last {hours_back} hours"
 
+        formatted_messages = []
+        for msg in messages:
+            formatted_messages.append({
+                'message_id': str(msg['message_id']),
+                'channel_name': msg['channel_name'],
+                'author': msg['author_name'],
+                'content': msg['content'],
+                'timestamp': msg['timestamp'].isoformat() if msg['timestamp'] else None
+            })
+
         result = {
             'trader': trader_name,
-            'count': len(messages),
+            'count': len(formatted_messages),
             'time_range': f'Last {hours_back} hours',
-            'messages': messages
+            'messages': formatted_messages
         }
 
         return str(result)
@@ -200,6 +248,11 @@ def filter_trader_messages_tool(trader_name: str, hours_back: int = 48) -> str:
     except Exception as e:
         logger.error(f"Error filtering trader messages: {e}")
         return f"Error: {str(e)}"
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 class DiscordAgent(BaseAgent):

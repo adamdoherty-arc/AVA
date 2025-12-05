@@ -16,7 +16,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { apiClient, APIError, isAPIError, formatAPIError } from '@/lib/api-client';
+import { apiClient, isAPIError, formatAPIError } from '@/lib/api-client';
+import type { APIError } from '@/lib/api-client';
 
 // =============================================================================
 // Types

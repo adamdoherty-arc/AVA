@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Magnus QA Runner
+AVA QA Runner
 
 Main entry point for the continuous QA and enhancement system.
 Runs every 20 minutes, invokes Claude Code with --dangerously-skip-permissions,
@@ -72,6 +72,14 @@ except ImportError as e:
     logger.warning(f"SpecAgent system not available: {e}")
     SPEC_AGENTS_AVAILABLE = False
 
+# Import AI Auto-Fixer
+try:
+    from .ai_auto_fixer import get_auto_fixer, AIAutoFixer, FixConfidence, FixDifficulty
+    AI_AUTO_FIXER_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"AI Auto-Fixer not available: {e}")
+    AI_AUTO_FIXER_AVAILABLE = False
+
 
 class QARunner:
     """
@@ -127,6 +135,16 @@ class QARunner:
             except Exception as e:
                 logger.warning(f"Could not connect to QA Issues Database: {e}")
                 self.qa_db = None
+
+        # AI Auto-Fixer for intelligent issue resolution
+        self.ai_fixer = None
+        if AI_AUTO_FIXER_AVAILABLE:
+            try:
+                self.ai_fixer = get_auto_fixer()
+                logger.info("AI Auto-Fixer initialized (DeepSeek R1 + Claude)")
+            except Exception as e:
+                logger.warning(f"Could not initialize AI Auto-Fixer: {e}")
+                self.ai_fixer = None
 
         logger.info(f"QA Runner initialized (interval: {interval_minutes} min)")
 
@@ -645,7 +663,7 @@ class QARunner:
     def _build_review_prompt(self) -> str:
         """Build the review prompt for Claude Code."""
         return """
-You are reviewing the Magnus financial trading platform. Perform a COMPREHENSIVE review.
+You are reviewing the AVA financial trading platform. Perform a COMPREHENSIVE review.
 
 ## Focus Areas
 
@@ -717,7 +735,12 @@ At the end, provide:
 
     def _invoke_claude_fixer(self, results: List[ModuleCheckResult]) -> int:
         """
-        Invoke Claude Code to actually FIX issues found by checks.
+        Invoke AI-powered auto-fixer to resolve issues found by checks.
+
+        Uses the intelligent LLM router to select the best model:
+        - DeepSeek R1 32B (FREE, LOCAL) for deep reasoning
+        - Groq Llama for fast, simple fixes
+        - Claude Sonnet for complex code generation
 
         Args:
             results: List of check results with issues
@@ -733,10 +756,85 @@ At the end, provide:
                     issues_to_fix.append({
                         'module': result.module_name,
                         'check': check.check_name,
+                        'check_name': check.check_name,
                         'message': check.message,
                         'details': check.details,
+                        'auto_fixable': getattr(check, 'auto_fixable', True),
                     })
 
+        if not issues_to_fix:
+            return 0
+
+        self._log(f"Found {len(issues_to_fix)} issues to analyze and fix...")
+        fixes_applied = 0
+
+        # Try AI Auto-Fixer first (uses DeepSeek R1 for reasoning)
+        if self.ai_fixer and AI_AUTO_FIXER_AVAILABLE:
+            self._log("Using AI Auto-Fixer with intelligent model routing...")
+
+            for issue in issues_to_fix[:10]:  # Limit to top 10 issues
+                try:
+                    # Analyze the failure with AI
+                    import asyncio
+                    fix_attempt = asyncio.run(self.ai_fixer.analyze_failure(issue))
+
+                    if fix_attempt:
+                        # Check if we should auto-apply
+                        should_apply, reason = self.ai_fixer.should_auto_fix(fix_attempt)
+
+                        self._log(
+                            f"  Issue: {issue['check']}"
+                            f" | Confidence: {fix_attempt.confidence_score:.0f}%"
+                            f" | Difficulty: {fix_attempt.difficulty.value}"
+                            f" | Model: {fix_attempt.ai_model_used}"
+                        )
+
+                        if should_apply:
+                            self._log(f"    -> Applying fix: {reason}")
+                            result = asyncio.run(self.ai_fixer.apply_fix(fix_attempt))
+
+                            if result.success:
+                                fixes_applied += 1
+                                self.ai_fixer.record_fix_result(fix_attempt, True)
+                                self.tracker.log_auto_fix(
+                                    module="ai_auto_fixer",
+                                    message=f"AI fixed {issue['check']}: {fix_attempt.suggested_fix[:100]}",
+                                    files=fix_attempt.files_to_modify,
+                                    details={
+                                        'confidence': fix_attempt.confidence_score,
+                                        'model': fix_attempt.ai_model_used,
+                                        'reasoning': fix_attempt.reasoning[:200]
+                                    },
+                                )
+                            else:
+                                self.ai_fixer.record_fix_result(fix_attempt, False)
+                                self._log(f"    -> Fix failed: {result.message[:100]}")
+                        else:
+                            self._log(f"    -> Skipped: {reason}")
+
+                except Exception as e:
+                    logger.warning(f"AI analysis failed for {issue['check']}: {e}")
+                    continue
+
+            # If AI fixer handled some issues, return
+            if fixes_applied > 0:
+                self._log(f"AI Auto-Fixer applied {fixes_applied} fixes")
+                return fixes_applied
+
+        # Fallback to Claude Code CLI for remaining issues
+        self._log("Falling back to Claude Code CLI...")
+        return self._invoke_claude_cli_fixer(issues_to_fix)
+
+    def _invoke_claude_cli_fixer(self, issues_to_fix: List[Dict]) -> int:
+        """
+        Fallback to Claude Code CLI when AI Auto-Fixer is not available.
+
+        Args:
+            issues_to_fix: List of issues to fix
+
+        Returns:
+            Number of fixes applied
+        """
         if not issues_to_fix:
             return 0
 
@@ -744,10 +842,7 @@ At the end, provide:
         prompt = self._build_fix_prompt(issues_to_fix)
 
         try:
-            self._log("Invoking Claude Code to fix issues...")
-
             # Use Claude Code SDK or CLI to actually fix
-            # Try multiple possible paths for claude CLI
             import shutil
             claude_path = shutil.which("claude")
 
@@ -759,27 +854,20 @@ At the end, provide:
                 # Try common installation paths - get actual username
                 username = os.environ.get('USERNAME', os.environ.get('USER', 'New User'))
                 possible_paths = [
-                    # Windows paths with actual username
                     f"C:/Users/{username}/AppData/Roaming/npm/claude.cmd",
                     f"C:/Users/{username}/AppData/Roaming/npm/claude",
-                    # Also try with os.path.expanduser
                     os.path.expanduser("~/AppData/Roaming/npm/claude.cmd"),
                     os.path.expanduser("~/AppData/Roaming/npm/claude"),
-                    # Linux/Mac paths
                     os.path.expanduser("~/.npm/bin/claude"),
                     "/usr/local/bin/claude",
-                    # Common Windows paths
-                    "C:/Users/New User/AppData/Roaming/npm/claude.cmd",
                 ]
                 for p in possible_paths:
                     if os.path.exists(p):
                         claude_path = p
-                        self._log(f"Found Claude CLI at: {claude_path}")
                         break
 
             if not claude_path:
                 logger.warning("Claude CLI not found in PATH or common locations.")
-                logger.warning(f"Searched paths including: ~/AppData/Roaming/npm/claude.cmd")
                 return 0
 
             self._log(f"Using Claude CLI at: {claude_path}")
@@ -793,11 +881,9 @@ At the end, provide:
             )
 
             if result.returncode == 0:
-                # Count fixes from output
                 output = result.stdout
                 fixes_applied = output.lower().count('fixed') + output.lower().count('created') + output.lower().count('added')
 
-                # Log the fix
                 self.tracker.log_auto_fix(
                     module="claude_code_fixer",
                     message=f"Claude Code applied fixes for {len(issues_to_fix)} issues",
@@ -827,7 +913,7 @@ At the end, provide:
             for i in issues[:10]  # Limit to top 10 issues
         ])
 
-        return f"""You are a code fixer for the Magnus trading platform.
+        return f"""You are a code fixer for the AVA trading platform.
 FIX these specific issues found during QA:
 
 {issue_list}
@@ -1008,7 +1094,7 @@ Be concise. Make the fixes. Do not ask for confirmation.
 
 def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(description='Magnus QA Runner')
+    parser = argparse.ArgumentParser(description='AVA QA Runner')
     parser.add_argument('--once', action='store_true',
                         help='Run once and exit')
     parser.add_argument('--daemon', action='store_true',

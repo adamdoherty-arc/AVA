@@ -3,14 +3,17 @@
 from fastapi import APIRouter, HTTPException, Query
 from typing import Dict, Any, List, Optional
 from pydantic import BaseModel
-import logging
+import structlog
+
+from backend.infrastructure.errors import safe_internal_error
+from backend.infrastructure.database import get_database, AsyncDatabaseManager
 
 router = APIRouter(
     prefix="/api/agents",
     tags=["agents"]
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Import agent registry
 try:
@@ -24,7 +27,7 @@ except ImportError:
 class AgentInvokeRequest(BaseModel):
     """Request to invoke an agent"""
     query: str
-    context: Optional[Dict[str, Any]] = {}
+    context: Optional[Dict[str, Any]] = None  # Use None to avoid mutable default
 
 
 class AgentInfo(BaseModel):
@@ -205,82 +208,78 @@ async def get_top_options_recommendations(
     Returns stored recommendations from the database.
     """
     try:
-        from src.database.connection_pool import get_db_connection
         from datetime import datetime, timedelta
 
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
+        db = await get_database()
 
-            # Check if we have an options_recommendations table
-            cursor.execute("""
-                SELECT EXISTS (
-                    SELECT FROM information_schema.tables
-                    WHERE table_name = 'options_recommendations'
-                )
-            """)
-            table_exists = cursor.fetchone()[0]
+        # Check if we have an options_recommendations table
+        table_exists_row = await db.fetchrow("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_name = 'options_recommendations'
+            )
+        """)
+        table_exists = table_exists_row["exists"]
 
-            if table_exists:
-                # Get recent recommendations from database
-                cursor.execute("""
-                    SELECT
-                        symbol, company_name, current_price, strike, expiration,
-                        dte, premium, score, recommendation, reasoning,
-                        delta, iv, premium_pct, monthly_return, created_at
-                    FROM options_recommendations
-                    WHERE score >= %s
-                      AND created_at > NOW() - INTERVAL '24 hours'
-                    ORDER BY score DESC
-                    LIMIT 50
-                """, (min_score,))
+        if table_exists:
+            # Get recent recommendations from database
+            rows = await db.fetch("""
+                SELECT
+                    symbol, company_name, current_price, strike, expiration,
+                    dte, premium, score, recommendation, reasoning,
+                    delta, iv, premium_pct, monthly_return, created_at
+                FROM options_recommendations
+                WHERE score >= $1
+                  AND created_at > NOW() - INTERVAL '24 hours'
+                ORDER BY score DESC
+                LIMIT 50
+            """, min_score)
 
-                rows = cursor.fetchall()
+            recommendations = []
+            for row in rows:
+                recommendations.append({
+                    "symbol": row["symbol"],
+                    "company_name": row["company_name"] or row["symbol"],
+                    "current_price": float(row["current_price"]) if row["current_price"] else 0,
+                    "strike": float(row["strike"]) if row["strike"] else 0,
+                    "expiration": row["expiration"].isoformat() if row["expiration"] else "",
+                    "dte": row["dte"] or 0,
+                    "premium": float(row["premium"]) if row["premium"] else 0,
+                    "score": row["score"] or 0,
+                    "recommendation": row["recommendation"] or "Hold",
+                    "reasoning": row["reasoning"] or "",
+                    "delta": float(row["delta"]) if row["delta"] else 0,
+                    "iv": float(row["iv"]) if row["iv"] else 0,
+                    "premium_pct": float(row["premium_pct"]) if row["premium_pct"] else 0,
+                    "monthly_return": float(row["monthly_return"]) if row["monthly_return"] else 0
+                })
 
-                recommendations = []
-                for row in rows:
-                    recommendations.append({
-                        "symbol": row[0],
-                        "company_name": row[1] or row[0],
-                        "current_price": float(row[2]) if row[2] else 0,
-                        "strike": float(row[3]) if row[3] else 0,
-                        "expiration": row[4].isoformat() if row[4] else "",
-                        "dte": row[5] or 0,
-                        "premium": float(row[6]) if row[6] else 0,
-                        "score": row[7] or 0,
-                        "recommendation": row[8] or "Hold",
-                        "reasoning": row[9] or "",
-                        "delta": float(row[10]) if row[10] else 0,
-                        "iv": float(row[11]) if row[11] else 0,
-                        "premium_pct": float(row[12]) if row[12] else 0,
-                        "monthly_return": float(row[13]) if row[13] else 0
-                    })
+            # Calculate stats
+            if recommendations:
+                avg_score = sum(r["score"] for r in recommendations) / len(recommendations)
+                strong_buys = len([r for r in recommendations if r["recommendation"] == "Strong Buy"])
+                strong_buy_rate = (strong_buys / len(recommendations)) * 100
+            else:
+                avg_score = 0
+                strong_buy_rate = 0
 
-                # Calculate stats
-                if recommendations:
-                    avg_score = sum(r["score"] for r in recommendations) / len(recommendations)
-                    strong_buys = len([r for r in recommendations if r["recommendation"] == "Strong Buy"])
-                    strong_buy_rate = (strong_buys / len(recommendations)) * 100
-                else:
-                    avg_score = 0
-                    strong_buy_rate = 0
-
-                return {
-                    "recommendations": recommendations,
-                    "total_analyzed": len(recommendations),
-                    "avg_score": avg_score,
-                    "strong_buy_rate": strong_buy_rate,
-                    "generated_at": datetime.now().isoformat()
-                }
-
-            # No table yet - return empty with message
             return {
-                "recommendations": [],
-                "total_analyzed": 0,
-                "avg_score": 0,
-                "strong_buy_rate": 0,
-                "message": "Run an analysis to generate recommendations",
+                "recommendations": recommendations,
+                "total_analyzed": len(recommendations),
+                "avg_score": avg_score,
+                "strong_buy_rate": strong_buy_rate,
                 "generated_at": datetime.now().isoformat()
             }
+
+        # No table yet - return empty with message
+        return {
+            "recommendations": [],
+            "total_analyzed": 0,
+            "avg_score": 0,
+            "strong_buy_rate": 0,
+            "message": "Run an analysis to generate recommendations",
+            "generated_at": datetime.now().isoformat()
+        }
 
     except Exception as e:
         logger.error(f"Error fetching top options: {e}")
@@ -334,83 +333,96 @@ async def analyze_options(request: OptionsAnalyzeRequest):
 
         except ImportError:
             # Fallback: Query from database if scanner not available
-            from src.database.connection_pool import get_db_connection
-
             results = []
 
-            with get_db_connection() as conn:
-                cursor = conn.cursor()
+            db = await get_database()
 
-                # Get options data from premium_opportunities table if it exists
-                cursor.execute("""
-                    SELECT EXISTS (
-                        SELECT FROM information_schema.tables
-                        WHERE table_name = 'premium_opportunities'
-                    )
-                """)
+            # Get options data from premium_opportunities table if it exists
+            table_exists_row = await db.fetchrow("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = 'premium_opportunities'
+                )
+            """)
 
-                if cursor.fetchone()[0]:
-                    symbols_str = ','.join([f"'{s}'" for s in (request.symbols or [])])
-                    where_symbols = f"AND symbol IN ({symbols_str})" if request.symbols else ""
-
-                    cursor.execute(f"""
+            if table_exists_row["exists"]:
+                # Build parameterized query - symbols use ANY() for safe array matching
+                if request.symbols:
+                    # Sanitize symbols: uppercase, alphanumeric only, max 5 chars each
+                    import re
+                    safe_symbols = [
+                        s.upper()[:5] for s in request.symbols
+                        if s and re.match(r'^[A-Z]{1,5}$', s.upper())
+                    ]
+                    rows = await db.fetch("""
                         SELECT
                             symbol, company_name, current_price, strike, expiration,
                             dte, premium, delta, iv, premium_pct, monthly_return
                         FROM premium_opportunities
-                        WHERE dte BETWEEN %s AND %s
-                          AND delta BETWEEN %s AND %s
-                          AND premium >= %s
-                          {where_symbols}
+                        WHERE dte BETWEEN $1 AND $2
+                          AND delta BETWEEN $3 AND $4
+                          AND premium >= $5
+                          AND symbol = ANY($6)
                         ORDER BY monthly_return DESC
-                        LIMIT %s
-                    """, (request.min_dte, request.max_dte, request.min_delta, request.max_delta,
-                          request.min_premium, request.max_results))
+                        LIMIT $7
+                    """, request.min_dte, request.max_dte, request.min_delta, request.max_delta,
+                          request.min_premium, safe_symbols, request.max_results)
+                else:
+                    rows = await db.fetch("""
+                        SELECT
+                            symbol, company_name, current_price, strike, expiration,
+                            dte, premium, delta, iv, premium_pct, monthly_return
+                        FROM premium_opportunities
+                        WHERE dte BETWEEN $1 AND $2
+                          AND delta BETWEEN $3 AND $4
+                          AND premium >= $5
+                        ORDER BY monthly_return DESC
+                        LIMIT $6
+                    """, request.min_dte, request.max_dte, request.min_delta, request.max_delta,
+                          request.min_premium, request.max_results)
 
-                    rows = cursor.fetchall()
+                for row in rows:
+                    # Calculate MCDM score
+                    monthly_return = float(row["monthly_return"]) if row["monthly_return"] else 0
+                    delta = abs(float(row["delta"])) if row["delta"] else 0
+                    dte = row["dte"] or 0
+                    iv = float(row["iv"]) if row["iv"] else 0
 
-                    for row in rows:
-                        # Calculate MCDM score
-                        monthly_return = float(row[10]) if row[10] else 0
-                        delta = abs(float(row[7])) if row[7] else 0
-                        dte = row[5] or 0
-                        iv = float(row[8]) if row[8] else 0
+                    # Weighted scoring
+                    score = int(
+                        (monthly_return * 30) +
+                        ((0.30 - delta) * 100) +
+                        (min(iv, 100) / 2) +
+                        (max(0, 45 - dte) / 2)
+                    )
+                    score = min(100, max(0, score))
 
-                        # Weighted scoring
-                        score = int(
-                            (monthly_return * 30) +
-                            ((0.30 - delta) * 100) +
-                            (min(iv, 100) / 2) +
-                            (max(0, 45 - dte) / 2)
-                        )
-                        score = min(100, max(0, score))
+                    # Determine recommendation
+                    if score >= 90:
+                        rec = "Strong Buy"
+                    elif score >= 70:
+                        rec = "Buy"
+                    elif score >= 50:
+                        rec = "Hold"
+                    else:
+                        rec = "Avoid"
 
-                        # Determine recommendation
-                        if score >= 90:
-                            rec = "Strong Buy"
-                        elif score >= 70:
-                            rec = "Buy"
-                        elif score >= 50:
-                            rec = "Hold"
-                        else:
-                            rec = "Avoid"
-
-                        results.append({
-                            "symbol": row[0],
-                            "company_name": row[1] or row[0],
-                            "current_price": float(row[2]) if row[2] else 0,
-                            "strike": float(row[3]) if row[3] else 0,
-                            "expiration": row[4].isoformat() if row[4] else "",
-                            "dte": dte,
-                            "premium": float(row[5]) if row[5] else 0,
-                            "score": score,
-                            "recommendation": rec,
-                            "reasoning": f"MCDM Score based on premium return ({monthly_return:.1f}%), delta ({delta:.2f}), IV ({iv:.0f}%)",
-                            "delta": float(row[7]) if row[7] else 0,
-                            "iv": iv,
-                            "premium_pct": float(row[9]) if row[9] else 0,
-                            "monthly_return": monthly_return
-                        })
+                    results.append({
+                        "symbol": row["symbol"],
+                        "company_name": row["company_name"] or row["symbol"],
+                        "current_price": float(row["current_price"]) if row["current_price"] else 0,
+                        "strike": float(row["strike"]) if row["strike"] else 0,
+                        "expiration": row["expiration"].isoformat() if row["expiration"] else "",
+                        "dte": dte,
+                        "premium": float(row["premium"]) if row["premium"] else 0,
+                        "score": score,
+                        "recommendation": rec,
+                        "reasoning": f"MCDM Score based on premium return ({monthly_return:.1f}%), delta ({delta:.2f}), IV ({iv:.0f}%)",
+                        "delta": float(row["delta"]) if row["delta"] else 0,
+                        "iv": iv,
+                        "premium_pct": float(row["premium_pct"]) if row["premium_pct"] else 0,
+                        "monthly_return": monthly_return
+                    })
 
             processing_time = (time.time() - start_time) * 1000
 
@@ -474,7 +486,7 @@ async def invoke_agent(agent_name: str, request: AgentInvokeRequest):
         )
     except Exception as e:
         logger.error(f"Agent invocation error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "invoke agent")
 
 
 @router.post("/route")
@@ -510,7 +522,7 @@ async def smart_route(request: AgentInvokeRequest):
                 "result": result
             }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        safe_internal_error(e, "route to agent")
 
 
 async def _invoke_agent_impl(agent_name: str, query: str, context: Dict) -> Dict[str, Any]:

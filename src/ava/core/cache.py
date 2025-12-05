@@ -49,7 +49,7 @@ class CacheEntry(Generic[T]):
             return False
         return datetime.now() > self.expires_at
 
-    def touch(self):
+    def touch(self) -> None:
         """Update access time and count"""
         self.last_accessed = datetime.now()
         self.access_count += 1
@@ -145,7 +145,7 @@ class LRUCache:
                 return True
             return False
 
-    def clear(self):
+    def clear(self) -> None:
         """Clear entire cache"""
         with self._lock:
             self._cache.clear()
@@ -186,7 +186,7 @@ class LRUCache:
         self.set(key, value, ttl)
         return value
 
-    def cleanup_expired(self):
+    def cleanup_expired(self) -> None:
         """Remove expired entries"""
         with self._lock:
             expired_keys = [
@@ -244,7 +244,7 @@ class RedisCache:
         self._redis = None
         self._connected = False
 
-    async def connect(self):
+    async def connect(self) -> None:
         """Connect to Redis"""
         try:
             import redis.asyncio as redis
@@ -262,7 +262,7 @@ class RedisCache:
             logger.error(f"Redis connection failed: {e}")
             self._connected = False
 
-    async def disconnect(self):
+    async def disconnect(self) -> None:
         """Disconnect from Redis"""
         if self._redis:
             await self._redis.close()
@@ -400,12 +400,12 @@ class TieredCache:
                 prefix=prefix
             )
 
-    async def initialize(self):
+    async def initialize(self) -> None:
         """Initialize cache connections"""
         if self.l2:
             await self.l2.connect()
 
-    async def shutdown(self):
+    async def shutdown(self) -> None:
         """Shutdown cache connections"""
         if self.l2:
             await self.l2.disconnect()
@@ -592,7 +592,7 @@ class OptionChainCache(TieredCache):
 class GreeksCache(LRUCache):
     """Specialized cache for Greeks calculations"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(
             max_size=5000,
             default_ttl=5  # Greeks change rapidly

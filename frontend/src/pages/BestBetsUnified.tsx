@@ -66,12 +66,14 @@ export default function BestBetsUnified() {
     const { data, isLoading, refetch, error } = useQuery<BestBetsData>({
         queryKey: ['best-bets', selectedSports, minEV, minConfidence, topN],
         queryFn: async () => {
-            const { data } = await axiosInstance.get('/sports/best-bets/unified', {
+            // Use v2 endpoint which has proper async handling and AI predictions
+            const { data } = await axiosInstance.get('/sports/v2/best-bets', {
                 params: {
                     sports: selectedSports.includes('All') ? 'NFL,NBA,NCAAF,NCAAB' : selectedSports.join(','),
-                    min_ev: minEV / 100,
-                    min_confidence: minConfidence,
-                    top_n: topN
+                    min_ev: minEV,
+                    min_edge: 1.0,
+                    min_confidence: minConfidence > 50 ? 'medium' : 'low',
+                    limit: topN
                 }
             })
             return data
@@ -301,9 +303,9 @@ export default function BestBetsUnified() {
                                     <div className="flex items-center gap-2 text-slate-400">
                                         <Database className="w-4 h-4" />
                                         <span>
-                                            {Object.entries(syncProgress.details.gamesSync.sports || {})
-                                                .filter(([, v]) => typeof v === 'object' && v.synced > 0)
-                                                .map(([sport, v]: [string, any]) => `${sport}: ${v.synced}`)
+                                            {(Object.entries(syncProgress.details.gamesSync.sports || {}) as [string, { synced?: number }][])
+                                                .filter(([, v]) => v && typeof v === 'object' && v.synced && v.synced > 0)
+                                                .map(([sport, v]) => `${sport}: ${v?.synced || 0}`)
                                                 .join(', ') || `${syncProgress.details.gamesSync.total} games`}
                                         </span>
                                     </div>
